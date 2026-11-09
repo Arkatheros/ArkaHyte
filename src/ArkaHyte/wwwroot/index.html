@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="fr">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Arka Hyte</title>
+	<link rel="stylesheet" href="fonts/fonts.css">
+	<link rel="stylesheet" href="css/console.css">
+</head>
+<body>
+	<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+		<defs>
+			<symbol id="i-thermo" viewBox="0 0 24 24"><path d="M14 14.8V4a2 2 0 0 0-4 0v10.8a4 4 0 1 0 4 0z"/><path d="M12 9v8"/></symbol>
+			<symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></symbol>
+			<symbol id="i-chip" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5"/><rect x="9.5" y="9.5" width="5" height="5"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></symbol>
+			<symbol id="i-gpu" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="11" rx="1.5"/><circle cx="9" cy="11.5" r="3"/><circle cx="9" cy="11.5" r=".6"/><path d="M15 9.5h4M15 12h4M15 14.5h4M5 17v2.5M8 17v2.5M11 17v2.5"/></symbol>
+			<symbol id="i-note" viewBox="0 0 24 24"><path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></symbol>
+			<symbol id="i-play" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="m10 9 5 3-5 3z"/></symbol>
+			<symbol id="i-live" viewBox="0 0 24 24"><path d="M5 4h15v10l-4 4h-4l-3 3v-3H5z"/><path d="M11 8v4M15 8v4"/></symbol>
+		</defs>
+	</svg>
+
+	<div class="frame ignite" id="frame">
+		<canvas class="layer" id="bg" width="682" height="2560"></canvas>
+		<!-- Drifting smoke over the sky and breathing lava hot spots (positions match background.jpg) -->
+		<div class="smoke" data-period="90" data-amplitude="160" style="top: 80px"></div>
+		<div class="smoke" data-period="130" data-amplitude="220" style="top: 520px"></div>
+		<div class="lava-spot" style="left: -30px; top: 1010px; width: 400px; height: 400px"></div>
+		<div class="lava-spot" style="left: 125px; top: 1200px; width: 180px; height: 180px"></div>
+		<div class="lava-spot" style="left: 360px; top: 1360px; width: 320px; height: 320px"></div>
+		<div class="lava-spot" style="left: 590px; top: 835px; width: 110px; height: 110px"></div>
+		<div class="lava-spot" style="left: 370px; top: 920px; width: 140px; height: 140px"></div>
+		<!-- Embers only exist around the lava: half-resolution canvas over that band (y 450 to 1750) -->
+		<canvas id="fx" width="341" height="650"></canvas>
+
+		<section class="widget clock" aria-label="Horloge">
+			<div class="date" id="date">&nbsp;</div>
+			<div class="time"><span id="hh">--</span><span class="colon">:</span><span class="mm" id="mm">--</span></div>
+		</section>
+
+		<!-- ===== Processor ===== -->
+		<div class="widget section-head cpu-head">
+			<svg class="ico"><use href="#i-chip"/></svg>
+			<div class="name"><span class="maker" id="cpuMaker">AMD</span><span class="model" id="cpuModel">Ryzen 7 9800X3D</span></div>
+			<span class="rule"></span>
+		</div>
+
+		<section class="widget cpu" id="cpu" aria-label="Charge du processeur" data-action="cpu">
+			<canvas id="cpuRing" width="360" height="360"></canvas>
+			<div class="cpu-core">
+				<span class="label">Charge</span>
+				<span class="big"><span id="cpuLoad">--</span><small>%</small></span>
+			</div>
+		</section>
+
+		<div class="widget metrics cpu-metrics">
+			<div class="metric" id="cpuTempTile">
+				<div class="metric-head"><svg class="ico"><use href="#i-thermo"/></svg><span class="label">Température</span></div>
+				<div class="metric-value"><span id="cpuTemp">--</span><span class="u">°C</span></div>
+				<div class="gauge"><div class="gauge-fill" id="cpuTempFill"><div class="ix" style="--d:0.3s"><div class="blade-h"></div></div></div></div>
+				<div class="gauge-scale data"><span>30</span><span>95 °C</span></div>
+			</div>
+			<div class="metric" id="cpuPowTile">
+				<div class="metric-head"><svg class="ico"><use href="#i-bolt"/></svg><span class="label">Consommation</span></div>
+				<div class="metric-value"><span id="cpuPow">--</span><span class="u">W</span></div>
+				<div class="gauge"><div class="gauge-fill" id="cpuPowFill"><div class="ix" style="--d:0.4s"><div class="blade-h"></div></div></div></div>
+				<div class="gauge-scale data"><span>0</span><span>160 W</span></div>
+			</div>
+		</div>
+
+		<!-- ===== Graphics card ===== -->
+		<div class="widget section-head gpu-head">
+			<svg class="ico"><use href="#i-gpu"/></svg>
+			<div class="name"><span class="maker" id="gpuMaker">NVIDIA</span><span class="model" id="gpuModel">GeForce RTX 4090</span></div>
+			<span class="rule"></span>
+		</div>
+
+		<section class="widget gpu-load" id="gpu" aria-label="Charge du GPU">
+			<div class="load-block">
+				<span class="label">Charge</span>
+				<span class="big"><span id="gpuLoad">--</span><small>%</small></span>
+			</div>
+			<div class="segs" id="segs"></div>
+		</section>
+
+		<section class="widget vram" aria-label="Mémoire vidéo">
+			<div class="vram-head">
+				<span class="label">Mémoire vidéo (VRAM)</span>
+				<span class="data"><span id="vramUsed">--</span> <small>/ <span id="vramTotal">24</span> Go</small></span>
+			</div>
+			<div class="saber-row">
+				<svg width="130" height="44" viewBox="0 0 130 44" aria-hidden="true">
+					<defs>
+						<linearGradient id="chrome" x1="0" y1="0" x2="0" y2="1">
+							<stop offset="0" stop-color="#55555b"/>
+							<stop offset="0.32" stop-color="#f4f4f7"/>
+							<stop offset="0.6" stop-color="#9c9ca3"/>
+							<stop offset="1" stop-color="#26262a"/>
+						</linearGradient>
+						<linearGradient id="grip" x1="0" y1="0" x2="0" y2="1">
+							<stop offset="0" stop-color="#3a3a3f"/>
+							<stop offset="0.4" stop-color="#1b1b1e"/>
+							<stop offset="1" stop-color="#050506"/>
+						</linearGradient>
+					</defs>
+					<!-- Pommel with hanging ring -->
+					<circle cx="7" cy="36" r="4.5" fill="none" stroke="url(#chrome)" stroke-width="2"/>
+					<rect x="2" y="12" width="11" height="20" rx="3" fill="url(#chrome)"/>
+					<rect x="13" y="13.5" width="12" height="17" fill="url(#chrome)"/>
+					<!-- Black ribbed grip -->
+					<rect x="25" y="12.5" width="40" height="19" fill="#0b0b0d"/>
+					<g fill="url(#grip)">
+						<rect x="27" y="10.5" width="5" height="23" rx="1.5"/>
+						<rect x="35" y="10.5" width="5" height="23" rx="1.5"/>
+						<rect x="43" y="10.5" width="5" height="23" rx="1.5"/>
+						<rect x="51" y="10.5" width="5" height="23" rx="1.5"/>
+						<rect x="59" y="10.5" width="5" height="23" rx="1.5"/>
+					</g>
+					<!-- Clamp with activation box -->
+					<rect x="65" y="11" width="26" height="22" fill="url(#chrome)"/>
+					<rect x="67" y="29" width="22" height="2" fill="#3a3a3f"/>
+					<rect x="68" y="3" width="20" height="9" rx="1" fill="#141416"/>
+					<circle cx="73" cy="7.5" r="2.2" fill="#ff1f33"/>
+					<rect x="78" y="5" width="8" height="5" rx="1" fill="#55555b"/>
+					<!-- Flared emitter shroud -->
+					<path d="M91 12 L110 12 L126 6 L126 38 L110 32 L91 32 Z" fill="url(#chrome)"/>
+					<g fill="#1a1a1d">
+						<rect x="96" y="15" width="3" height="14" rx="1"/>
+						<rect x="103" y="15" width="3" height="14" rx="1"/>
+					</g>
+					<rect x="124" y="8" width="4" height="28" fill="#2a2a2e"/>
+				</svg>
+				<div class="saber-zone">
+					<div class="vram-fill" id="vramFill"><div class="ix" style="--d:0.6s"><div class="blade-h"></div></div></div>
+				</div>
+			</div>
+			<div class="ticks data" id="vramTicks"><span>0</span><span>6</span><span>12</span><span>18</span><span>24 Go</span></div>
+		</section>
+
+		<div class="widget metrics gpu-metrics">
+			<div class="metric" id="gpuTempTile">
+				<div class="metric-head"><svg class="ico"><use href="#i-thermo"/></svg><span class="label">Température</span></div>
+				<div class="metric-value"><span id="gpuTemp">--</span><span class="u">°C</span></div>
+				<div class="gauge"><div class="gauge-fill" id="gpuTempFill"><div class="ix" style="--d:0.7s"><div class="blade-h"></div></div></div></div>
+				<div class="gauge-scale data"><span>30</span><span>90 °C</span></div>
+			</div>
+			<div class="metric" id="gpuPowTile">
+				<div class="metric-head"><svg class="ico"><use href="#i-bolt"/></svg><span class="label">Consommation</span></div>
+				<div class="metric-value"><span id="gpuPow">--</span><span class="u">W</span></div>
+				<div class="gauge"><div class="gauge-fill" id="gpuPowFill"><div class="ix" style="--d:0.8s"><div class="blade-h"></div></div></div></div>
+				<div class="gauge-scale data"><span>0</span><span>450 W</span></div>
+			</div>
+		</div>
+
+		<!-- ===== Memory + storage ===== -->
+		<section class="widget vault" aria-label="Mémoire et stockage">
+			<div class="ram-head">
+				<span class="label">Mémoire</span>
+				<span class="ram-value"><span id="ramUsed">--</span> <small>/ <span id="ramTotal">--</span> Go</small></span>
+			</div>
+			<div class="leds" id="leds"></div>
+			<!-- One card per configured drive, built by console.js from the template below -->
+			<div class="disks" id="disks"></div>
+			<template id="diskTemplate">
+				<div class="disk">
+					<div class="disk-ring">
+						<svg width="108" height="108" viewBox="0 0 108 108" aria-hidden="true">
+							<circle cx="54" cy="54" r="47" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="7"/>
+							<circle class="disk-arc" cx="54" cy="54" r="47" fill="none" stroke="#ff1f33" stroke-width="7" stroke-linecap="round" stroke-dasharray="0 296"/>
+						</svg>
+						<div class="inner"><span class="free">--</span><span class="unit">Go libres</span></div>
+					</div>
+					<div class="disk-name"><span class="disk-letter">--</span><span class="disk-label"></span></div>
+					<span class="data disk-total">&nbsp;</span>
+					<span class="disk-temp" hidden><svg class="ico"><use href="#i-thermo"/></svg><span class="disk-temp-value">-- °C</span></span>
+				</div>
+			</template>
+		</section>
+
+		<!-- ===== Network ===== -->
+		<section class="widget holonet" id="holonet" aria-label="Réseau">
+			<div class="net-head">
+				<span class="label">Réseau</span>
+				<span class="chip" id="netChip">--</span>
+			</div>
+			<div class="net-body">
+				<div class="signal">
+					<svg width="130" height="100" viewBox="0 0 130 100" aria-hidden="true">
+						<path class="arc" id="arc1" d="M52.27 79.27 A18 18 0 0 1 77.73 79.27"/>
+						<path class="arc" id="arc2" d="M39.54 66.54 A36 36 0 0 1 90.46 66.54"/>
+						<path class="arc" id="arc3" d="M26.82 53.82 A54 54 0 0 1 103.18 53.82"/>
+						<path class="arc" id="arc4" d="M14.09 41.09 A72 72 0 0 1 115.91 41.09"/>
+						<circle class="source" cx="65" cy="90" r="6" fill="#ff1f33"/>
+					</svg>
+					<span class="signal-pct"><span id="sigPct">--</span><small> %</small></span>
+					<span class="data" id="rssi">&nbsp;</span>
+				</div>
+				<dl class="netgrid">
+					<div><dt>SSID</dt><dd id="ssid">--</dd></div>
+					<div><dt>Canal</dt><dd id="channel">--</dd></div>
+					<div><dt>↓ Réception</dt><dd class="rate down" id="rateDown">--</dd></div>
+					<div><dt>↑ Envoi</dt><dd class="rate" id="rateUp">--</dd></div>
+					<div><dt>Lien</dt><dd id="link">--</dd></div>
+					<div><dt>Ping</dt><dd id="ping">--</dd></div>
+				</dl>
+			</div>
+		</section>
+
+		<!-- ===== Now playing ===== -->
+		<section class="widget media" id="media" aria-label="Lecture en cours">
+			<div class="media-head">
+				<span class="label">Lecture en cours</span>
+				<span class="media-tags">
+					<span class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+					<span class="chip" id="mediaSource"><svg><use href="#i-note"/></svg><span>--</span></span>
+				</span>
+			</div>
+			<div class="media-body">
+				<div class="media-art-box">
+					<canvas id="mediaArt" width="200" height="200"></canvas>
+					<img id="mediaCover" alt="" hidden>
+				</div>
+				<div class="media-info">
+					<span class="media-title" id="mediaTitle">Aucune lecture</span>
+					<span class="media-artist" id="mediaArtist">&nbsp;</span>
+					<div class="media-progress" id="mediaProgress">
+						<div class="gauge"><div class="gauge-fill" id="mediaFill"><div class="blade-h"></div></div></div>
+						<div class="media-time data"><span id="mediaPos">0:00</span><span id="mediaDur">0:00</span></div>
+					</div>
+					<div class="live" id="mediaLive" hidden><b>EN DIRECT</b></div>
+					<div class="media-controls">
+						<button type="button" data-media="previous" aria-label="Précédent"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
+						<button type="button" data-media="toggle" class="main" id="playBtn" aria-label="Lecture"><svg viewBox="0 0 24 24" id="playIcon"><path d="M7 4v16l13-8z"/></svg></button>
+						<button type="button" data-media="next" aria-label="Suivant"><svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<!-- Dock buttons come from the "Shortcuts" setting (label, target, icon); long press opens the editor -->
+		<nav class="widget dock" id="dock" aria-label="Raccourcis"></nav>
+
+		<!-- Shortcut editor (long press on a dock button) -->
+		<div class="editor" id="editor" role="dialog" aria-modal="true" aria-labelledby="editorTitle" hidden>
+			<div class="editor-panel">
+				<div class="editor-head">
+					<span class="label" id="editorTitle">Raccourci</span>
+					<button type="button" class="editor-close" id="editorClose" aria-label="Fermer">
+						<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
+					</button>
+				</div>
+				<div class="editor-preview">
+					<span class="dock-icon" id="editorPreviewIcon"></span>
+					<div class="editor-preview-text">
+						<span class="editor-app-name" id="editorAppName">Choisis une application</span>
+						<span class="data">Touche une application, puis une icône</span>
+					</div>
+				</div>
+				<span class="label editor-section">Application</span>
+				<div class="editor-apps-wrap">
+					<div class="editor-apps" id="editorApps"></div>
+					<div class="editor-letters" id="editorLetters"></div>
+				</div>
+				<span class="label editor-section">Icône</span>
+				<div class="editor-icons" id="editorIcons"></div>
+				<div class="editor-actions">
+					<button type="button" class="editor-btn" id="editorCancel">Annuler</button>
+					<button type="button" class="editor-btn primary" id="editorSave" disabled>Enregistrer</button>
+				</div>
+			</div>
+		</div>
+		<div class="toast" id="toast" role="status"></div>
+	</div>
+
+	<script src="js/console.js"></script>
+</body>
+</html>

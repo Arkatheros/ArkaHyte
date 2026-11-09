@@ -1,0 +1,2 @@
+# Normalise text line endings in the repository; images and fonts are detected as binary
+* text=auto
