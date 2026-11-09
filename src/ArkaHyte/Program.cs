@@ -13,6 +13,8 @@ internal static class Program
 	///   ArkaHyte.exe --screenshot out.png render, save a capture of the page and exit
 	///   ArkaHyte.exe --demo stress        show a simulated scenario (idle, stress) instead of live data
 	///   ArkaHyte.exe --open-editor 0      open the shortcut editor of dock button 0 at start
+	///   ArkaHyte.exe --preview-speedtest [done]  speed test dial (or final summary) with sample values
+	///   ArkaHyte.exe --speedtest out.txt  run a real speed test and write every update
 	///   ArkaHyte.exe --list-apps out.json list the applications offered by the shortcut editor and exit
 	///   ArkaHyte.exe --dump out.json      sample every sensor once, write the result and exit
 	/// </summary>
@@ -25,6 +27,15 @@ internal static class Program
 		if (dumpPath is not null)
 		{
 			return Dump(settings, dumpPath);
+		}
+		var speedTestPath = ArgumentValue(args, "--speedtest");
+		if (speedTestPath is not null)
+		{
+			// Full real test (uses the connection), every update written as one line
+			var lines = new List<string>();
+			new SpeedTest().RunAsync(update => lines.Add(JsonSerializer.Serialize(update)), CancellationToken.None).GetAwaiter().GetResult();
+			File.WriteAllLines(speedTestPath, lines);
+			return 0;
 		}
 		var appsPath = ArgumentValue(args, "--list-apps");
 		if (appsPath is not null)
@@ -64,7 +75,8 @@ internal static class Program
 			args.Contains("--devtools"),
 			ArgumentValue(args, "--screenshot"),
 			ArgumentValue(args, "--demo"),
-			int.TryParse(ArgumentValue(args, "--open-editor"), out var editorIndex) ? editorIndex : null);
+			int.TryParse(ArgumentValue(args, "--open-editor"), out var editorIndex) ? editorIndex : null,
+			args.Contains("--preview-speedtest") ? (ArgumentValue(args, "--preview-speedtest") == "done" ? "done" : "preview") : null);
 		Application.Run(new DisplayForm(settings, hub, options));
 		Log.Info("Stopped");
 		return 0;

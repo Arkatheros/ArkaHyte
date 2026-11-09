@@ -233,6 +233,261 @@
 		}
 	}
 
+	// ---------- Speed test (runs in the host through the Speedtest by Ookla CLI) ----------
+	const SPEEDTEST_PHASES = {
+		install: 'Installation de Speedtest…',
+		ping: 'Mesure du ping…',
+		download: 'Réception…',
+		upload: 'Envoi…',
+		done: 'Test terminé',
+		cancelled: 'Test annulé',
+		error: 'Échec du test'
+	};
+	const SPEEDTEST_AUTO_CLOSE_MS = 90000;
+	const SPEED_COLORS = { download: '255, 31, 51', upload: '255, 176, 32' };
+	// Speedometer scales, graduations evenly spaced like Speedtest's dial; the wide one kicks in above 1 Gbit/s
+	const GAUGE_SCALES = [
+		[0, 5, 10, 50, 100, 250, 500, 750, 1000],
+		[0, 10, 50, 100, 250, 500, 1000, 2500, 5000]
+	];
+	const GAUGE = { cx: 280, cy: 262, radius: 222, start: Math.PI * 5 / 6, sweep: Math.PI * 4 / 3 };
+
+	const speedTest = {
+		running: false,
+		closeTimer: 0,
+		server: null,
+		phase: 'ping',
+		target: 0,
+		shown: 0,
+		scale: GAUGE_SCALES[0]
+	};
+	const gaugeCtx = $('stGauge').getContext('2d');
+
+	const formatMbps = (mbps) => (mbps >= 100 ? nf0(mbps) : nf1.format(mbps));
+
+	// Phase title, followed by the Ookla server once it is known ("Réception… · Scaleway · Paris")
+	function speedTestTitle(update) {
+		if (update.server) {
+			speedTest.server = update.server;
+		}
+		if (update.phase === 'error') {
+			return update.reason === 'install' ? 'Échec du téléchargement de Speedtest' : 'Échec du test : connexion indisponible';
+		}
+		const title = SPEEDTEST_PHASES[update.phase] || 'Test de débit';
+		return speedTest.server && !['install', 'cancelled', 'done'].includes(update.phase) ? `${title} · ${speedTest.server}` : title;
+	}
+
+	function openSpeedTestView() {
+		clearTimeout(speedTest.closeTimer);
+		$('speedtest').hidden = false;
+	}
+
+	function closeSpeedTestView() {
+		clearTimeout(speedTest.closeTimer);
+		$('speedtest').hidden = true;
+	}
+
+	function startSpeedTest() {
+		if (speedTest.running) {
+			return;
+		}
+		['stPing', 'stDown', 'stUp'].forEach((id) => text(id, '--'));
+		speedTest.server = null;
+		speedTest.shown = 0;
+		speedTest.target = 0;
+		speedTest.scale = GAUGE_SCALES[0];
+		renderSpeedTest({ phase: 'ping', progress: 0 });
+		if (host) {
+			host.postMessage({ type: 'speedtest', action: 'start' });
+		} else {
+			simulateSpeedTest();
+		}
+	}
+
+	function renderSpeedTest(update) {
+		openSpeedTestView();
+		const view = $('speedtest');
+		const running = ['install', 'ping', 'download', 'upload'].includes(update.phase);
+		const finished = update.phase === 'done';
+		speedTest.running = running;
+		speedTest.phase = update.phase;
+		$('netTestBtn').disabled = running;
+		text('stPhase', speedTestTitle(update));
+		text('stAction', running ? 'Annuler' : 'Fermer');
+		view.classList.toggle('upload', update.phase === 'upload');
+		view.classList.toggle('failed', update.phase === 'error');
+
+		if (isNum(update.pingMs)) text('stPing', `${nf1.format(update.pingMs)} ms`);
+		if (isNum(update.downMbps)) text('stDown', formatMbps(update.downMbps));
+		if (isNum(update.upMbps)) text('stUp', formatMbps(update.upMbps));
+
+		// Live figure in the dial: ping while measuring it, then the rate of the running direction
+		if (update.phase === 'download' || update.phase === 'upload') {
+			const mbps = isNum(update.mbps) ? update.mbps : 0;
+			if (mbps > 1000) {
+				speedTest.scale = GAUGE_SCALES[1];
+			}
+			speedTest.target = mbps;
+			text('stDir', update.phase === 'download' ? '↓ Réception' : '↑ Envoi');
+			text('stUnit', 'Mbit/s');
+		} else if (update.phase === 'ping' || update.phase === 'install') {
+			speedTest.target = 0;
+			text('stDir', update.phase === 'install' ? 'Installation' : 'Ping');
+			text('stValue', isNum(update.pingMs) ? nf1.format(update.pingMs) : '--');
+			text('stUnit', 'ms');
+		} else if (!finished) {
+			speedTest.target = 0;
+			text('stDir', update.phase === 'error' ? 'Erreur' : 'Annulé');
+			text('stValue', '--');
+			text('stUnit', '');
+		}
+
+		// End of test: the dial gives way to a summary of both speeds and the ping
+		$('stGaugeBox').hidden = finished;
+		$('stResults').hidden = finished;
+		$('stSummary').hidden = !finished;
+		if (finished) {
+			text('stSumDown', isNum(update.downMbps) ? formatMbps(update.downMbps) : '--');
+			text('stSumUp', isNum(update.upMbps) ? formatMbps(update.upMbps) : '--');
+			text('stSumPing', isNum(update.pingMs) ? nf1.format(update.pingMs) : '--');
+			text('stServer', speedTest.server ? `Serveur ${speedTest.server}` : ' ');
+		}
+		$('stFill').style.width = `${clamp((update.progress || 0) * 100, finished ? 100 : 1, 100)}%`;
+
+		if (!running) {
+			speedTest.closeTimer = setTimeout(closeSpeedTestView, SPEEDTEST_AUTO_CLOSE_MS);
+		}
+	}
+
+	// Position on the dial (0..1) with the scale's graduations evenly spaced, linear in between
+	function gaugeFraction(mbps, scale) {
+		const steps = scale.length - 1;
+		if (mbps <= 0) return 0;
+		for (let i = 1; i < scale.length; i++) {
+			if (mbps <= scale[i]) {
+				return (i - 1 + (mbps - scale[i - 1]) / (scale[i] - scale[i - 1])) / steps;
+			}
+		}
+		return 1;
+	}
+
+	// Called from the main loop while the view is open: the needle eases towards the live rate
+	function drawSpeedGauge(ticks) {
+		if ($('speedtest').hidden || !$('stGaugeBox').offsetParent) {
+			return;
+		}
+		const ease = Math.min(0.18 * ticks, 1);
+		speedTest.shown += (speedTest.target - speedTest.shown) * ease;
+		const transferring = speedTest.phase === 'download' || speedTest.phase === 'upload';
+		if (transferring) {
+			text('stValue', formatMbps(Math.max(0, speedTest.shown)));
+		}
+
+		const ctx = gaugeCtx;
+		const { cx, cy, radius, start, sweep } = GAUGE;
+		const color = SPEED_COLORS[speedTest.phase === 'upload' ? 'upload' : 'download'];
+		const fraction = gaugeFraction(speedTest.shown, speedTest.scale);
+		const angle = start + sweep * fraction;
+		ctx.clearRect(0, 0, 560, 390);
+
+		// Track
+		ctx.lineCap = 'round';
+		ctx.lineWidth = 22;
+		ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+		ctx.beginPath();
+		ctx.arc(cx, cy, radius, start, start + sweep);
+		ctx.stroke();
+
+		// Graduations and labels
+		ctx.font = "18px 'Share Tech Mono', monospace";
+		ctx.textAlign = 'center';
+		ctx.textBaseline = 'middle';
+		speedTest.scale.forEach((value, i) => {
+			const a = start + (sweep * i) / (speedTest.scale.length - 1);
+			const lit = i / (speedTest.scale.length - 1) <= fraction + 0.001 && fraction > 0;
+			ctx.strokeStyle = lit ? `rgba(${color}, 0.9)` : 'rgba(255, 255, 255, 0.25)';
+			ctx.lineWidth = 2;
+			ctx.beginPath();
+			ctx.moveTo(cx + Math.cos(a) * (radius - 22), cy + Math.sin(a) * (radius - 22));
+			ctx.lineTo(cx + Math.cos(a) * (radius - 34), cy + Math.sin(a) * (radius - 34));
+			ctx.stroke();
+			ctx.fillStyle = lit ? 'rgba(243, 233, 234, 0.95)' : 'rgba(143, 118, 121, 0.9)';
+			ctx.fillText(value >= 1000 ? `${value / 1000}G` : String(value), cx + Math.cos(a) * (radius - 58), cy + Math.sin(a) * (radius - 58));
+		});
+
+		// Glowing blade arc up to the current rate
+		if (fraction > 0.002) {
+			ctx.lineWidth = 22;
+			ctx.shadowColor = `rgb(${color})`;
+			ctx.shadowBlur = 26;
+			ctx.strokeStyle = `rgb(${color})`;
+			ctx.beginPath();
+			ctx.arc(cx, cy, radius, start, angle);
+			ctx.stroke();
+			ctx.shadowBlur = 6;
+			ctx.lineWidth = 6;
+			ctx.strokeStyle = '#fff4f4';
+			ctx.beginPath();
+			ctx.arc(cx, cy, radius, start, angle);
+			ctx.stroke();
+			ctx.shadowBlur = 0;
+		}
+
+		// Needle with its hub
+		ctx.lineCap = 'round';
+		ctx.lineWidth = 5;
+		ctx.shadowColor = `rgb(${color})`;
+		ctx.shadowBlur = 14;
+		ctx.strokeStyle = '#fff4f4';
+		ctx.beginPath();
+		ctx.moveTo(cx + Math.cos(angle) * 40, cy + Math.sin(angle) * 40);
+		ctx.lineTo(cx + Math.cos(angle) * (radius - 40), cy + Math.sin(angle) * (radius - 40));
+		ctx.stroke();
+		ctx.shadowBlur = 0;
+		ctx.fillStyle = `rgb(${color})`;
+		ctx.beginPath();
+		ctx.arc(cx, cy, 9, 0, Math.PI * 2);
+		ctx.fill();
+	}
+
+	// Design mode: plausible fake run to preview the view without the host
+	function simulateSpeedTest() {
+		const started = performance.now();
+		const ping = 5 + Math.random() * 2;
+		const server = 'Serveur de démo · Paris';
+		const timer = setInterval(() => {
+			const t = (performance.now() - started) / 1000;
+			if (!speedTest.running && t > 0.5) {
+				clearInterval(timer);
+				return;
+			}
+			if (t < 2) {
+				renderSpeedTest({ phase: 'ping', progress: t / 20, pingMs: ping, server });
+			} else if (t < 10) {
+				const ramp = Math.min(1, (t - 2) / 1.5);
+				renderSpeedTest({ phase: 'download', progress: 0.1 + 0.45 * ((t - 2) / 8), mbps: ramp * (900 + Math.random() * 40), pingMs: ping, server });
+			} else if (t < 18) {
+				const ramp = Math.min(1, (t - 10) / 1.5);
+				renderSpeedTest({ phase: 'upload', progress: 0.55 + 0.45 * ((t - 10) / 8), mbps: ramp * (910 + Math.random() * 40), pingMs: ping, downMbps: 924.7, server });
+			} else {
+				clearInterval(timer);
+				renderSpeedTest({ phase: 'done', progress: 1, pingMs: ping, downMbps: 924.7, upMbps: 935.6, server });
+			}
+		}, 250);
+	}
+
+	$('netTestBtn').addEventListener('click', startSpeedTest);
+	$('stAction').addEventListener('click', () => {
+		if (!speedTest.running) {
+			closeSpeedTestView();
+		} else if (host) {
+			host.postMessage({ type: 'speedtest', action: 'cancel' });
+		} else {
+			speedTest.running = false;
+			renderSpeedTest({ phase: 'cancelled', progress: 0 });
+		}
+	});
+
 	// ---------- Dock (built from the host's "Shortcuts" setting) ----------
 	const SVG_NS = 'http://www.w3.org/2000/svg';
 	const BUILTIN_ICONS = {
@@ -624,6 +879,8 @@
 			applyConfig(message);
 		} else if (message.type === 'toast') {
 			showToast(message.text);
+		} else if (message.type === 'speedtest') {
+			renderSpeedTest(message);
 		} else if (message.type === 'apps') {
 			apps = Array.isArray(message.apps) ? message.apps : [];
 			if (!$('editor').hidden) {
@@ -986,6 +1243,7 @@
 		animateCss(now);
 		drawRing(now, progress);
 		drawFx(now, ticks);
+		drawSpeedGauge(ticks);
 	}
 
 	// ---------- Touch actions ----------
@@ -1106,6 +1364,14 @@
 	}
 	if (!host || demo) {
 		startSimulator(demo || 'idle');
+	}
+	// "?speedtest=preview|done" (ArkaHyte.exe --preview-speedtest [done]) shows the test view with sample values
+	const speedTestPreview = new URLSearchParams(location.search).get('speedtest');
+	if (speedTestPreview === 'preview') {
+		speedTest.shown = 640;
+		renderSpeedTest({ phase: 'upload', progress: 0.78, mbps: 640, pingMs: 5.6, downMbps: 924.7, server: 'Scaleway · Paris' });
+	} else if (speedTestPreview === 'done') {
+		renderSpeedTest({ phase: 'done', progress: 1, pingMs: 5.97, downMbps: 924.7, upMbps: 935.6, server: 'Scaleway · Paris' });
 	}
 	// "?editor=<index>" (ArkaHyte.exe --open-editor N) opens a shortcut editor once the dock is known
 	const editorParam = new URLSearchParams(location.search).get('editor');

@@ -8,7 +8,8 @@ namespace ArkaHyte;
 
 /// <param name="Demo">Scenario name forwarded to the page ("idle", "stress") to preview it with simulated data.</param>
 /// <param name="OpenEditor">Dock button whose shortcut editor opens at start (diagnostics).</param>
-public sealed record DisplayOptions(bool DevTools, string? ScreenshotPath, string? Demo, int? OpenEditor = null);
+/// <param name="PreviewSpeedTest">"preview" (dial during upload) or "done" (summary): speed test view with sample values, no network use.</param>
+public sealed record DisplayOptions(bool DevTools, string? ScreenshotPath, string? Demo, int? OpenEditor = null, string? PreviewSpeedTest = null);
 
 /// <summary>
 /// Borderless, non-activating window pinned to the case display that hosts the web UI.
@@ -29,6 +30,8 @@ public sealed class DisplayForm : Form
 	private readonly WebView2 _webView;
 	private readonly TrayIcon? _tray;
 	private readonly System.Windows.Forms.Timer _placementRetry = new() { Interval = 5000 };
+	private readonly SpeedTest _speedTest = new();
+	private CancellationTokenSource? _speedTestRun;
 	private string? _demo;
 	private bool _webReady;
 	private List<object>? _dockButtons;
@@ -209,6 +212,10 @@ public sealed class DisplayForm : Form
 		{
 			parameters.Add($"editor={editorIndex}");
 		}
+		if (_options.PreviewSpeedTest is { } preview)
+		{
+			parameters.Add($"speedtest={Uri.EscapeDataString(preview)}");
+		}
 		var query = parameters.Count == 0 ? string.Empty : "?" + string.Join('&', parameters);
 		_webView.Source = new Uri($"https://{VirtualHost}/index.html{query}");
 	}
@@ -260,6 +267,56 @@ public sealed class DisplayForm : Form
 			case "saveShortcut":
 				SaveShortcut(root);
 				break;
+			case "speedtest" when action == "start":
+				StartSpeedTest();
+				break;
+			case "speedtest" when action == "cancel":
+				_speedTestRun?.Cancel();
+				break;
+		}
+	}
+
+	private void StartSpeedTest()
+	{
+		if (_speedTestRun is not null)
+		{
+			return;
+		}
+		_speedTestRun = new CancellationTokenSource();
+		_ = RunSpeedTestAsync(_speedTestRun);
+	}
+
+	private async Task RunSpeedTestAsync(CancellationTokenSource run)
+	{
+		try
+		{
+			await Task.Run(() => _speedTest.RunAsync(update => PostFromAnyThread(update), run.Token));
+		}
+		catch (OperationCanceledException)
+		{
+			PostFromAnyThread(new SpeedTestUpdate("cancelled", 0));
+		}
+		catch (SpeedTestInstallException exception)
+		{
+			Log.Error("Speed test CLI install failed", exception.InnerException);
+			PostFromAnyThread(new SpeedTestUpdate("error", 0, Reason: "install"));
+		}
+		catch (Exception exception)
+		{
+			Log.Error("Speed test failed", exception);
+			PostFromAnyThread(new SpeedTestUpdate("error", 0, Reason: "test"));
+		}
+		finally
+		{
+			// Continuation of an awaited Task.Run may land on a pool thread: clear the run on the UI thread
+			BeginInvoke(() =>
+			{
+				run.Dispose();
+				if (ReferenceEquals(_speedTestRun, run))
+				{
+					_speedTestRun = null;
+				}
+			});
 		}
 	}
 
@@ -391,6 +448,7 @@ public sealed class DisplayForm : Form
 	{
 		if (disposing)
 		{
+			_speedTestRun?.Cancel();
 			_tray?.Dispose();
 			_placementRetry.Dispose();
 			_webView.Dispose();

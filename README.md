@@ -56,6 +56,19 @@ scripts\Install.ps1
 
 Retour à Nexus : `scripts\Install.ps1 -Uninstall`
 
+## Test de débit
+
+Bouton **Test débit** du panneau Réseau : compteur de vitesse façon Speedtest (rouge en réception,
+ambre en envoi) puis résumé ↓ / ↑ / ping, affiché 90 s.
+
+Le test passe par l'outil officiel **Speedtest by Ookla** (CLI), téléchargé depuis
+`install.speedtest.net` au premier test dans `%LOCALAPPDATA%\ArkaHyte\tools\speedtest.exe` (sa
+licence n'autorise pas de l'inclure dans le dépôt ; elle est acceptée via `--accept-license
+--accept-gdpr`). Il choisit le serveur Ookla le plus proche. Le test sature réellement la connexion
+(~1 à 2 Go à 1 Gbit/s) : il ne se lance que sur appui.
+
+Les serveurs de test de Cloudflare ont été abandonnés : ils bloquaient l'adresse 1 h après deux tests.
+
 ## Tactile et curseur
 
 Windows place le curseur de la souris à l'endroit de chaque toucher. Arka Hyte intègre une
@@ -94,6 +107,8 @@ Clic droit sur le sabre rouge dans la zone de notification : **mode démo** (CPU
 | `ArkaHyte.exe --screenshot out.png` | Affiche l'interface, enregistre une capture et quitte |
 | `ArkaHyte.exe --demo stress` | Démarre en mode démo (CPU/GPU 100 %, sans internet) |
 | `ArkaHyte.exe --open-editor 0` | Ouvre l'éditeur du 1er raccourci au démarrage |
+| `ArkaHyte.exe --preview-speedtest [done]` | Affiche le compteur (ou le résumé) du test de débit avec des valeurs d'exemple |
+| `ArkaHyte.exe --speedtest out.txt` | Lance un vrai test de débit et écrit chaque étape |
 | `ArkaHyte.exe --list-apps out.json` | Liste les applications proposées par l'éditeur |
 | `ArkaHyte.exe --menu-preview out.png` | Rend le menu de l'icône de notification en image |
 | `ArkaHyte.exe --devtools` | Active F12 (outils de développement) |

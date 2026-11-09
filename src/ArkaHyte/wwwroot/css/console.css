@@ -10,6 +10,8 @@
 	--core: #fff4f4;
 	--warm: #ffb08a;
 	--ember: #ff7a45;
+	/* Speed test upload phase, to tell it apart from the red download */
+	--upload: #ffb020;
 	--line: rgba(255, 60, 75, 0.26);
 	--font-display: 'Advent Pro', 'Segoe UI', sans-serif;
 	--font-label: 'Rajdhani', 'Segoe UI', sans-serif;
@@ -634,6 +636,225 @@ body {
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
+/* ---------- Speed test ---------- */
+.net-actions {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+.net-test {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 12px;
+	border: 1px solid var(--line);
+	background: rgba(255, 31, 51, 0.08);
+	color: var(--bone);
+	font: 700 13px var(--font-label);
+	letter-spacing: 0.16em;
+	text-transform: uppercase;
+	cursor: pointer;
+}
+.net-test svg {
+	width: 18px;
+	height: 18px;
+	fill: none;
+	stroke: var(--blade);
+	stroke-width: 2;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+.net-test:active {
+	transform: scale(0.95);
+}
+.net-test:disabled {
+	opacity: 0.4;
+}
+/* Speedometer view: covers the network and now-playing panels while a test runs */
+.speedtest {
+	--st-color: var(--blade);
+	left: 24px;
+	top: 1684px;
+	width: 634px;
+	height: 712px;
+	z-index: 5;
+	box-sizing: border-box;
+	padding: 22px 26px 24px;
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	/* Opaque: the network and now-playing panels underneath must not show through */
+	background: #0c0507;
+	box-shadow: inset 0 1px 0 var(--line), inset 0 -1px 0 var(--line), 0 0 60px rgba(0, 0, 0, 0.6);
+	clip-path: polygon(24px 0, 100% 0, 100% calc(100% - 24px), calc(100% - 24px) 100%, 0 100%, 0 24px);
+}
+.speedtest.upload {
+	--st-color: var(--upload);
+}
+.st-top {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+.st-top .label {
+	min-width: 0;
+	margin-right: 14px;
+	color: var(--bone);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.st-btn {
+	padding: 7px 16px;
+	border: 1px solid var(--line);
+	background: transparent;
+	color: var(--bone);
+	font: 700 14px var(--font-label);
+	letter-spacing: 0.16em;
+	text-transform: uppercase;
+	cursor: pointer;
+}
+.st-btn:active {
+	transform: scale(0.95);
+}
+.st-gauge-box {
+	position: relative;
+	width: 560px;
+	height: 390px;
+	margin: 6px auto 0;
+	flex: none;
+}
+#stGauge {
+	display: block;
+}
+/* Below the needle hub (dial centre at y 262) so the needle never crosses the figure */
+.st-center {
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: 282px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	pointer-events: none;
+}
+.st-dir {
+	font-weight: 700;
+	font-size: 17px;
+	letter-spacing: 0.26em;
+	text-transform: uppercase;
+	color: var(--st-color);
+}
+.st-value {
+	font-family: var(--font-display);
+	font-weight: 200;
+	font-size: 84px;
+	line-height: 0.9;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+.st-reading {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	margin-top: 4px;
+}
+.st-unit {
+	font-size: 20px;
+	color: var(--ash);
+}
+.st-results {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 14px;
+	margin: 0;
+	padding-top: 14px;
+	border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.st-results div {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+}
+.st-results dt {
+	font-size: 13px;
+	font-weight: 600;
+	letter-spacing: 0.2em;
+	color: var(--ash);
+	text-transform: uppercase;
+}
+.st-results dd {
+	margin: 0;
+	font-family: var(--font-data);
+	font-size: 26px;
+}
+.st-results .down dd {
+	color: var(--blade);
+	text-shadow: 0 0 10px rgba(255, 31, 51, 0.5);
+}
+.st-results .up dd {
+	color: var(--upload);
+	text-shadow: 0 0 10px rgba(255, 176, 32, 0.45);
+}
+
+/* Final summary: big download / upload figures, ping and server */
+.st-summary {
+	flex: 1;
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	grid-template-rows: auto auto auto;
+	align-content: center;
+	gap: 26px 20px;
+}
+.st-stat {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+}
+.st-stat.ping {
+	grid-column: 1 / -1;
+}
+.st-big {
+	font-family: var(--font-display);
+	font-weight: 200;
+	font-size: 112px;
+	line-height: 0.95;
+	font-variant-numeric: tabular-nums;
+}
+.st-stat.down .st-big {
+	color: var(--blade);
+	text-shadow: 0 0 26px rgba(255, 31, 51, 0.55);
+}
+.st-stat.up .st-big {
+	color: var(--upload);
+	text-shadow: 0 0 26px rgba(255, 176, 32, 0.5);
+}
+.st-stat.ping .st-big {
+	font-size: 76px;
+}
+.st-u {
+	font-size: 20px;
+	color: var(--ash);
+}
+.st-server {
+	grid-column: 1 / -1;
+	text-align: center;
+	font-size: 15px;
+	color: var(--ash);
+}
+.st-bar {
+	flex: none;
+	margin-top: auto;
+}
+.speedtest.upload .st-bar {
+	--blade: var(--upload);
+}
+.speedtest.failed .st-value {
+	color: var(--ember);
+}
+
 /* Connectivity alarm, pulsing with the shared --alarm variable */
 .holonet.alert {
 	background: rgba(52, 7, 4, 0.9);

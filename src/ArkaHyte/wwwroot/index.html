@@ -181,7 +181,13 @@
 		<section class="widget holonet" id="holonet" aria-label="Réseau">
 			<div class="net-head">
 				<span class="label">Réseau</span>
-				<span class="chip" id="netChip">--</span>
+				<div class="net-actions">
+					<button type="button" class="net-test" id="netTestBtn" aria-label="Lancer un test de débit">
+						<svg viewBox="0 0 24 24"><path d="M4 18a8 8 0 1 1 16 0"/><path d="m12 18 4-6"/><path d="M6.6 13.6h.01M8.6 9.6h.01M12 8h.01M15.4 9.6h.01"/></svg>
+						<span>Test débit</span>
+					</button>
+					<span class="chip" id="netChip">--</span>
+				</div>
 			</div>
 			<div class="net-body">
 				<div class="signal">
@@ -204,6 +210,34 @@
 					<div><dt>Ping</dt><dd id="ping">--</dd></div>
 				</dl>
 			</div>
+
+		</section>
+
+		<!-- Speed test: speedometer view over the network and now-playing area -->
+		<section class="widget speedtest" id="speedtest" aria-label="Test de débit" hidden>
+			<div class="st-top">
+				<span class="label" id="stPhase">Test de débit</span>
+				<button type="button" class="st-btn" id="stAction">Annuler</button>
+			</div>
+			<div class="st-gauge-box" id="stGaugeBox">
+				<canvas id="stGauge" width="560" height="390"></canvas>
+				<div class="st-center">
+					<span class="st-dir" id="stDir">Ping</span>
+					<div class="st-reading"><span class="st-value" id="stValue">--</span><span class="st-unit" id="stUnit">ms</span></div>
+				</div>
+			</div>
+			<dl class="st-results" id="stResults">
+				<div><dt>Ping</dt><dd id="stPing">--</dd></div>
+				<div class="down"><dt>↓ Réception</dt><dd id="stDown">--</dd></div>
+				<div class="up"><dt>↑ Envoi</dt><dd id="stUp">--</dd></div>
+			</dl>
+			<div class="st-summary" id="stSummary" hidden>
+				<div class="st-stat down"><span class="label">↓ Réception</span><span class="st-big" id="stSumDown">--</span><span class="st-u">Mbit/s</span></div>
+				<div class="st-stat up"><span class="label">↑ Envoi</span><span class="st-big" id="stSumUp">--</span><span class="st-u">Mbit/s</span></div>
+				<div class="st-stat ping"><span class="label">Ping</span><span class="st-big" id="stSumPing">--</span><span class="st-u">ms</span></div>
+				<span class="data st-server" id="stServer">&nbsp;</span>
+			</div>
+			<div class="gauge st-bar"><div class="gauge-fill" id="stFill"><div class="blade-h"></div></div></div>
 		</section>
 
 		<!-- ===== Now playing ===== -->
