@@ -92,6 +92,25 @@
 		}
 		return bytesPerSec < MB ? `${nf0(bytesPerSec / 1024)} Ko/s` : `${nf1.format(bytesPerSec / MB)} Mo/s`;
 	}
+	// Storage sizes in the largest fitting unit (binary, like the Windows Explorer), three
+	// significant digits: 1,82 To / 47,3 Go / 512 Go / 850 Mo
+	const SIZE_UNITS = ['Ko', 'Mo', 'Go', 'To', 'Po'];
+	const sizeFormats = [0, 1, 2].map((digits) => new Intl.NumberFormat('fr-FR', { maximumFractionDigits: digits }));
+	function formatSize(gb) {
+		if (!isNum(gb) || gb <= 0) {
+			return { value: '0', unit: 'Go' };
+		}
+		let value = gb * 1024 * 1024;
+		let unit = 0;
+		// Switch below 1024 (at what would round to 1000), so no size ever shows four digits
+		while (value >= 999.5 && unit < SIZE_UNITS.length - 1) {
+			value /= 1024;
+			unit++;
+		}
+		const digits = value < 10 ? 2 : value < 100 ? 1 : 0;
+		return { value: sizeFormats[digits].format(value), unit: SIZE_UNITS[unit] };
+	}
+
 	const text = (id, value) => {
 		$(id).textContent = value;
 	};
@@ -185,8 +204,11 @@
 			const disk = disks[i];
 			slot.querySelector('.disk-letter').textContent = disk.name;
 			slot.querySelector('.disk-label').textContent = disk.label || '';
-			slot.querySelector('.free').textContent = nf0(disk.totalGb - disk.usedGb);
-			slot.querySelector('.disk-total').textContent = `sur ${nf0(disk.totalGb)} Go`;
+			const free = formatSize(disk.totalGb - disk.usedGb);
+			slot.querySelector('.free').textContent = free.value;
+			slot.querySelector('.unit').textContent = `${free.unit} libres`;
+			const total = formatSize(disk.totalGb);
+			slot.querySelector('.disk-total').textContent = `sur ${total.value} ${total.unit}`;
 			slot.querySelector('.disk-arc').setAttribute('stroke-dasharray', `${(circumference * disk.usedGb) / disk.totalGb} ${circumference}`);
 			const temp = slot.querySelector('.disk-temp');
 			temp.hidden = !isNum(disk.temp);

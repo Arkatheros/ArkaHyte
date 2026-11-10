@@ -15,4 +15,3 @@ du non fait.
 ---
 
 # Liste des tâches
-- [ ] pour les tailles de disques dur, faire un gestion automatique, pour dire 1.5Ko, Go ou To, plutot que d'afficher 1999 Go
