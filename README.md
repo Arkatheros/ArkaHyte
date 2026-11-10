@@ -117,6 +117,19 @@ Textes et images de l'assistant MSI : `installer\` (`welcome.txt`, `conclusion.t
 
 ### Développement
 
+Tester une modification sans publier de version : `scripts\Test-Dev.ps1` compile vers `bin\ArkaHyte`,
+arrête la copie installée, lance la version de dev (« dev » à côté du numéro dans le menu de l'icône)
+et attend. Quitter la version de dev (menu de l'icône › Quitter, ou Ctrl+C dans le terminal) relance
+la copie installée. Les deux partagent `%LOCALAPPDATA%\ArkaHyte` (réglages, raccourcis, journaux).
+
+```powershell
+scripts\Test-Dev.ps1                          # compile puis lance la version de dev
+scripts\Test-Dev.ps1 -Arguments '--setup'     # avec l'assistant ouvert
+scripts\Test-Dev.ps1 -Arguments '--demo','stress' -NoBuild
+```
+
+Ancienne installation de dev (tâche planifiée, sans la version installée) :
+
 ```powershell
 dotnet publish src\ArkaHyte -c Release -o bin\ArkaHyte
 scripts\Install.ps1              # (admin) tâche planifiée vers bin\ArkaHyte

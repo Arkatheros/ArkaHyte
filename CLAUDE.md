@@ -16,6 +16,10 @@ Le [README](README.md) décrit l'usage ; [TODO.md](TODO.md) est la file d'attent
 # Build + publication (l'app installée tourne depuis bin\ArkaHyte : la quitter avant, fichiers verrouillés)
 dotnet publish src\ArkaHyte -c Release -o bin\ArkaHyte
 
+# Tester sans publier : copie installée arrêtée, bin\ArkaHyte lancé, copie installée relancée en sortant
+# (menu Quitter ou Ctrl+C). Moyen normal de faire valider une modification par l'utilisateur.
+scripts\Test-Dev.ps1 [-Arguments '--setup'] [-NoBuild]
+
 # Installation de dev au démarrage (PowerShell admin, tâche planifiée vers bin) / retrait
 scripts\Install.ps1
 scripts\Install.ps1 -Uninstall

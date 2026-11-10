@@ -70,7 +70,8 @@ public sealed class DisplayForm : Form
 		// Diagnostic screenshot runs are short-lived: no tray icon for them
 		if (options.ScreenshotPath is null)
 		{
-			_tray = new TrayIcon(_demo is not null, updater.CurrentVersion);
+			// "dev" tells a development build (scripts\Test-Dev.ps1) apart from the installed copy
+			_tray = new TrayIcon(_demo is not null, updater.IsInstalled ? updater.CurrentVersion : $"{updater.CurrentVersion} dev");
 			_tray.DemoToggled += enabled => SetDemo(enabled ? DemoScenario : null);
 			_tray.ReloadRequested += () => _webView.CoreWebView2?.Reload();
 			_tray.ExitRequested += Close;
