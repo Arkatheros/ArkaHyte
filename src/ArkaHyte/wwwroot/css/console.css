@@ -89,7 +89,8 @@ body {
 	will-change: transform;
 }
 /* Looping effects are driven by the 24 fps JS loop through these variables: infinite CSS
-   animations would keep the compositor rendering at the panel refresh rate (73 Hz) */
+   animations would keep the compositor rendering at the panel refresh rate (73 Hz).
+   Defaults only: the loop sets each one on the elements that read it, never on the frame. */
 .frame {
 	--flicker: 1;
 	--breathe-2: 0.6;
@@ -226,6 +227,15 @@ body {
 	width: 360px;
 	height: 360px;
 	cursor: pointer;
+}
+.cpu canvas {
+	position: absolute;
+	left: 0;
+	top: 0;
+}
+/* Turned between samples by the JS loop: compositor-only rotation */
+#cpuSpikes {
+	will-change: transform;
 }
 .cpu-core {
 	position: absolute;

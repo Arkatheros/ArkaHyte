@@ -114,12 +114,33 @@ Clic droit sur le sabre rouge dans la zone de notification : **mode démo** (CPU
 | `ArkaHyte.exe --list-apps out.json` | Liste les applications proposées par l'éditeur |
 | `ArkaHyte.exe --menu-preview out.png` | Rend le menu de l'icône de notification en image |
 | `ArkaHyte.exe --devtools` | Active F12 (outils de développement) |
+| `ArkaHyte.exe --memory-log` | Note la mémoire de l'hôte (tas .NET, mémoire privée, handles) toutes les 10 s dans `display.log` (sinon toutes les heures) |
 
 Logs : `%LOCALAPPDATA%\ArkaHyte\` (`display.log`, `launcher.log`).
+
+### Mesurer la consommation
+
+```powershell
+scripts\Measure-ArkaHyte.ps1                                # 60 s sur l'instance en cours
+scripts\Measure-ArkaHyte.ps1 -Seconds 300 -OutFile bench.json
+```
+
+Échantillonne `ArkaHyte.exe` et tous ses processus WebView2 (ceux des autres applis sont ignorés),
+puis affiche une ligne par processus et le total :
+
+- **CPU % core** : moyenne en % d'un cœur logique (16 % visés) ; le résumé donne aussi le % de la
+  machine (chiffre du Gestionnaire des tâches) et le pic.
+- **GPU %** : moteur le plus chargé (3D, Copy…), comme le Gestionnaire des tâches.
+- **Private WS MB** : mémoire de la colonne « Mémoire » du Gestionnaire des tâches ;
+  **Peak WS MB** : plus haut working set vu (pages partagées comprises) ; **Private MB** : mémoire privée allouée.
+
+Pour le scénario chargé, activer le **mode démo** depuis l'icône de notification pendant la mesure.
 
 ## Modifier l'interface
 
 Ouvrir `src/ArkaHyte/wwwroot/index.html` dans un navigateur : sans l'application, la page
 passe en **mode design** avec des données simulées. Republier ensuite avec `dotnet publish`.
 
-Performances mesurées : ~16 % d'un cœur (≈ 1 % du CPU total), ~380 Mo de RAM (WebView2).
+Performances mesurées (`Measure-ArkaHyte.ps1` sur 120 s, 10/11/2026, affichage normal) : ~7 % d'un
+cœur (≈ 0,4 % du CPU total), ~1 % de GPU, ~150 Mo de RAM stables (hôte .NET ~20-45 Mo, le reste
+pour WebView2). Écrans éteints ou session verrouillée : rendu et capteurs en pause.

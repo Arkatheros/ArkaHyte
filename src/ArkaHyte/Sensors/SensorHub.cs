@@ -7,6 +7,7 @@ namespace ArkaHyte.Sensors;
 public sealed class SensorHub : IDisposable
 {
 	private static readonly TimeSpan Interval = TimeSpan.FromSeconds(1);
+	private const int CollectEverySamples = 30;
 
 	private readonly AppSettings _settings;
 	private readonly HwInfoReader _hwInfo = new();
@@ -25,6 +26,14 @@ public sealed class SensorHub : IDisposable
 	public MediaMonitor Media => _media;
 	public HwInfoReader HwInfo => _hwInfo;
 
+	/// <summary>Skips sampling while nobody can see the display (monitors off, session locked).</summary>
+	public bool Paused
+	{
+		get => _paused;
+		set => _paused = value;
+	}
+	private volatile bool _paused;
+
 	public SensorHub(AppSettings settings)
 	{
 		_settings = settings;
@@ -41,8 +50,13 @@ public sealed class SensorHub : IDisposable
 	private async Task RunAsync(CancellationToken token)
 	{
 		using var timer = new PeriodicTimer(Interval);
+		var samples = 0;
 		do
 		{
+			if (Paused)
+			{
+				continue;
+			}
 			try
 			{
 				var snapshot = await SampleAsync();
@@ -53,8 +67,24 @@ public sealed class SensorHub : IDisposable
 			{
 				Log.Error("Sampling failed", exception);
 			}
+			if (++samples % CollectEverySamples == 0)
+			{
+				ReleaseNativeWrappers();
+			}
 		}
 		while (await timer.WaitForNextTickAsync(token).ConfigureAwait(false));
+	}
+
+	/// <summary>
+	/// The media session API hands out new WinRT objects at every sample. Their managed wrappers are
+	/// tiny but hold native memory until finalised, and this process allocates so little managed
+	/// memory that the GC would almost never run: collect explicitly (a ~10 MB heap, a few ms).
+	/// </summary>
+	private static void ReleaseNativeWrappers()
+	{
+		GC.Collect();
+		GC.WaitForPendingFinalizers();
+		GC.Collect();
 	}
 
 	public async Task<Snapshot> SampleAsync()

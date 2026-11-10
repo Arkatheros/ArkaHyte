@@ -30,6 +30,9 @@ Pas de tests automatisés ni de linter. Vérification par les options one-shot d
 - `--speedtest out.txt` : vrai test de débit (sature la connexion, ne pas lancer sans raison).
 - `--devtools` : F12.
 
+Consommation : `scripts\Measure-ArkaHyte.ps1 [-Seconds 60] [-OutFile x.json]` sur l'instance en cours
+(CPU par processus en % d'un cœur, GPU, mémoire ; hôte + arbre WebView2 uniquement).
+
 Itération UI rapide : ouvrir `src/ArkaHyte/wwwroot/index.html` dans un navigateur. Sans hôte WebView2
 (`window.chrome.webview` absent), `console.js` passe en **mode design** avec données simulées.
 
@@ -74,7 +77,20 @@ L'écran tourne en permanence : cible ~16 % d'un cœur.
 - Boucle d'animation unique à 24 fps via `setTimeout` dans `console.js` ; tout nouvel effet s'y branche.
 - Aucune `transition` CSS ni animation CSS infinie, pas de `backdrop-filter`.
 - Effets pilotés par variables CSS mises à jour en JS ; `will-change` sur les éléments animés.
-- Canvas d'effets en demi-résolution ; mettre en cache ce qui ne change pas (ex. pointes de l'anneau CPU).
+- Une variable animée se pose sur les éléments qui la lisent (`setVar(elements, …)`), jamais sur `.frame` :
+  héritée par toute la page, elle forcerait un recalcul de style complet à chaque frame.
+- Rotation / déplacement : `transform` CSS (compositeur) plutôt que redessiner un canvas (ex. pointes de l'anneau CPU).
+- Canvas d'effets en demi-résolution ; ne redessiner que si le rendu change (lame de l'anneau CPU).
+- Écrans éteints ou session verrouillée : WebView masquée et `SensorHub.Paused` (`DisplayForm.UpdateRendering`).
+
+## Mémoire de l'hôte (impératif)
+
+- Rien qui charge le shell Windows (extensions shell, `Shell.Application`) dans l'hôte : le catalogue
+  d'applis est listé par un processus enfant `ArkaHyte.exe --export-apps` (+50 Mo restés à vie sinon).
+- L'hôte alloue très peu en .NET, donc le GC ne passe presque jamais alors que les objets WinRT (SMTC)
+  retiennent de la mémoire native et des handles jusqu'à finalisation : `SensorHub` force un GC toutes
+  les 30 s. `HeapHardLimit` (csproj) réduit le budget gen0, calé sinon sur le cache L3 (96 Mo).
+- Vérifier avec `--memory-log` + `scripts\Measure-ArkaHyte.ps1` : la mémoire privée doit rester stable.
 
 ## Conventions
 

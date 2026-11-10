@@ -11,6 +11,28 @@ internal static class NativeMethods
 	public const int WM_DISPLAYCHANGE = 0x007E;
 	public const int MA_NOACTIVATE = 3;
 
+	// ---------- Monitor power state ----------
+	public const int WM_POWERBROADCAST = 0x0218;
+	public const int PBT_POWERSETTINGCHANGE = 0x8013;
+	public const int DEVICE_NOTIFY_WINDOW_HANDLE = 0;
+	// GUID_CONSOLE_DISPLAY_STATE: data is 0 = off, 1 = on, 2 = dimmed
+	public static readonly Guid GuidConsoleDisplayState = new("6fe69556-704a-47a0-8f24-c28d936fda47");
+
+	[StructLayout(LayoutKind.Sequential)]
+	public struct PowerBroadcastSetting
+	{
+		public Guid PowerSetting;
+		public uint DataLength;
+		public uint Data;
+	}
+
+	[DllImport("user32.dll", SetLastError = true)]
+	public static extern IntPtr RegisterPowerSettingNotification(IntPtr recipient, ref Guid powerSettingGuid, int flags);
+
+	[DllImport("user32.dll", SetLastError = true)]
+	[return: MarshalAs(UnmanagedType.Bool)]
+	public static extern bool UnregisterPowerSettingNotification(IntPtr handle);
+
 	// ---------- CPU / memory ----------
 	[StructLayout(LayoutKind.Sequential)]
 	public struct MemoryStatusEx

@@ -10,6 +10,7 @@ internal static class Program
 	///   ArkaHyte.exe                      run the case display
 	///   ArkaHyte.exe --devtools           same, with F12 developer tools enabled
 	///   ArkaHyte.exe --touch-log          same, logging every click/touch seen by the touch guard
+	///   ArkaHyte.exe --memory-log         same, logging the memory use every 10 s (hourly otherwise)
 	///   ArkaHyte.exe --screenshot out.png render, save a capture of the page and exit
 	///   ArkaHyte.exe --demo stress        show a simulated scenario (idle, stress) instead of live data
 	///   ArkaHyte.exe --open-editor 0      open the shortcut editor of dock button 0 at start
@@ -36,10 +37,16 @@ internal static class Program
 			File.WriteAllLines(speedTestPath, lines);
 			return 0;
 		}
+		var exportPath = ArgumentValue(args, AppCatalog.ExportArgument);
+		if (exportPath is not null)
+		{
+			// Child process started by the display to list applications away from its own memory
+			return AppCatalog.Export(exportPath);
+		}
 		var appsPath = ArgumentValue(args, "--list-apps");
 		if (appsPath is not null)
 		{
-			var apps = AppCatalog.ListAsync().GetAwaiter().GetResult();
+			var apps = AppCatalog.EnumerateOnStaAsync().GetAwaiter().GetResult();
 			var summary = apps.Select(a => new { a.Name, a.Id, icon = a.Icon is null ? "none" : $"{a.Icon.Length} chars" });
 			File.WriteAllText(appsPath, JsonSerializer.Serialize(summary, new JsonSerializerOptions { WriteIndented = true }));
 			return 0;
@@ -63,6 +70,10 @@ internal static class Program
 		using var hub = new SensorHub(settings);
 		hub.Start();
 
+		// Memory trend in display.log: hourly, or every 10 s with --memory-log while investigating
+		var memoryLogPeriod = args.Contains("--memory-log") ? TimeSpan.FromSeconds(10) : TimeSpan.FromHours(1);
+		using var memoryLog = new System.Threading.Timer(_ => Log.Memory(), null, memoryLogPeriod, memoryLogPeriod);
+
 		// Keeps the mouse cursor off the case display after touches (skipped for one-shot captures)
 		using var touchGuard = new TouchGuard(settings.Display, verbose: args.Contains("--touch-log"));
 		if (ArgumentValue(args, "--screenshot") is null)
@@ -76,7 +87,7 @@ internal static class Program
 			ArgumentValue(args, "--demo"),
 			int.TryParse(ArgumentValue(args, "--open-editor"), out var editorIndex) ? editorIndex : null,
 			args.Contains("--preview-speedtest") ? (ArgumentValue(args, "--preview-speedtest") == "done" ? "done" : "preview") : null);
-		Application.Run(new DisplayForm(settings, hub, options));
+		Application.Run(new DisplayForm(settings, hub, touchGuard, options));
 		Log.Info("Stopped");
 		return 0;
 	}

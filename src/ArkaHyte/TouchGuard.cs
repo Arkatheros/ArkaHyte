@@ -39,13 +39,16 @@ public sealed class TouchGuard : IDisposable
 	private readonly bool _verbose;
 	private readonly LowLevelMouseProc _callback;
 	private readonly ThreadingTimer _restoreTimer;
-	private readonly object _positionLock = new();
 	private ThreadingTimer? _watchdog;
 	private Thread? _thread;
 	private uint _threadId;
 	private IntPtr _hook;
-	private Point _lastOffCasePosition;
+	// X and Y packed in one long: written by the hook, read by timers, no lock on the hook path
+	private long _lastOffCasePosition;
 	private int _idleTicksOnCase;
+	// The hook runs for every mouse event of the system (up to 8000/s with gaming mice):
+	// monitor bounds are cached instead of querying the monitor at each event
+	private volatile MonitorLayout _layout = new(null, []);
 
 	public TouchGuard(DisplaySettings display, bool verbose = false)
 	{
@@ -58,6 +61,8 @@ public sealed class TouchGuard : IDisposable
 
 	public void Start()
 	{
+		RefreshCaseBounds();
+		Microsoft.Win32.SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
 		var ready = new ManualResetEventSlim();
 		_thread = new Thread(() => Run(ready)) { IsBackground = true, Name = "TouchGuard" };
 		_thread.Start();
@@ -67,10 +72,10 @@ public sealed class TouchGuard : IDisposable
 	private void Run(ManualResetEventSlim ready)
 	{
 		_threadId = GetCurrentThreadId();
-		_lastOffCasePosition = GetPrimaryCenter();
+		SetLastOffCasePosition(GetPrimaryCenter());
 		if (GetCursorPos(out var current) && !IsOnCaseDisplay(current))
 		{
-			_lastOffCasePosition = current;
+			SetLastOffCasePosition(current);
 		}
 
 		_hook = SetWindowsHookEx(WH_MOUSE_LL, _callback, GetModuleHandle(null), 0);
@@ -99,23 +104,22 @@ public sealed class TouchGuard : IDisposable
 	{
 		if (code >= 0)
 		{
-			var data = Marshal.PtrToStructure<MouseHookData>(lParam);
+			// MSLLHOOKSTRUCT starts with the POINT: read it in place, without marshalling the struct
+			var position = new Point { X = Marshal.ReadInt32(lParam), Y = Marshal.ReadInt32(lParam, 4) };
 			var message = wParam.ToInt32();
-			var onCase = IsOnCaseDisplay(data.Position);
+			var onCase = IsOnCaseDisplay(position);
 
 			if (_verbose && (message != WM_MOUSEMOVE || onCase))
 			{
-				Log.Info($"Touch guard: msg=0x{message:X4} pt={data.Position.X},{data.Position.Y} onCase={onCase} extra=0x{data.ExtraInfo.ToInt64():X}");
+				var data = Marshal.PtrToStructure<MouseHookData>(lParam);
+				Log.Info($"Touch guard: msg=0x{message:X4} pt={position.X},{position.Y} onCase={onCase} extra=0x{data.ExtraInfo.ToInt64():X}");
 			}
 
 			if (!onCase)
 			{
 				if (message == WM_MOUSEMOVE)
 				{
-					lock (_positionLock)
-					{
-						_lastOffCasePosition = data.Position;
-					}
+					SetLastOffCasePosition(position);
 				}
 			}
 			else if (message is WM_LBUTTONUP or WM_RBUTTONUP)
@@ -132,13 +136,21 @@ public sealed class TouchGuard : IDisposable
 		return CallNextHookEx(_hook, code, wParam, lParam);
 	}
 
+	/// <summary>
+	/// Sends the cursor back at once, before an app is launched from the display: once an elevated
+	/// window (Task Manager auto-elevates for administrators) is in front, Windows ignores
+	/// SetCursorPos and this process's hook, so the delayed restore would never happen.
+	/// </summary>
+	public void ReturnCursorNow()
+	{
+		_restoreTimer.Change(Timeout.Infinite, Timeout.Infinite);
+		RestoreCursor();
+	}
+
 	private void RestoreCursor()
 	{
-		Point target;
-		lock (_positionLock)
-		{
-			target = _lastOffCasePosition;
-		}
+		var packed = Interlocked.Read(ref _lastOffCasePosition);
+		var target = new Point { X = (int)(packed >> 32), Y = (int)packed };
 
 		if (GetCursorPos(out var current) && IsOnCaseDisplay(current))
 		{
@@ -167,7 +179,33 @@ public sealed class TouchGuard : IDisposable
 		}
 	}
 
+	/// <summary>
+	/// The hook sees where a move was headed before Windows clips it to the screens, so points just
+	/// past an edge of the case display arrive (e.g. x = -683 or x = 0). Those belong to the nearest
+	/// monitor, as Windows will clip them: only points outside every cached monitor pay for that query.
+	/// </summary>
 	private bool IsOnCaseDisplay(Point point)
+	{
+		var layout = _layout;
+		if (layout.Case is null)
+		{
+			return false;
+		}
+		if (layout.Case.Contains(point))
+		{
+			return true;
+		}
+		foreach (var other in layout.Others)
+		{
+			if (other.Contains(point))
+			{
+				return false;
+			}
+		}
+		return IsNearestMonitorTheCase(point);
+	}
+
+	private bool IsNearestMonitorTheCase(Point point)
 	{
 		var monitor = MonitorFromPoint(point, MONITOR_DEFAULTTONEAREST);
 		var info = new MonitorInfo { Size = Marshal.SizeOf<MonitorInfo>() };
@@ -178,6 +216,33 @@ public sealed class TouchGuard : IDisposable
 		var width = info.Monitor.Right - info.Monitor.Left;
 		var height = info.Monitor.Bottom - info.Monitor.Top;
 		return (width == _caseWidth && height == _caseHeight) || (width == _caseHeight && height == _caseWidth);
+	}
+
+	private void SetLastOffCasePosition(Point point) =>
+		Interlocked.Exchange(ref _lastOffCasePosition, ((long)point.X << 32) | (uint)point.Y);
+
+	private void OnDisplaySettingsChanged(object? sender, EventArgs e) => RefreshCaseBounds();
+
+	// Same rule as the display window: the case screen is the one with its native size, either orientation
+	private void RefreshCaseBounds()
+	{
+		Bounds? caseBounds = null;
+		var others = new List<Bounds>();
+		foreach (var screen in Screen.AllScreens)
+		{
+			var bounds = new Bounds(screen.Bounds.Left, screen.Bounds.Top, screen.Bounds.Right, screen.Bounds.Bottom);
+			var isCase = (screen.Bounds.Width == _caseWidth && screen.Bounds.Height == _caseHeight)
+				|| (screen.Bounds.Width == _caseHeight && screen.Bounds.Height == _caseWidth);
+			if (isCase && caseBounds is null)
+			{
+				caseBounds = bounds;
+			}
+			else
+			{
+				others.Add(bounds);
+			}
+		}
+		_layout = new MonitorLayout(caseBounds, [.. others]);
 	}
 
 	private static Point GetPrimaryCenter()
@@ -194,6 +259,7 @@ public sealed class TouchGuard : IDisposable
 
 	public void Dispose()
 	{
+		Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
 		_watchdog?.Dispose();
 		_restoreTimer.Dispose();
 		if (_thread is { IsAlive: true } && _threadId != 0)
@@ -204,6 +270,14 @@ public sealed class TouchGuard : IDisposable
 	}
 
 	private delegate IntPtr LowLevelMouseProc(int code, IntPtr wParam, IntPtr lParam);
+
+	private sealed record Bounds(int Left, int Top, int Right, int Bottom)
+	{
+		public bool Contains(Point point) =>
+			point.X >= Left && point.X < Right && point.Y >= Top && point.Y < Bottom;
+	}
+
+	private sealed record MonitorLayout(Bounds? Case, Bounds[] Others);
 
 	[StructLayout(LayoutKind.Sequential)]
 	private struct Point

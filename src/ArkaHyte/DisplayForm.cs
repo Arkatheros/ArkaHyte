@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using ArkaHyte.Native;
 using ArkaHyte.Sensors;
@@ -27,6 +28,7 @@ public sealed class DisplayForm : Form
 	private readonly ShortcutStore _shortcuts;
 	private readonly ShortcutLauncher _launcher;
 	private readonly DisplayOptions _options;
+	private readonly TouchGuard _touchGuard;
 	private readonly WebView2 _webView;
 	private readonly TrayIcon? _tray;
 	private readonly System.Windows.Forms.Timer _placementRetry = new() { Interval = 5000 };
@@ -34,12 +36,16 @@ public sealed class DisplayForm : Form
 	private CancellationTokenSource? _speedTestRun;
 	private string? _demo;
 	private bool _webReady;
+	private IntPtr _displayStateNotification;
+	private bool _displayOn = true;
+	private bool _sessionLocked;
 	private List<object>? _dockButtons;
 
-	public DisplayForm(AppSettings settings, SensorHub hub, DisplayOptions options)
+	public DisplayForm(AppSettings settings, SensorHub hub, TouchGuard touchGuard, DisplayOptions options)
 	{
 		_settings = settings;
 		_hub = hub;
+		_touchGuard = touchGuard;
 		_options = options;
 		_demo = options.Demo;
 		_shortcuts = new ShortcutStore(settings.Shortcuts);
@@ -61,6 +67,7 @@ public sealed class DisplayForm : Form
 			_tray.DemoToggled += enabled => SetDemo(enabled ? DemoScenario : null);
 			_tray.ReloadRequested += () => _webView.CoreWebView2?.Reload();
 			_tray.ExitRequested += Close;
+			Microsoft.Win32.SystemEvents.SessionSwitch += OnSessionSwitch;
 		}
 
 		_placementRetry.Tick += (_, _) => PlaceOnCaseDisplay(showIfFound: true);
@@ -79,12 +86,42 @@ public sealed class DisplayForm : Form
 		}
 	}
 
+	protected override void OnHandleCreated(EventArgs e)
+	{
+		base.OnHandleCreated(e);
+		if (_options.ScreenshotPath is null)
+		{
+			var guid = NativeMethods.GuidConsoleDisplayState;
+			_displayStateNotification = NativeMethods.RegisterPowerSettingNotification(Handle, ref guid, NativeMethods.DEVICE_NOTIFY_WINDOW_HANDLE);
+		}
+	}
+
+	protected override void OnHandleDestroyed(EventArgs e)
+	{
+		if (_displayStateNotification != IntPtr.Zero)
+		{
+			NativeMethods.UnregisterPowerSettingNotification(_displayStateNotification);
+			_displayStateNotification = IntPtr.Zero;
+		}
+		base.OnHandleDestroyed(e);
+	}
+
 	protected override void WndProc(ref Message message)
 	{
 		if (message.Msg == NativeMethods.WM_MOUSEACTIVATE)
 		{
 			message.Result = NativeMethods.MA_NOACTIVATE;
 			return;
+		}
+		if (message.Msg == NativeMethods.WM_POWERBROADCAST && message.WParam == NativeMethods.PBT_POWERSETTINGCHANGE)
+		{
+			var setting = Marshal.PtrToStructure<NativeMethods.PowerBroadcastSetting>(message.LParam);
+			if (setting.PowerSetting == NativeMethods.GuidConsoleDisplayState)
+			{
+				// Dimmed (2) still shows the display
+				_displayOn = setting.Data != 0;
+				UpdateRendering();
+			}
 		}
 		if (message.Msg == NativeMethods.WM_DISPLAYCHANGE)
 		{
@@ -142,6 +179,49 @@ public sealed class DisplayForm : Form
 		return true;
 	}
 
+	private void OnSessionSwitch(object? sender, Microsoft.Win32.SessionSwitchEventArgs args)
+	{
+		if (args.Reason is not (Microsoft.Win32.SessionSwitchReason.SessionLock or Microsoft.Win32.SessionSwitchReason.SessionUnlock))
+		{
+			return;
+		}
+		var locked = args.Reason == Microsoft.Win32.SessionSwitchReason.SessionLock;
+		PostToUiThread(() =>
+		{
+			_sessionLocked = locked;
+			UpdateRendering();
+		});
+	}
+
+	/// <summary>
+	/// Nobody sees the case screen while the monitors sleep or the session is locked: the WebView is
+	/// hidden (Chromium stops painting and throttles the page timers) and sampling pauses.
+	/// </summary>
+	private void UpdateRendering()
+	{
+		var active = _displayOn && !_sessionLocked;
+		if (_hub.Paused == !active)
+		{
+			return;
+		}
+		_hub.Paused = !active;
+		_webView.Visible = active;
+		if (_webView.CoreWebView2 is { } core)
+		{
+			// Low lets Chromium drop its caches while hidden; restored before it paints again
+			core.MemoryUsageTargetLevel = active ? CoreWebView2MemoryUsageTargetLevel.Normal : CoreWebView2MemoryUsageTargetLevel.Low;
+		}
+		Log.Info(active ? "Display visible again, rendering resumed" : "Display off or session locked, rendering paused");
+	}
+
+	private void PostToUiThread(Action action)
+	{
+		if (!IsDisposed && IsHandleCreated)
+		{
+			BeginInvoke(action);
+		}
+	}
+
 	private async Task InitializeAsync()
 	{
 		try
@@ -193,7 +273,7 @@ public sealed class DisplayForm : Form
 		await Task.Delay(TimeSpan.FromSeconds(20));
 		try
 		{
-			await AppCatalog.ListAsync();
+			await AppCatalog.ListJsonAsync();
 		}
 		catch (Exception exception)
 		{
@@ -253,6 +333,8 @@ public sealed class DisplayForm : Form
 				OnWebReady();
 				break;
 			case "launch" when action is not null:
+				// Before the app opens: an elevated one would block the cursor restore
+				_touchGuard.ReturnCursorNow();
 				if (!_launcher.Launch(action))
 				{
 					Post(new { type = "toast", text = "Raccourci indisponible" });
@@ -363,9 +445,11 @@ public sealed class DisplayForm : Form
 	{
 		try
 		{
-			var apps = await AppCatalog.ListAsync();
+			// Already JSON from the child process: wrapped as is, never deserialised here
+			var apps = await AppCatalog.ListJsonAsync();
+			var json = $$"""{"type":"apps","apps":{{apps}}}""";
 			// Continuation may run on a pool thread: hop back to the UI thread to post
-			PostFromAnyThread(new { type = "apps", apps });
+			PostToUiThread(() => PostJson(json));
 		}
 		catch (Exception exception)
 		{
@@ -409,22 +493,17 @@ public sealed class DisplayForm : Form
 		}
 	}
 
-	private void PostFromAnyThread(object message)
-	{
-		if (IsDisposed || !IsHandleCreated)
-		{
-			return;
-		}
-		BeginInvoke(() => Post(message));
-	}
+	private void PostFromAnyThread(object message) => PostToUiThread(() => Post(message));
 
-	private void Post(object message)
+	private void Post(object message) => PostJson(JsonSerializer.Serialize(message, message.GetType(), JsonOptions));
+
+	private void PostJson(string json)
 	{
 		if (!_webReady || IsDisposed || _webView.CoreWebView2 is null)
 		{
 			return;
 		}
-		_webView.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(message, message.GetType(), JsonOptions));
+		_webView.CoreWebView2.PostWebMessageAsJson(json);
 	}
 
 	/// <summary>Diagnostic mode: lets ignition and a few samples play, saves a PNG of the page, then quits.</summary>
@@ -448,6 +527,8 @@ public sealed class DisplayForm : Form
 	{
 		if (disposing)
 		{
+			// Static event: would keep the form alive otherwise
+			Microsoft.Win32.SystemEvents.SessionSwitch -= OnSessionSwitch;
 			_speedTestRun?.Cancel();
 			_tray?.Dispose();
 			_placementRetry.Dispose();

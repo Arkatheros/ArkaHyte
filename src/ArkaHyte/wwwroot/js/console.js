@@ -1014,15 +1014,16 @@
 	const RING_LENS = 100;
 	const RING_STEP = (Math.PI * 2) / RING;
 
-	// The glowing spikes only change once per second: render them off-screen at each sample
-	// and just rotate that bitmap between samples instead of re-stroking 72 blurred lines per frame
-	const spikeLayer = document.createElement('canvas');
-	spikeLayer.width = RING_SIZE;
-	spikeLayer.height = RING_SIZE;
-	const spikeCtx = spikeLayer.getContext('2d');
+	// The glowing spikes only change once per second: they live on their own canvas, redrawn at
+	// each sample and turned in between by a CSS transform, which the compositor applies without
+	// repainting. The lens and the load blade on top are redrawn only when the eased load moves.
+	const spikeCanvas = $('cpuSpikes');
+	const spikeCtx = spikeCanvas.getContext('2d');
 	let spikeGrow = -1;
 	let spikeColor = '';
 	let spikeTick = -1;
+	let spikeAngle = NaN;
+	let ringKey = '';
 
 	function ringColor() {
 		const cpuTemp = current && current.cpu ? current.cpu.temp : null;
@@ -1057,6 +1058,26 @@
 		const r0 = RING_R0;
 		const color = ringColor();
 		const grow = ignition(now, 200, 900);
+
+		if (lastTick !== spikeTick || grow !== spikeGrow || color !== spikeColor) {
+			renderSpikes(color, grow);
+			spikeTick = lastTick;
+			spikeGrow = grow;
+			spikeColor = color;
+		}
+		const angle = Math.round(progress * RING_STEP * 10000) / 10000;
+		if (angle !== spikeAngle) {
+			spikeAngle = angle;
+			spikeCanvas.style.transform = `rotate(${angle}rad)`;
+		}
+
+		// Blade sweep quantised well below a pixel at the ring's radius
+		const sweep = (shown.cpu / 100) * grow;
+		const key = `${Math.round(sweep * 4000)}|${color}`;
+		if (key === ringKey) {
+			return;
+		}
+		ringKey = key;
 		ctx.clearRect(0, 0, RING_SIZE, RING_SIZE);
 
 		// Dark lens behind the load value
@@ -1075,21 +1096,9 @@
 		ctx.arc(cx, cy, r0 + 4, 0, Math.PI * 2);
 		ctx.stroke();
 
-		if (lastTick !== spikeTick || grow !== spikeGrow || color !== spikeColor) {
-			renderSpikes(color, grow);
-			spikeTick = lastTick;
-			spikeGrow = grow;
-			spikeColor = color;
-		}
-		ctx.save();
-		ctx.translate(cx, cy);
-		ctx.rotate(progress * RING_STEP);
-		ctx.drawImage(spikeLayer, -cx, -cy);
-		ctx.restore();
-
 		// Current load as a curved blade
 		const start = -Math.PI / 2;
-		const end = start + (shown.cpu / 100) * Math.PI * 2 * grow;
+		const end = start + sweep * Math.PI * 2;
 		const arcR = r0 - 12;
 		ctx.shadowBlur = 0;
 		ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
@@ -1218,14 +1227,28 @@
 	}
 
 	// ---------- Looping CSS effects, sampled here instead of CSS keyframes ----------
-	const cssVars = {};
-	function setVar(name, value) {
+	// Set on the frame, an inherited custom property would restyle the whole page at every frame:
+	// each looping value only goes to the elements whose CSS reads it
+	const cssVars = new WeakMap();
+	function setVar(elements, name, value) {
 		const rounded = Math.round(value * 100) / 100;
-		if (cssVars[name] !== rounded) {
-			cssVars[name] = rounded;
-			frame.style.setProperty(name, rounded);
+		for (const element of elements) {
+			let vars = cssVars.get(element);
+			if (!vars) {
+				vars = {};
+				cssVars.set(element, vars);
+			}
+			if (vars[name] !== rounded) {
+				vars[name] = rounded;
+				element.style.setProperty(name, rounded);
+			}
 		}
 	}
+	const flickerTargets = [...document.querySelectorAll('.blade-h')];
+	const breatheTargets = [...document.querySelectorAll('.time .colon')];
+	// Live collections: hot metric tiles (glowing value) and the network panel in alert
+	const hotTiles = frame.getElementsByClassName('hot');
+	const alertPanels = frame.getElementsByClassName('alert');
 
 	// Blade flicker: steady with three short dips per 2.7 s cycle
 	function flickerAt(now) {
@@ -1239,6 +1262,7 @@
 
 	const eqBars = [...document.querySelectorAll('.eq i')];
 	const eqPhases = [0, 0.33, 0.66, 0.17];
+	const eqTransforms = eqBars.map(() => '');
 
 	// Each lava spot mixes a long swell with a gentle ripple, periods offset so they never pulse in sync
 	const lavaSpots = [...document.querySelectorAll('.lava-spot')].map((element, i) => ({
@@ -1307,14 +1331,22 @@
 			return;
 		}
 		animateBackground(now);
-		setVar('--flicker', flickerAt(now));
-		setVar('--breathe-2', breatheAt(now, 4000));
+		setVar(flickerTargets, '--flicker', flickerAt(now));
+		setVar(breatheTargets, '--breathe-2', breatheAt(now, 4000));
 		animateSignal(now);
-		setVar('--alarm', 0.5 - 0.5 * Math.cos((2 * Math.PI * now) / 1200));
+		if (hotTiles.length > 0 || alertPanels.length > 0) {
+			const alarm = 0.5 - 0.5 * Math.cos((2 * Math.PI * now) / 1200);
+			setVar(hotTiles, '--alarm', alarm);
+			setVar(alertPanels, '--alarm', alarm);
+		}
 		const playing = current && current.media && current.media.playing;
 		eqBars.forEach((bar, i) => {
 			const level = playing ? 0.2 + 0.8 * (0.5 - 0.5 * Math.cos(2 * Math.PI * (now / 1800 + eqPhases[i]))) : 0.3;
-			bar.style.transform = `scaleY(${level.toFixed(2)})`;
+			const transform = `scaleY(${level.toFixed(2)})`;
+			if (eqTransforms[i] !== transform) {
+				eqTransforms[i] = transform;
+				bar.style.transform = transform;
+			}
 		});
 	}
 

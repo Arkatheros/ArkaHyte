@@ -15,6 +15,5 @@ du non fait.
 ---
 
 # Liste des tâches
-- [ ] bench le programme, pouvoir voir combien il prends de processeur et combien de mémoire
-- [ ] il faudrait trouver un moyen pour quand on selection une application, faire en sorte que son icons doit automatique transformer en mode blanc comme les icons de la liste afin de rester dans le theme
+- [ ] il faudrait trouver un moyen pour quand on selection une application, faire en sorte que son icons soit automatique transformer en mode blanc comme les icons de la liste afin de rester dans le theme
 - [ ] Faire un installeur

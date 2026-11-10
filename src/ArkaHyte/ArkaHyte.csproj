@@ -15,7 +15,16 @@
 		<ApplicationIcon>Assets\app.ico</ApplicationIcon>
 		<Product>Arka Hyte</Product>
 		<AssemblyTitle>Arka Hyte</AssemblyTitle>
+		<!-- The live heap is ~10 MB: no background GC thread needed -->
+		<ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
 	</PropertyGroup>
+
+	<ItemGroup>
+		<!-- Workstation GC sizes its gen0 budget from the L3 cache (96 MB on a 9800X3D), so the heap
+		     kept growing for minutes before a first collection. A hard limit (25x the live heap)
+		     scales that budget down; it is the only gen0 control readable from runtimeconfig.json. -->
+		<RuntimeHostConfigurationOption Include="System.GC.HeapHardLimit" Value="268435456" />
+	</ItemGroup>
 
 	<ItemGroup>
 		<Content Include="wwwroot\**" CopyToOutputDirectory="PreserveNewest" />
