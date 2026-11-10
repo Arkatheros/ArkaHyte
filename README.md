@@ -43,8 +43,13 @@ dans Gadget n'a donc pas d'importance. Jokers `*` acceptés.
 **Avant tout, désinstaller ou désactiver HYTE Nexus** (sinon les deux se disputent l'écran du
 boîtier) : Arka Hyte n'y touche pas.
 
-Télécharger `ArkaHyte.App-win-Setup.exe` depuis les
-[releases GitHub](https://github.com/Arkatheros/ArkaHyte/releases) et le lancer (pas de droits admin) :
+Télécharger depuis les [releases GitHub](https://github.com/Arkatheros/ArkaHyte/releases) (pas de
+droits admin) :
+
+- **`ArkaHyte-Setup.msi`** : assistant avec confirmation avant d'installer (boutons Windows Installer en anglais)
+- `ArkaHyte-Setup.exe` : installation directe en un clic, sans question
+
+Les deux font la même installation :
 
 - installe dans `%LOCALAPPDATA%\ArkaHyte.App` (le runtime .NET 10 Desktop est installé s'il manque)
 - lance Arka Hyte à l'ouverture de session (clé `Run` de l'utilisateur) et crée le raccourci du menu Démarrer
@@ -71,8 +76,13 @@ $env:GITHUB_TOKEN = '<jeton>'                       # droit de créer des releas
 scripts\New-Release.ps1 -Version 1.0.1 -Publish    # + release GitHub v1.0.1
 ```
 
-Le script publie l'appli, récupère la release précédente (paquet delta), empaquette avec
-[Velopack](https://velopack.io) (`vpk`, outil local du dépôt : `dotnet-tools.json`) et envoie la release.
+Le script publie l'appli, récupère la release précédente (paquet delta : quelques dizaines de Ko pour
+un petit changement), empaquette avec [Velopack](https://velopack.io) (`vpk`, outil local du dépôt :
+`dotnet-tools.json`), renomme les installeurs (`ArkaHyte-Setup.*`) et envoie la release. Une version
+déjà publiée ne peut pas être reconstruite : toujours monter le numéro.
+
+Textes et images de l'assistant MSI : `installer\` (`welcome.txt`, `conclusion.txt`, `banner.bmp`,
+`dialog.bmp`) ; images régénérées depuis l'icône par `powershell -File scripts\New-InstallerArt.ps1`.
 
 ### Développement
 

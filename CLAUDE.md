@@ -20,7 +20,8 @@ dotnet publish src\ArkaHyte -c Release -o bin\ArkaHyte
 scripts\Install.ps1
 scripts\Install.ps1 -Uninstall
 
-# Installeur Velopack (artifacts\releases\ArkaHyte.App-win-Setup.exe) ; -Publish = release GitHub (GITHUB_TOKEN)
+# Installeurs Velopack (artifacts\releases\ArkaHyte-Setup.msi/.exe) ; -Publish = release GitHub (GITHUB_TOKEN)
+# Version toujours > dernière release publiée ; packId ArkaHyte.App à ne jamais changer (mises à jour)
 scripts\New-Release.ps1 -Version 1.0.1 [-Publish]
 ```
 

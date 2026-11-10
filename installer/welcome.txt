@@ -1,0 +1,3 @@
+Arka Hyte remplace l'affichage de l'écran du boîtier Hyte Y70 Touch : capteurs, réseau, lecture en cours et raccourcis, sur un thème Sith.
+
+Avant de continuer, désactivez ou désinstallez HYTE Nexus vous-même : les deux applications se disputeraient l'écran.

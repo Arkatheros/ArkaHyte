@@ -1,16 +1,19 @@
 <#
 .SYNOPSIS
-	Builds the Arka Hyte installer (Setup.exe) and update packages, and optionally publishes them
-	as a GitHub release that installed copies pick up from their tray menu.
+	Builds the Arka Hyte installers and update packages, and optionally publishes them as a GitHub
+	release that installed copies pick up from their tray menu.
 
 .DESCRIPTION
 	1. dotnet publish with the given version
 	2. downloads the previous GitHub release, so vpk can make a small delta package
-	3. vpk pack: artifacts\releases\ArkaHyte.App-win-Setup.exe + update packages
+	3. vpk pack, then installers renamed in artifacts\releases:
+		ArkaHyte-Setup.msi     wizard with confirmation (texts and images from installer\)
+		ArkaHyte-Setup.exe     one-click install
+		ArkaHyte-Portable.zip
 	4. with -Publish: vpk upload to https://github.com/Arkatheros/ArkaHyte (tag v<version>)
 
 	The repository must be public: installed copies read the releases without credentials.
-	Publishing needs a GitHub token allowed to create releases (classic "repo" scope or a
+	Publishing needs a GitHub token allowed to create releases (classic "public_repo" scope or a
 	fine-grained token with "Contents: read and write"), in -Token or $env:GITHUB_TOKEN.
 
 .EXAMPLE
@@ -29,14 +32,22 @@ param(
 $ErrorActionPreference = 'Stop'
 
 # Install folder is %LOCALAPPDATA%\<packId>: it must differ from the data folder
-# %LOCALAPPDATA%\ArkaHyte (shortcuts, logs, settings), which uninstall would otherwise delete
+# %LOCALAPPDATA%\ArkaHyte (shortcuts, logs, settings), which uninstall would otherwise delete.
+# Never change it: installed copies only accept updates carrying the same id.
 $packId = 'ArkaHyte.App'
 $repoUrl = 'https://github.com/Arkatheros/ArkaHyte'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $project = Join-Path $repoRoot 'src\ArkaHyte'
+$installerDir = Join-Path $repoRoot 'installer'
 $publishDir = Join-Path $repoRoot 'artifacts\publish'
 $releasesDir = Join-Path $repoRoot 'artifacts\releases'
-$icon = Join-Path $project 'Assets\app.ico'
+
+# vpk names its files <packId>-win-*; the published names drop the technical id
+$assetNames = [ordered]@{
+	"$packId-win.msi" = 'ArkaHyte-Setup.msi'
+	"$packId-win-Setup.exe" = 'ArkaHyte-Setup.exe'
+	"$packId-win-Portable.zip" = 'ArkaHyte-Portable.zip'
+}
 
 function Invoke-Native([string]$description, [scriptblock]$command) {
 	Write-Host "== $description"
@@ -46,14 +57,31 @@ function Invoke-Native([string]$description, [scriptblock]$command) {
 	}
 }
 
+# Renames the installers and the manifest entries vpk upload reads (assets.win.json); updates
+# only use releases.win.json and the .nupkg, which keep their names
+function Rename-Installers {
+	$manifestPath = Join-Path $releasesDir 'assets.win.json'
+	$manifest = Get-Content $manifestPath -Raw
+	foreach ($name in $assetNames.Keys) {
+		$source = Join-Path $releasesDir $name
+		if (Test-Path $source) {
+			Move-Item -LiteralPath $source -Destination (Join-Path $releasesDir $assetNames[$name]) -Force
+			$manifest = $manifest.Replace("`"$name`"", "`"$($assetNames[$name])`"")
+		}
+	}
+	[IO.File]::WriteAllText($manifestPath, $manifest)
+}
+
 if ($Publish -and -not $Token) {
 	throw 'Publishing needs a GitHub token: -Token or $env:GITHUB_TOKEN.'
 }
 
 Push-Location $repoRoot
 try {
-	if (Test-Path $publishDir) {
-		Remove-Item -Recurse -Force $publishDir
+	foreach ($dir in @($publishDir, $releasesDir)) {
+		if (Test-Path $dir) {
+			Remove-Item -Recurse -Force $dir
+		}
 	}
 	Invoke-Native "Publish $Version" { dotnet publish $project -c Release -r win-x64 --self-contained false -o $publishDir "-p:Version=$Version" }
 	Invoke-Native 'Restore vpk' { dotnet tool restore }
@@ -78,11 +106,18 @@ try {
 			--mainExe 'ArkaHyte.exe' `
 			--packTitle 'Arka Hyte' `
 			--packAuthors 'Arkatheros' `
-			--icon $icon `
+			--icon (Join-Path $project 'Assets\app.ico') `
 			--framework 'net10.0-x64-desktop' `
 			--shortcuts 'StartMenuRoot' `
+			--msi `
+			--instLocation 'PerUser' `
+			--instWelcome (Join-Path $installerDir 'welcome.txt') `
+			--instConclusion (Join-Path $installerDir 'conclusion.txt') `
+			--msiTopBanner (Join-Path $installerDir 'banner.bmp') `
+			--msiDialogBackground (Join-Path $installerDir 'dialog.bmp') `
 			--outputDir $releasesDir
 	}
+	Rename-Installers
 
 	if ($Publish) {
 		Invoke-Native "Upload v$Version to GitHub" {
@@ -96,7 +131,7 @@ try {
 		}
 	}
 
-	Write-Host "Installer: $(Join-Path $releasesDir "$packId-win-Setup.exe")"
+	Write-Host "Installers: $releasesDir\ArkaHyte-Setup.msi, ArkaHyte-Setup.exe"
 }
 finally {
 	Pop-Location

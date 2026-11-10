@@ -1,0 +1,3 @@
+Arka Hyte est installé et démarrera à chaque ouverture de session.
+
+Les mises à jour se font depuis le menu de son icône de notification (clic droit sur le sabre rouge).
