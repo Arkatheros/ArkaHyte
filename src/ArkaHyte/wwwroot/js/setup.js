@@ -15,7 +15,10 @@
 		{ key: 'gpuTemp', name: 'Température GPU', unit: '°C', sensor: /gpu/i, labels: [/^gpu temperature$|^température gpu$/i, /^(gpu )?temp/i, /temp/i] },
 		{ key: 'gpuPower', name: 'Consommation GPU', unit: 'W', sensor: /gpu/i, labels: [/^gpu power$|gpu consommation|consommation d'énergie gpu/i, /power|consommation|puissance/i] },
 		{ key: 'gpuLoad', name: 'Charge GPU', unit: '%', sensor: /gpu/i, labels: [/core load|charge du c/i, /gpu (load|utili)/i, /load|charge|utili/i] },
-		{ key: 'gpuVram', name: 'Mémoire GPU', unit: '%', sensor: /gpu/i, labels: [/memory usage|utilisation de la mémoire/i, /memory|mémoire/i] }
+		{ key: 'gpuVram', name: 'Mémoire GPU', unit: '%', sensor: /gpu/i, labels: [/memory usage|utilisation de la mémoire/i, /memory|mémoire/i] },
+		// HWiNFO's own PresentMon sensor first (no extra tool), RTSS otherwise; only filled in games,
+		// so not counted as missing
+		{ key: 'gpuFps', name: 'FPS en jeu', unit: 'FPS', sensor: /./, labels: [/framerate \(displayed\)/i, /framerate \(presented\)/i, /^framerate$/i, /^(framerate|fps)/i, /framerate|fps|images/i], optional: true }
 	];
 
 	const $ = id => document.getElementById(id);
@@ -262,8 +265,9 @@
 			row.cells[2].textContent = entry ? entry.text : '--';
 			const tag = row.cells[0].querySelector('.tag');
 			const labels = { configured: 'configuré', suggested: 'suggéré', missing: 'non trouvé', chosen: 'choisi' };
-			tag.textContent = sensor.choice ? labels[sensor.origin] : 'non attribué';
-			tag.className = 'tag ' + (sensor.choice ? sensor.origin : 'missing');
+			const optional = METRICS.find(m => m.key === row.dataset.key).optional;
+			tag.textContent = sensor.choice ? labels[sensor.origin] : (optional ? 'facultatif' : 'non attribué');
+			tag.className = 'tag ' + (sensor.choice ? sensor.origin : (optional ? '' : 'missing'));
 		}
 	}
 
@@ -305,8 +309,11 @@
 			? 'HWiNFO : <b>' + entries.length + '</b> valeur' + (entries.length > 1 ? 's' : '') + ' transmise' + (entries.length > 1 ? 's' : '')
 			: 'HWiNFO : <b>non lancé</b>, les widgets de capteurs afficheront « -- »');
 		if (entries.length) {
-			const assigned = METRICS.filter(m => model.sensors[m.key] && model.sensors[m.key].choice).length;
-			add(assigned === METRICS.length ? 'ok' : 'warn', 'Capteurs : <b>' + assigned + ' / ' + METRICS.length + '</b> attribués');
+			const required = METRICS.filter(m => !m.optional);
+			const assigned = required.filter(m => model.sensors[m.key] && model.sensors[m.key].choice).length;
+			const fps = model.sensors.gpuFps && model.sensors.gpuFps.choice;
+			add(assigned === required.length ? 'ok' : 'warn', 'Capteurs : <b>' + assigned + ' / ' + required.length + '</b> attribués'
+				+ (fps ? ', FPS en jeu compris' : ', sans FPS en jeu'));
 		}
 		else {
 			add('warn', 'Capteurs : réglage actuel conservé');
@@ -337,6 +344,10 @@
 				const configured = entries[matches[metric.key]];
 				// Unchanged rows are left out so the existing selector (wildcards included) stays
 				if (configured && keyOf(configured) === choice) {
+					continue;
+				}
+				// The RTSS entry only exists while a game runs: an empty optional row keeps its selector
+				if (metric.optional && !choice && !model.sensors[metric.key].touched) {
 					continue;
 				}
 				const entry = byKey.get(choice);
@@ -428,7 +439,9 @@
 				{ sensor: sensorGpu, label: 'Température GPU', text: '41.0 °C' },
 				{ sensor: sensorGpu, label: 'GPU Consommation d\'énergie', text: '28.410 W' },
 				{ sensor: sensorGpu, label: 'Charge du cœur du GPU', text: '3.0 %' },
-				{ sensor: sensorGpu, label: 'Utilisation de la mémoire GPU', text: '11.2 %' }
+				{ sensor: sensorGpu, label: 'Utilisation de la mémoire GPU', text: '11.2 %' },
+				{ sensor: 'PresentMon', label: 'Framerate (Presented)', text: '146.2 FPS' },
+				{ sensor: 'PresentMon', label: 'Framerate (Displayed)', text: '143.8 FPS' }
 			],
 			matches: { cpuTemp: 0, cpuPower: 1, gpuTemp: -1, gpuPower: -1, gpuLoad: 4, gpuVram: 5 }
 		});

@@ -29,7 +29,8 @@ public sealed class SetupForm : Form
 		("gpuTemp", nameof(HwInfoSettings.GpuTemp), s => s.GpuTemp),
 		("gpuPower", nameof(HwInfoSettings.GpuPower), s => s.GpuPower),
 		("gpuLoad", nameof(HwInfoSettings.GpuLoad), s => s.GpuLoad),
-		("gpuVram", nameof(HwInfoSettings.GpuVramPercent), s => s.GpuVramPercent)
+		("gpuVram", nameof(HwInfoSettings.GpuVramPercent), s => s.GpuVramPercent),
+		("gpuFps", nameof(HwInfoSettings.GpuFps), s => s.GpuFps)
 	];
 
 	private readonly AppSettings _settings;

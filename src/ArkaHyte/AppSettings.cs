@@ -23,7 +23,9 @@ public sealed record HwInfoSettings(
 	SensorSelector? GpuTemp = null,
 	SensorSelector? GpuPower = null,
 	SensorSelector? GpuLoad = null,
-	SensorSelector? GpuVramPercent = null);
+	SensorSelector? GpuVramPercent = null,
+	// Game framerate: HWiNFO's PresentMon sensor (or RTSS), only present while a game runs
+	SensorSelector? GpuFps = null);
 
 public sealed record DriveSettings(string Name, SensorSelector? Temp = null);
 

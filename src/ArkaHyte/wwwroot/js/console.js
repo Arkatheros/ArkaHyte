@@ -170,6 +170,14 @@
 		}
 		setMetric('gpuTemp', gpu.temp, 30, 90, 70, 80);
 		setMetric('gpuPow', gpu.power, 0, 450, 350, 420);
+		// RTSS reports 0 (or nothing) outside games: the readout only shows while one runs
+		const playing = isNum(gpu.fps) && gpu.fps >= 1;
+		if ($('gpuFps').hidden === playing) {
+			$('gpuFps').hidden = !playing;
+		}
+		if (playing) {
+			text('gpuFpsValue', nf0(gpu.fps));
+		}
 	}
 
 	function renderVramTicks(totalGb) {
@@ -1643,7 +1651,7 @@
 	const SCENARIOS = {
 		idle: { cpu: 14, cpuSpread: 9, gpu: 5, vram: 6, ram: 19.3, offline: false },
 		// Everything maxed out and the connection lost, to preview every alarm state at once
-		stress: { cpu: 100, cpuSpread: 0, gpu: 100, vram: 96, ram: 55, offline: true }
+		stress: { cpu: 100, cpuSpread: 0, gpu: 100, vram: 96, ram: 55, offline: true, fps: 144 }
 	};
 
 	function startSimulator(scenarioName) {
@@ -1680,7 +1688,7 @@
 			onHostMessage({
 				type: 'snapshot',
 				cpu: { load: sim.cpu, temp: sim.cpuTemp, power: 30 + sim.cpu * 1.25 },
-				gpu: { load: sim.gpu, temp: sim.gpuTemp, power: 25 + sim.gpu * 4.15, vramPercent: sim.vram, vramTotalGb: 24 },
+				gpu: { load: sim.gpu, temp: sim.gpuTemp, power: 25 + sim.gpu * 4.15, vramPercent: sim.vram, vramTotalGb: 24, fps: scenario.fps ? scenario.fps - Math.random() * 12 : null },
 				ram: { usedGb: sim.ram, totalGb: 62 },
 				disks: [
 					{ name: 'C:', label: 'Windows', usedGb: 539.4, totalGb: 818.3, temp: 38 },

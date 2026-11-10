@@ -24,6 +24,7 @@ passe en mode design avec des données simulées.
 |---|---|
 | Charge CPU, RAM, disques, uptime | API Windows |
 | Températures, puissances, charge GPU, VRAM | HWiNFO → Gadget (registre `HKCU\Software\HWiNFO64\VSB`) |
+| FPS en jeu (affichés seulement pendant un jeu) | Capteur PresentMon de HWiNFO 64 bits, « Framerate (Displayed) » (ou RTSS si RivaTuner tourne) → Gadget (`HwInfo.GpuFps`) |
 | Wi-Fi (SSID, signal, RSSI, canal, bande, norme, sécurité, débit du lien) | API native `wlanapi` |
 | Débits réseau, ping | .NET `NetworkInterface` / `Ping` |
 | Lecture en cours (Spotify, YouTube, Twitch…) | API média Windows (`GlobalSystemMediaTransportControls`) |

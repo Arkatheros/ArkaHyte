@@ -359,6 +359,23 @@ body {
 	height: 50px;
 	margin-bottom: 8px;
 }
+/* Game framerate above the segments, only while a game reports one */
+.gpu-load .fps {
+	position: absolute;
+	right: 0;
+	top: -6px;
+	display: flex;
+	align-items: baseline;
+	gap: 12px;
+}
+.fps .data {
+	font-size: 26px;
+	color: var(--core);
+}
+.fps .data small {
+	font-size: 0.6em;
+	color: var(--ash);
+}
 .seg-bar {
 	transform: skewX(-18deg);
 	background: rgba(255, 255, 255, 0.07);

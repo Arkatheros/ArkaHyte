@@ -4,7 +4,8 @@ namespace ArkaHyte.Sensors;
 
 public sealed record CpuData(double? Load, double? Temp, double? Power);
 
-public sealed record GpuData(double? Load, double? Temp, double? Power, double? VramPercent, double VramTotalGb);
+/// <param name="Fps">Framerate of the running game; null or 0 when none (the widget then hides).</param>
+public sealed record GpuData(double? Load, double? Temp, double? Power, double? VramPercent, double VramTotalGb, double? Fps);
 
 public sealed record RamData(double UsedGb, double TotalGb);
 

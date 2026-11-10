@@ -102,7 +102,8 @@ public sealed class SensorHub : IDisposable
 			_hwInfo.Get(hw.GpuTemp),
 			_hwInfo.Get(hw.GpuPower),
 			_hwInfo.Get(hw.GpuVramPercent),
-			_settings.Hardware.VramTotalGb);
+			_settings.Hardware.VramTotalGb,
+			_hwInfo.Get(hw.GpuFps));
 
 		var disks = _settings.Drives
 			.Select(d => SystemMetrics.ReadDrive(d.Name, _hwInfo.Get(d.Temp)))
