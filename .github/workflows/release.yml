@@ -1,0 +1,54 @@
+# Publishes a GitHub release when a version tag is pushed: git tag v1.0.5; git push origin v1.0.5
+# The tag must match <Version> in the csproj, so the commit being tagged is the one carrying that version.
+# YAML forbids tabs for indentation: this file is the one exception to the repository's tab rule.
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Check tag against csproj version
+        id: version
+        shell: pwsh
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          $version = $env:TAG.Substring(1)
+          $projectVersion = (Select-Xml -Path src/ArkaHyte/ArkaHyte.csproj -XPath '//Version').Node.InnerText
+          if ($projectVersion -ne $version) {
+            throw "Tag $env:TAG does not match <Version>$projectVersion</Version> in ArkaHyte.csproj"
+          }
+          "number=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Build, pack and publish
+        shell: pwsh
+        env:
+          # Workflow token: creating releases on this repository is all it needs
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./scripts/New-Release.ps1 -Version ${{ steps.version.outputs.number }} -Publish
+
+      - name: Keep the installers with the run
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ArkaHyte-${{ steps.version.outputs.number }}
+          path: artifacts/releases/ArkaHyte-Setup.*
+          if-no-files-found: ignore

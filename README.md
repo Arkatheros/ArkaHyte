@@ -10,7 +10,9 @@ alimentée par des données réelles lues en C#.
 |---|---|
 | `src/ArkaHyte` | Application C# .NET 10 (WinForms + WebView2) |
 | `src/ArkaHyte/wwwroot` | Interface : `index.html`, `css/console.css`, `js/console.js`, polices, fond |
-| `scripts/` | Lanceur au démarrage, installation, génération de l'icône |
+| `scripts/` | Lanceur au démarrage, installation, release, génération de l'icône |
+| `installer/` | Textes et images de l'assistant d'installation MSI |
+| `.github/workflows` | Release GitHub automatique sur tag `v1.x.y` |
 | `bin/` | Binaires publiés (non versionnés) |
 
 Itération sur le design : ouvrir `src/ArkaHyte/wwwroot/index.html` dans un navigateur, l'interface
@@ -70,10 +72,24 @@ vérifier tout de suite. Rien de tout cela pour une copie lancée depuis `bin\` 
 
 Le dépôt doit être **public** (les copies installées lisent les releases sans identifiant).
 
+1. Monter `<Version>` dans `src\ArkaHyte\ArkaHyte.csproj`, commiter, pousser.
+2. Poser le tag correspondant et le pousser :
+
 ```powershell
-scripts\New-Release.ps1 -Version 1.0.1             # installeur local dans artifacts\releases
-$env:GITHUB_TOKEN = '<jeton>'                       # droit de créer des releases
-scripts\New-Release.ps1 -Version 1.0.1 -Publish    # + release GitHub v1.0.1
+git tag v1.0.5
+git push origin v1.0.5
+```
+
+Le workflow [Release](.github/workflows/release.yml) (GitHub Actions, Windows) vérifie que le tag
+correspond à la version du csproj puis lance `scripts\New-Release.ps1 -Publish` avec le jeton du
+workflow : aucun jeton personnel n'est nécessaire. Suivi dans l'onglet **Actions** du dépôt ; les
+installeurs restent aussi attachés à l'exécution. En cas d'échec, supprimer le tag
+(`git push origin :refs/tags/v1.0.5`, `git tag -d v1.0.5`), corriger, recommencer.
+
+Construction locale, sans publication (ou publication manuelle avec `$env:GITHUB_TOKEN` et `-Publish`) :
+
+```powershell
+scripts\New-Release.ps1 -Version 1.0.5             # installeurs dans artifacts\releases
 ```
 
 Le script publie l'appli, récupère la release précédente (paquet delta : quelques dizaines de Ko pour

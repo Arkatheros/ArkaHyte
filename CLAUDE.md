@@ -20,10 +20,16 @@ dotnet publish src\ArkaHyte -c Release -o bin\ArkaHyte
 scripts\Install.ps1
 scripts\Install.ps1 -Uninstall
 
-# Installeurs Velopack (artifacts\releases\ArkaHyte-Setup.msi/.exe) ; -Publish = release GitHub (GITHUB_TOKEN)
+# Installeurs Velopack en local (artifacts\releases\ArkaHyte-Setup.msi/.exe), sans publier
 # Version toujours > dernière release publiée ; packId ArkaHyte.App à ne jamais changer (mises à jour)
-scripts\New-Release.ps1 -Version 1.0.1 [-Publish]
+scripts\New-Release.ps1 -Version 1.0.5
+
+# Release GitHub : <Version> du csproj montée et poussée, puis tag identique poussé
+# → .github/workflows/release.yml lance New-Release.ps1 -Publish avec le jeton du workflow
+git tag v1.0.5; git push origin v1.0.5
 ```
+
+YAML : seule exception aux tabulations (interdites pour l'indentation), espaces dans `.github/workflows`.
 
 Pas de tests automatisés ni de linter. Vérification par les options one-shot de `ArkaHyte.exe`
 (liste complète dans `Program.cs` et le README) :
