@@ -30,6 +30,7 @@ public sealed class AppUpdater : IDisposable
 	private static readonly TimeSpan CheckPeriod = TimeSpan.FromHours(6);
 
 	private readonly UpdateManager _manager = new(new GithubSource(RepositoryUrl, null, false));
+	private readonly bool _simulate;
 	private readonly SemaphoreSlim _busy = new(1, 1);
 	private System.Threading.Timer? _timer;
 	private UpdateInfo? _available;
@@ -47,8 +48,20 @@ public sealed class AppUpdater : IDisposable
 
 	public bool IsInstalled => _manager.IsInstalled;
 
+	/// <param name="simulate">
+	/// Development build (--simulate-updates): the tray entry works without an installed copy, a check
+	/// pretends to take two seconds and finds nothing; nothing is ever downloaded.
+	/// </param>
+	public AppUpdater(bool simulate = false) => _simulate = simulate && !_manager.IsInstalled;
+
 	public void Start()
 	{
+		if (_simulate)
+		{
+			Log.Info("Updates simulated (development build)");
+			SetState(new UpdateState(UpdateStage.Idle));
+			return;
+		}
 		if (!_manager.IsInstalled)
 		{
 			Log.Info($"Updates off: not an installed copy (version {CurrentVersion})");
@@ -63,6 +76,13 @@ public sealed class AppUpdater : IDisposable
 
 	public async Task CheckAsync()
 	{
+		if (_simulate)
+		{
+			SetState(new UpdateState(UpdateStage.Checking));
+			await Task.Delay(TimeSpan.FromSeconds(2));
+			SetState(new UpdateState(UpdateStage.UpToDate));
+			return;
+		}
 		if (!_manager.IsInstalled || !await _busy.WaitAsync(0))
 		{
 			return;

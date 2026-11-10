@@ -1,5 +1,8 @@
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
+using Microsoft.Win32.SafeHandles;
 
 namespace ArkaHyte;
 
@@ -103,6 +106,84 @@ public static partial class HardwareDetector
 		};
 		return bytes > 0 ? Math.Round(bytes / (1024.0 * 1024 * 1024)) : null;
 	}
+
+	/// <summary>
+	/// Physical disk holding a volume ("C:" → 0): drives on the same disk share its temperature.
+	/// IOCTLs used here need no elevation.
+	/// </summary>
+	public static int? ReadDiskNumber(string driveName)
+	{
+		try
+		{
+			using var volume = OpenDevice(@"\\.\" + driveName.TrimEnd('\\'));
+			// VOLUME_DISK_EXTENTS: extent count, padding, then the first extent's disk number
+			var extents = new byte[256];
+			if (volume.IsInvalid || !DeviceIoControl(volume, IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS, null, 0, extents, extents.Length, out _, IntPtr.Zero)
+				|| BitConverter.ToInt32(extents, 0) < 1)
+			{
+				return null;
+			}
+			return BitConverter.ToInt32(extents, 8);
+		}
+		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException)
+		{
+			Log.Error($"Disk of {driveName} unreadable", exception);
+			return null;
+		}
+	}
+
+	/// <summary>Model of a physical disk ("Samsung SSD 990 PRO 2TB"), as HWiNFO names its S.M.A.R.T. sensors.</summary>
+	public static string? ReadDiskModel(int diskNumber)
+	{
+		try
+		{
+			using var disk = OpenDevice($@"\\.\PhysicalDrive{diskNumber}");
+			// STORAGE_PROPERTY_QUERY: StorageDeviceProperty, PropertyStandardQuery
+			var query = new byte[12];
+			var descriptor = new byte[1024];
+			if (disk.IsInvalid || !DeviceIoControl(disk, IOCTL_STORAGE_QUERY_PROPERTY, query, query.Length, descriptor, descriptor.Length, out var length, IntPtr.Zero))
+			{
+				return null;
+			}
+			var vendor = ReadAnsi(descriptor, BitConverter.ToInt32(descriptor, 12), length);
+			var product = ReadAnsi(descriptor, BitConverter.ToInt32(descriptor, 16), length);
+			// NVMe drives report "NVMe" or nothing as vendor, the full name is in the product id
+			var model = vendor is null || product is null || product.StartsWith(vendor, StringComparison.OrdinalIgnoreCase) || vendor.Equals("NVMe", StringComparison.OrdinalIgnoreCase)
+				? product
+				: $"{vendor} {product}";
+			return string.IsNullOrWhiteSpace(model) ? null : model;
+		}
+		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException)
+		{
+			Log.Error($"Model of disk {diskNumber} unreadable", exception);
+			return null;
+		}
+	}
+
+	private static string? ReadAnsi(byte[] buffer, int offset, int length)
+	{
+		if (offset <= 0 || offset >= length)
+		{
+			return null;
+		}
+		var end = Array.IndexOf(buffer, (byte)0, offset);
+		var text = Encoding.ASCII.GetString(buffer, offset, (end < 0 ? length : end) - offset).Trim();
+		return text.Length == 0 ? null : text;
+	}
+
+	private const uint IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS = 0x00560000;
+	private const uint IOCTL_STORAGE_QUERY_PROPERTY = 0x002D1400;
+
+	// No access right needed for these queries: works without elevation
+	private static SafeFileHandle OpenDevice(string path) =>
+		CreateFile(path, 0, FileShare.ReadWrite, IntPtr.Zero, FileMode.Open, 0, IntPtr.Zero);
+
+	[DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+	private static extern SafeFileHandle CreateFile(string path, uint access, FileShare share, IntPtr security, FileMode mode, uint flags, IntPtr template);
+
+	[DllImport("kernel32.dll", SetLastError = true)]
+	[return: MarshalAs(UnmanagedType.Bool)]
+	private static extern bool DeviceIoControl(SafeFileHandle device, uint code, byte[]? input, int inputSize, byte[] output, int outputSize, out int returned, IntPtr overlapped);
 
 	/// <summary>"NVIDIA GeForce RTX 4090" → ("NVIDIA", "GeForce RTX 4090").</summary>
 	private static (string? Maker, string? Model) Split(string? name)

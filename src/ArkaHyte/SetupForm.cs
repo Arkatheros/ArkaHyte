@@ -172,6 +172,7 @@ public sealed class SetupForm : Form
 			}),
 			hardware = _settings.Hardware,
 			detected,
+			drives = ReadDrives(),
 			hwInfoPath = FindHwInfo()
 		});
 		SendHwInfo();
@@ -190,8 +191,38 @@ public sealed class SetupForm : Form
 			type = "hwinfo",
 			running = IsHwInfoRunning(),
 			entries = _hwInfo.Entries.Select(e => new { sensor = e.Sensor, label = e.Label, text = e.Text }),
-			matches = Metrics.ToDictionary(m => m.Key, m => _hwInfo.IndexOf(m.Read(_settings.HwInfo)))
+			matches = Metrics
+				.Select(m => (m.Key, Index: _hwInfo.IndexOf(m.Read(_settings.HwInfo))))
+				.Concat(_settings.Drives.Select(d => (DriveKeyPrefix + d.Name, Index: _hwInfo.IndexOf(d.Temp))))
+				.ToDictionary(m => m.Item1, m => m.Index)
 		});
+	}
+
+	private const string DriveKeyPrefix = "drive:";
+
+	/// <summary>Configured drives that exist, with the disk model used to suggest their S.M.A.R.T. sensor.</summary>
+	private object[] ReadDrives()
+	{
+		var drives = new List<object>();
+		foreach (var drive in _settings.Drives)
+		{
+			try
+			{
+				var info = new DriveInfo(drive.Name);
+				if (!info.IsReady)
+				{
+					continue;
+				}
+				var disk = HardwareDetector.ReadDiskNumber(drive.Name);
+				var model = disk is { } number ? HardwareDetector.ReadDiskModel(number) : null;
+				drives.Add(new { name = drive.Name, label = info.VolumeLabel, disk, model });
+			}
+			catch (Exception exception) when (exception is IOException or ArgumentException or UnauthorizedAccessException)
+			{
+				Log.Error($"Drive {drive.Name} unreadable", exception);
+			}
+		}
+		return [.. drives];
 	}
 
 	private static bool IsHwInfoRunning()
@@ -280,8 +311,8 @@ public sealed class SetupForm : Form
 	// ---------- Saving ----------
 
 	/// <summary>
-	/// { display: { width, height }, hardware: { cpuMaker, ... }, sensors: { cpuTemp: { sensor, label } | null } }.
-	/// Sensors left out of "sensors" keep their current selector (wildcards included).
+	/// { display: { width, height }, hardware: { cpuMaker, ... }, sensors: { cpuTemp: { sensor, label } | null },
+	/// drives: { "C:": { sensor, label } | null } }. Entries left out keep their current selector (wildcards included).
 	/// </summary>
 	private void Save(JsonElement message)
 	{
@@ -311,17 +342,33 @@ public sealed class SetupForm : Form
 					{
 						continue;
 					}
-					hwInfo[property] = choice.ValueKind == JsonValueKind.Object
-						? new JsonObject
-						{
-							["Sensor"] = choice.GetProperty("sensor").GetString(),
-							["Label"] = choice.GetProperty("label").GetString()
-						}
-						: null;
+					hwInfo[property] = ToSelector(choice);
+				}
+			}
+			if (message.TryGetProperty("drives", out var drives) && drives.ValueKind == JsonValueKind.Object
+				&& root["Drives"] is JsonArray driveNodes)
+			{
+				foreach (var choice in drives.EnumerateObject())
+				{
+					var node = driveNodes.OfType<JsonObject>().FirstOrDefault(d =>
+						string.Equals(d["Name"]?.GetValue<string>(), choice.Name, StringComparison.OrdinalIgnoreCase));
+					if (node is not null)
+					{
+						node["Temp"] = ToSelector(choice.Value);
+					}
 				}
 			}
 		}, restart: true);
 	}
+
+	private static JsonObject? ToSelector(JsonElement choice) =>
+		choice.ValueKind == JsonValueKind.Object
+			? new JsonObject
+			{
+				["Sensor"] = choice.GetProperty("sensor").GetString(),
+				["Label"] = choice.GetProperty("label").GetString()
+			}
+			: null;
 
 	private void Complete(Action<JsonObject> change, bool restart)
 	{
@@ -411,6 +458,18 @@ internal sealed class ScreenBadge : Form
 	}
 
 	protected override bool ShowWithoutActivation => true;
+
+	// Tool window like the display itself: on this setup an ordinary window placed on the case
+	// display is pushed back onto the primary screen right after it appears
+	protected override CreateParams CreateParams
+	{
+		get
+		{
+			var parameters = base.CreateParams;
+			parameters.ExStyle |= NativeMethods.WS_EX_TOOLWINDOW | NativeMethods.WS_EX_NOACTIVATE;
+			return parameters;
+		}
+	}
 
 	public static void ShowAll()
 	{

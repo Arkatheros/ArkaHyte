@@ -9,7 +9,8 @@ public sealed record GpuData(double? Load, double? Temp, double? Power, double? 
 
 public sealed record RamData(double UsedGb, double TotalGb);
 
-public sealed record DiskData(string Name, string Label, double UsedGb, double TotalGb, double? Temp);
+/// <param name="Disk">Physical disk number: drives sharing it are grouped under one temperature.</param>
+public sealed record DiskData(string Name, string Label, double UsedGb, double TotalGb, double? Temp, int? Disk);
 
 public sealed record WifiData(
 	string Ssid,

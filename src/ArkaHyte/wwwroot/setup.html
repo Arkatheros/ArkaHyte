@@ -55,6 +55,9 @@
 					<li>Dans la même liste, sélectionnez chaque valeur utile (température et consommation du CPU,
 						température, consommation, charge et mémoire du GPU) et cochez
 						<strong>Report value in Gadget</strong>.</li>
+					<li>Facultatif, pour la <strong>température des disques</strong> : dans le capteur
+						<strong>S.M.A.R.T.</strong> de chaque disque, cochez <strong>Drive Temperature</strong>
+						(<em>Température du disque</em>).</li>
 					<li>Facultatif, pour les <strong>FPS en jeu</strong> : lancez un jeu, HWiNFO 64 bits ajoute alors un
 						capteur <strong>PresentMon</strong> ; cochez sa valeur <strong>Framerate (Displayed)</strong> de la
 						même façon. Aucun autre outil n'est nécessaire (le capteur RTSS de RivaTuner convient aussi).</li>
@@ -71,7 +74,8 @@
 			<!-- Sensors -->
 			<section class="page" data-page="2">
 				<h1>Capteurs</h1>
-				<p class="lead">Choisissez la valeur HWiNFO de chaque widget. Seules les valeurs cochées
+				<p class="lead">Choisissez la valeur HWiNFO de chaque widget, puis la température de chaque disque
+					(proposée d'après le modèle du disque). Seules les valeurs cochées
 					<strong>Report value in Gadget</strong> apparaissent dans les listes.</p>
 				<p class="status warn" id="sensorsEmpty" hidden>Aucune valeur reçue de HWiNFO : revenez à l'étape précédente.</p>
 				<table class="sensors" id="sensors">

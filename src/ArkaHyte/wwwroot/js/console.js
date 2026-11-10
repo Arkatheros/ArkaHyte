@@ -189,14 +189,36 @@
 	}
 	let vramTicksFor = 24;
 
-	// One card per drive reported by the host; rebuilt only when the drive count changes
-	function ensureDiskSlots(count) {
-		const container = $('disks');
-		if (container.children.length !== count) {
-			container.replaceChildren(...Array.from({ length: count }, () => $('diskTemplate').content.firstElementChild.cloneNode(true)));
-			container.style.setProperty('--disk-count', Math.max(count, 1));
+	// One card per drive reported by the host, then one bracket per run of drives on the same physical
+	// disk (its temperature); the DOM is only rebuilt when that layout changes
+	let diskLayout = null;
+	let diskSlots = [];
+	let diskGroups = [];
+
+	function ensureDiskLayout(disks) {
+		const runs = [];
+		disks.forEach((disk, i) => {
+			const last = runs[runs.length - 1];
+			if (last && isNum(disk.disk) && disks[last.start].disk === disk.disk) {
+				last.count++;
+			} else {
+				runs.push({ start: i, count: 1 });
+			}
+		});
+		const layout = disks.length + ':' + runs.map(r => r.count).join(',');
+		if (layout !== diskLayout) {
+			diskLayout = layout;
+			const container = $('disks');
+			diskSlots = disks.map(() => $('diskTemplate').content.firstElementChild.cloneNode(true));
+			diskGroups = runs.map(run => {
+				const group = $('diskGroupTemplate').content.firstElementChild.cloneNode(true);
+				group.style.gridColumn = `${run.start + 1} / span ${run.count}`;
+				return group;
+			});
+			container.replaceChildren(...diskSlots, ...diskGroups);
+			container.style.setProperty('--disk-count', Math.max(disks.length, 1));
 		}
-		return [...container.children];
+		return runs;
 	}
 
 	function renderMemory(ram, disks) {
@@ -206,9 +228,9 @@
 			const lit = Math.round((ram.usedGb / ram.totalGb) * 32);
 			[...leds.children].forEach((led, i) => led.classList.toggle('on', i < lit));
 		}
-		const slots = ensureDiskSlots(disks.length);
+		const runs = ensureDiskLayout(disks);
 		const circumference = 2 * Math.PI * 47;
-		slots.forEach((slot, i) => {
+		diskSlots.forEach((slot, i) => {
 			const disk = disks[i];
 			slot.querySelector('.disk-letter').textContent = disk.name;
 			slot.querySelector('.disk-label').textContent = disk.label || '';
@@ -218,11 +240,15 @@
 			const total = formatSize(disk.totalGb);
 			slot.querySelector('.disk-total').textContent = `sur ${total.value} ${total.unit}`;
 			slot.querySelector('.disk-arc').setAttribute('stroke-dasharray', `${(circumference * disk.usedGb) / disk.totalGb} ${circumference}`);
-			const temp = slot.querySelector('.disk-temp');
-			temp.hidden = !isNum(disk.temp);
-			if (isNum(disk.temp)) {
-				temp.querySelector('.disk-temp-value').textContent = `${nf0(disk.temp)} °C`;
-				temp.classList.toggle('hot', disk.temp >= 60);
+		});
+		runs.forEach((run, i) => {
+			// Drives of one disk read the same sensor; the first one configured stands for the disk
+			const temp = disks.slice(run.start, run.start + run.count).map(d => d.temp).find(isNum);
+			const group = diskGroups[i];
+			group.hidden = !isNum(temp);
+			if (isNum(temp)) {
+				group.querySelector('.disk-temp-value').textContent = `${nf0(temp)} °C`;
+				group.classList.toggle('hot', temp >= 60);
 			}
 		});
 	}
@@ -1628,7 +1654,14 @@
 			text('updateText', label);
 		}
 	}
-	$('updateBanner').addEventListener('click', () => send({ type: 'update', action: 'install' }));
+	$('updateBanner').addEventListener('click', () => {
+		// The demo banner announces a made-up version: nothing to install
+		if (simulating) {
+			showToast('Mode démo : mise à jour simulée');
+			return;
+		}
+		send({ type: 'update', action: 'install' });
+	});
 
 	function send(message) {
 		if (host) {
@@ -1654,7 +1687,11 @@
 		stress: { cpu: 100, cpuSpread: 0, gpu: 100, vram: 96, ram: 55, offline: true, fps: 144 }
 	};
 
+	// Set while simulated data replaces the host's: design mode or a demo scenario
+	let simulating = false;
+
 	function startSimulator(scenarioName) {
+		simulating = true;
 		const scenario = SCENARIOS[scenarioName] || SCENARIOS.idle;
 		const sim = { cpu: scenario.cpu, gpu: scenario.gpu, cpuTemp: 30 + scenario.cpu * 0.6, gpuTemp: 31 + scenario.gpu * 0.52, vram: scenario.vram, ram: scenario.ram };
 		let position = 72;
@@ -1674,6 +1711,8 @@
 				{ label: 'Tâches', icon: { kind: 'builtin', value: 'pulse' } }
 			]
 		});
+		// The update banner is part of the preview too
+		renderUpdate({ stage: 'available', version: '2.0.0' });
 		setInterval(() => {
 			sim.cpu = scenario.cpu >= 100 ? 100 : walk(sim.cpu, scenario.cpu, scenario.cpuSpread, 1, 100);
 			sim.gpu = scenario.gpu >= 100 ? 100 : walk(sim.gpu, scenario.gpu, 5, 0, 100);
@@ -1691,9 +1730,9 @@
 				gpu: { load: sim.gpu, temp: sim.gpuTemp, power: 25 + sim.gpu * 4.15, vramPercent: sim.vram, vramTotalGb: 24, fps: scenario.fps ? scenario.fps - Math.random() * 12 : null },
 				ram: { usedGb: sim.ram, totalGb: 62 },
 				disks: [
-					{ name: 'C:', label: 'Windows', usedGb: 539.4, totalGb: 818.3, temp: 38 },
-					{ name: 'D:', label: 'Données', usedGb: 454.7, totalGb: 1043.6, temp: 41 },
-					{ name: 'E:', label: 'Jeux', usedGb: 1727.1, totalGb: 3726, temp: 36 }
+					{ name: 'C:', label: 'Windows', usedGb: 539.4, totalGb: 818.3, temp: 41, disk: 0 },
+					{ name: 'D:', label: 'Données', usedGb: 454.7, totalGb: 1043.6, temp: 41, disk: 0 },
+					{ name: 'E:', label: 'Jeux', usedGb: 1727.1, totalGb: 3726, temp: 36, disk: 1 }
 				],
 				network: {
 					downBytesPerSec: down,
@@ -1730,7 +1769,7 @@
 	if (host) {
 		host.addEventListener('message', (event) => {
 			const message = event.data;
-			if (demo && message && (message.type === 'snapshot' || message.type === 'cover')) {
+			if (demo && message && (message.type === 'snapshot' || message.type === 'cover' || message.type === 'update')) {
 				return;
 			}
 			onHostMessage(message);

@@ -559,20 +559,44 @@ body {
 	font-size: 13px;
 	color: var(--ash);
 }
+/* Bracket under the drives of one physical disk, its temperature in the middle: └── 53 °C ──┘ */
+.disk-group {
+	grid-row: 2;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 0 18px;
+	min-width: 0;
+}
+.disk-group::before,
+.disk-group::after {
+	content: '';
+	flex: 1;
+	height: 9px;
+	margin-bottom: 9px;
+	border-bottom: 1px solid rgba(255, 60, 75, 0.45);
+}
+.disk-group::before {
+	border-left: 1px solid rgba(255, 60, 75, 0.45);
+}
+.disk-group::after {
+	border-right: 1px solid rgba(255, 60, 75, 0.45);
+}
 .disk-temp {
 	display: flex;
 	align-items: center;
 	gap: 4px;
 	font-family: var(--font-data);
 	font-size: 19px;
+	white-space: nowrap;
 }
-.disk-temp.hot {
+.disk-group.hot .disk-temp {
 	color: var(--ember);
 }
 
 /* ---------- Network panel ---------- */
 .holonet {
-	top: 1684px;
+	top: 1724px;
 	left: 24px;
 	width: 634px;
 	padding: 20px 26px;
@@ -856,6 +880,27 @@ body {
 		inset 0 0 0 2px rgba(255, 122, 69, calc(0.35 + 0.55 * var(--alarm))),
 		inset 0 0 46px rgba(255, 90, 40, calc(0.12 + 0.25 * var(--alarm)));
 }
+/* The inset border is a rectangle that the bevelled corners cut off: a 2px diagonal stroke along each
+   bevel, on its inner side, closes the outline */
+.holonet.alert::before,
+.holonet.alert::after {
+	content: '';
+	position: absolute;
+	width: 24px;
+	height: 24px;
+	pointer-events: none;
+	--edge: rgba(255, 122, 69, calc(0.35 + 0.55 * var(--alarm)));
+}
+.holonet.alert::before {
+	left: 0;
+	top: 0;
+	background: linear-gradient(135deg, transparent 50%, var(--edge) 50%, var(--edge) calc(50% + 2px), transparent calc(50% + 2px));
+}
+.holonet.alert::after {
+	right: 0;
+	bottom: 0;
+	background: linear-gradient(135deg, transparent calc(50% - 2px), var(--edge) calc(50% - 2px), var(--edge) 50%, transparent 50%);
+}
 .holonet.alert .net-head .label {
 	color: var(--ember);
 }
@@ -882,7 +927,7 @@ body {
 
 /* ---------- Now playing ---------- */
 .media {
-	top: 1956px;
+	top: 1996px;
 	left: 40px;
 	width: 602px;
 }
@@ -1365,7 +1410,7 @@ body {
 }
 
 .toast {
-	top: 2250px;
+	top: 2293px;
 	left: 141px;
 	width: 400px;
 	z-index: 11;
@@ -1387,7 +1432,7 @@ body {
 
 /* Update notice, in the free band between the media panel and the dock */
 .update-banner {
-	top: 2262px;
+	top: 2305px;
 	left: 111px;
 	width: 460px;
 	z-index: 10;

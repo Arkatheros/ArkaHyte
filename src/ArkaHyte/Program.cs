@@ -13,6 +13,8 @@ internal static class Program
 	///   ArkaHyte.exe --touch-log          same, logging every click/touch seen by the touch guard
 	///   ArkaHyte.exe --memory-log         same, logging the memory use every 10 s (hourly otherwise)
 	///   ArkaHyte.exe --setup              same, opening the setup wizard at start
+	///   ArkaHyte.exe --simulate-updates   development build: tray update entry with a fake check (nothing downloaded)
+	///   ArkaHyte.exe --identify-screens   show each screen's number for 3 s (as the setup wizard does) and exit
 	///   ArkaHyte.exe --setup-preview out.png [--setup-step 2]  render the setup wizard alone, capture it and exit
 	///   ArkaHyte.exe --screenshot out.png render, save a capture of the page and exit
 	///   ArkaHyte.exe --demo stress        show a simulated scenario (idle, stress) instead of live data
@@ -69,6 +71,18 @@ internal static class Program
 			return MenuPreview(menuPreviewPath);
 		}
 
+		if (args.Contains("--identify-screens"))
+		{
+			// Same numbers as the setup wizard, for 3 s
+			ApplicationConfiguration.Initialize();
+			ScreenBadge.ShowAll();
+			using var exit = new System.Windows.Forms.Timer { Interval = 3500 };
+			exit.Tick += (_, _) => Application.ExitThread();
+			exit.Start();
+			Application.Run();
+			return 0;
+		}
+
 		var setupPreviewPath = ArgumentValue(args, "--setup-preview");
 		if (setupPreviewPath is not null)
 		{
@@ -109,7 +123,7 @@ internal static class Program
 			int.TryParse(ArgumentValue(args, "--open-editor"), out var editorIndex) ? editorIndex : null,
 			args.Contains("--preview-speedtest") ? (ArgumentValue(args, "--preview-speedtest") == "done" ? "done" : "preview") : null,
 			args.Contains("--setup"));
-		using var updater = new AppUpdater();
+		using var updater = new AppUpdater(simulate: args.Contains("--simulate-updates"));
 		Log.Info($"Version {updater.CurrentVersion}");
 		var display = new DisplayForm(settings, hub, touchGuard, updater, options);
 		Application.Run(display);
@@ -163,7 +177,8 @@ internal static class Program
 		menu.CreateControl();
 		menu.Size = menu.GetPreferredSize(Size.Empty);
 		menu.PerformLayout();
-		menu.Items.OfType<ToolStripMenuItem>().ElementAt(1).Select();
+		// The demo item: hovered and checked, the busiest row (blade bar next to the check box)
+		menu.Items.OfType<ToolStripMenuItem>().First().Select();
 		using var bitmap = new Bitmap(menu.Width, menu.Height);
 		menu.DrawToBitmap(bitmap, new Rectangle(Point.Empty, menu.Size));
 		bitmap.Save(path, System.Drawing.Imaging.ImageFormat.Png);

@@ -16,6 +16,8 @@ public sealed class SensorHub : IDisposable
 	private readonly NetworkMonitor _network;
 	private readonly MediaMonitor _media = new();
 	private readonly CancellationTokenSource _stop = new();
+	// Partition layout does not change while running: looked up once per drive
+	private readonly Dictionary<string, int?> _diskNumbers = new(StringComparer.OrdinalIgnoreCase);
 	private Task? _loop;
 
 	public event Action<Snapshot>? SnapshotReady;
@@ -107,7 +109,7 @@ public sealed class SensorHub : IDisposable
 			ForegroundGame.IsRunning() ? _hwInfo.Get(hw.GpuFps) : null);
 
 		var disks = _settings.Drives
-			.Select(d => SystemMetrics.ReadDrive(d.Name, _hwInfo.Get(d.Temp)))
+			.Select(d => SystemMetrics.ReadDrive(d.Name, _hwInfo.Get(d.Temp), DiskNumber(d.Name)))
 			.OfType<DiskData>()
 			.ToList();
 
@@ -125,6 +127,16 @@ public sealed class SensorHub : IDisposable
 		}
 
 		return new Snapshot(cpu, gpu, SystemMetrics.ReadMemory(), disks, network, media);
+	}
+
+	private int? DiskNumber(string driveName)
+	{
+		if (!_diskNumbers.TryGetValue(driveName, out var number))
+		{
+			number = HardwareDetector.ReadDiskNumber(driveName);
+			_diskNumbers[driveName] = number;
+		}
+		return number;
 	}
 
 	private static T? Safe<T>(Func<T?> read)

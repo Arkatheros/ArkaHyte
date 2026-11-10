@@ -47,7 +47,7 @@ public sealed class SystemMetrics
 		return new RamData((status.TotalPhys - status.AvailPhys) / BytesPerGb, status.TotalPhys / BytesPerGb);
 	}
 
-	public static DiskData? ReadDrive(string name, double? temp)
+	public static DiskData? ReadDrive(string name, double? temp, int? disk)
 	{
 		try
 		{
@@ -58,7 +58,7 @@ public sealed class SystemMetrics
 			}
 			var total = drive.TotalSize / BytesPerGb;
 			var used = (drive.TotalSize - drive.TotalFreeSpace) / BytesPerGb;
-			return new DiskData(name.TrimEnd('\\'), drive.VolumeLabel, used, total, temp);
+			return new DiskData(name.TrimEnd('\\'), drive.VolumeLabel, used, total, temp, disk);
 		}
 		catch (Exception exception) when (exception is IOException or ArgumentException or UnauthorizedAccessException)
 		{

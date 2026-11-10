@@ -66,6 +66,8 @@ Ajouter une fonctionnalité interactive = un type de message de chaque côté.
 
 **Sources** (`Sensors/`) : HWiNFO Gadget via registre `HKCU\Software\HWiNFO64\VSB` (capteurs
 retrouvés par nom/libellé avec jokers, configurés dans `appsettings.json` → `HwInfo`, `Drives[].Temp`),
+Disques : `DiskData.Disk` = numéro de disque physique (IOCTL, `HardwareDetector.ReadDiskNumber`, mis en
+cache par `SensorHub`) ; l'UI regroupe les lecteurs consécutifs d'un même disque sous une température.
 FPS : capteur PresentMon de HWiNFO, nommé d'après le processus au premier plan (`PresentMon [x.exe]`,
 suffixe neutralisé par `HwInfoReader`) et ne comptant que si la fenêtre au premier plan couvre son
 écran (`ForegroundGame`). `wlanapi` natif lu à offsets fixes (`WifiReader`), `NetworkInterface` + `Ping` (statut

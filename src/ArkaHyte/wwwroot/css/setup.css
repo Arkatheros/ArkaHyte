@@ -376,6 +376,24 @@ button {
 	color: var(--core);
 	min-width: 90px;
 }
+.sensors tr.group td {
+	padding: 18px 8px 6px;
+	font-size: 13px;
+	font-weight: 700;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--blade);
+	border-bottom: 1px solid var(--line);
+}
+.sensors .detail {
+	display: block;
+	max-width: 210px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	font-size: 12px;
+	font-weight: 500;
+	color: var(--ash);
+}
 .sensors .tag {
 	display: block;
 	font-size: 11px;

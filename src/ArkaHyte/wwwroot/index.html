@@ -174,8 +174,11 @@
 					</div>
 					<div class="disk-name"><span class="disk-letter">--</span><span class="disk-label"></span></div>
 					<span class="data disk-total">&nbsp;</span>
-					<span class="disk-temp" hidden><svg class="ico"><use href="#i-thermo"/></svg><span class="disk-temp-value">-- °C</span></span>
 				</div>
+			</template>
+			<!-- One per physical disk, under the drives it holds: their shared temperature -->
+			<template id="diskGroupTemplate">
+				<div class="disk-group" hidden><span class="disk-temp"><svg class="ico"><use href="#i-thermo"/></svg><span class="disk-temp-value">-- °C</span></span></div>
 			</template>
 		</section>
 

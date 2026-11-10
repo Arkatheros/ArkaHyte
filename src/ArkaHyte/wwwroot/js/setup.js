@@ -12,10 +12,10 @@
 	const METRICS = [
 		{ key: 'cpuTemp', name: 'Température CPU', unit: '°C', sensor: /cpu/i, labels: [/tctl|tdie/i, /package|boîtier/i, /cpu.*(temp|tempé)/i, /core.*max/i] },
 		{ key: 'cpuPower', name: 'Consommation CPU', unit: 'W', sensor: /cpu/i, labels: [/total.*cpu|cpu.*total|totale du cpu/i, /package power/i, /power|consommation|puissance/i] },
-		{ key: 'gpuTemp', name: 'Température GPU', unit: '°C', sensor: /gpu/i, labels: [/^gpu temperature$|^température gpu$/i, /^(gpu )?temp/i, /temp/i] },
-		{ key: 'gpuPower', name: 'Consommation GPU', unit: 'W', sensor: /gpu/i, labels: [/^gpu power$|gpu consommation|consommation d'énergie gpu/i, /power|consommation|puissance/i] },
-		{ key: 'gpuLoad', name: 'Charge GPU', unit: '%', sensor: /gpu/i, labels: [/core load|charge du c/i, /gpu (load|utili)/i, /load|charge|utili/i] },
-		{ key: 'gpuVram', name: 'Mémoire GPU', unit: '%', sensor: /gpu/i, labels: [/memory usage|utilisation de la mémoire/i, /memory|mémoire/i] },
+		{ key: 'gpuTemp', name: 'Température GPU', unit: '°C', sensor: /gpu/i, strict: true, labels: [/^gpu temperature$|^température gpu$/i, /^(gpu )?temp/i, /temp/i] },
+		{ key: 'gpuPower', name: 'Consommation GPU', unit: 'W', sensor: /gpu/i, strict: true, labels: [/^gpu power$|gpu consommation|consommation d'énergie gpu/i, /power|consommation|puissance/i] },
+		{ key: 'gpuLoad', name: 'Charge GPU', unit: '%', sensor: /gpu/i, strict: true, labels: [/core load|charge du c/i, /gpu (load|utili)/i, /load|charge|utili/i] },
+		{ key: 'gpuVram', name: 'Mémoire GPU', unit: '%', sensor: /gpu/i, strict: true, labels: [/memory usage|utilisation de la mémoire/i, /memory|mémoire/i] },
 		// HWiNFO's own PresentMon sensor first (no extra tool), RTSS otherwise; only filled in games,
 		// so not counted as missing
 		{ key: 'gpuFps', name: 'FPS en jeu', unit: 'FPS', sensor: /./, labels: [/displayed.*avg|framerate \(displayed\)/i, /displayed/i, /presented/i, /^framerate$/i, /^(framerate|fps)/i, /framerate|fps|images/i], optional: true }
@@ -184,7 +184,78 @@
 		return match ? match[1].trim() : '';
 	}
 
+	const DRIVE_PREFIX = 'drive:';
+	// HWiNFO names a disk's sensors after its model: "S.M.A.R.T.: Samsung SSD 990 PRO 2TB (S73W...)"
+	const DRIVE_TEMP_LABELS = [/(drive temperature|température du disque)$/i, /temp/i];
+	const squeeze = text => text.toLowerCase().replace(/[^a-z0-9]+/g, '');
+
+	/**
+	 * Widget rows, then one row per physical disk: its drives (C: and D: on one SSD) share a single
+	 * temperature. Drives whose disk is unknown get a row of their own. Disk temperatures are optional.
+	 */
+	function sensorRows() {
+		const disks = [];
+		for (const drive of (model.state && model.state.drives) || []) {
+			const same = Number.isInteger(drive.disk) && disks.find(d => d.number === drive.disk);
+			if (same) {
+				same.names.push(drive.name);
+			}
+			else {
+				disks.push({ number: drive.disk, model: drive.model, names: [drive.name] });
+			}
+		}
+		return METRICS.concat(disks.map(disk => ({
+			key: Number.isInteger(disk.number) ? 'disk:' + disk.number : DRIVE_PREFIX + disk.names[0],
+			name: 'Disque ' + disk.names.join(' · '),
+			detail: disk.model || '',
+			unit: '°C',
+			disk,
+			optional: true
+		})));
+	}
+
+	/** Entry the current settings point to for a row; for a disk, the first of its drives that has one. */
+	function configuredEntry(metric) {
+		const { entries, matches } = model.hwinfo;
+		const keys = metric.disk ? metric.disk.names.map(name => DRIVE_PREFIX + name) : [metric.key];
+		for (const key of keys) {
+			const entry = entries[matches[key]];
+			if (entry) {
+				return entry;
+			}
+		}
+		return undefined;
+	}
+
+	const DISK_SENSOR = /s\.m\.a\.r\.t|drive|disk|disque|nvme|ssd/i;
+
+	// HWiNFO ends a disk sensor name with the drive letters it holds: "... (S7YF...) [C:, D:]"
+	function holdsDrive(sensor, driveName) {
+		const letters = /\[([A-Z]:(?:,\s*[A-Z]:)*)\]\s*$/i.exec(sensor);
+		return letters ? letters[1].toUpperCase().split(/,\s*/).includes(driveName.toUpperCase()) : false;
+	}
+
+	/** Entries that make sense for a row: same unit, and disk sensors only for a drive. */
+	function fits(metric, entry) {
+		return unitOf(entry) === metric.unit
+			&& (!metric.disk || DISK_SENSOR.test(entry.sensor))
+			// GPU values only come from a GPU sensor; a CPU temperature may come from the motherboard
+			&& (!metric.strict || metric.sensor.test(entry.sensor));
+	}
+
 	function suggest(metric, entries) {
+		if (metric.disk) {
+			const disk = metric.disk.model ? squeeze(metric.disk.model) : '';
+			const candidates = entries.filter(e => fits(metric, e)
+				&& (metric.disk.names.some(name => holdsDrive(e.sensor, name)) || (disk && squeeze(e.sensor).includes(disk))));
+			for (const pattern of DRIVE_TEMP_LABELS) {
+				const found = candidates.find(e => pattern.test(e.label));
+				if (found) {
+					return found;
+				}
+			}
+			return null;
+		}
 		const candidates = entries.filter(e => unitOf(e) === metric.unit && metric.sensor.test(e.sensor));
 		for (const pattern of metric.labels) {
 			const found = candidates.find(e => pattern.test(e.label));
@@ -198,12 +269,12 @@
 	// Rows the user has not touched follow the configuration, or a suggestion when it matches nothing
 	function updateSensorChoices() {
 		const { entries, matches } = model.hwinfo;
-		for (const metric of METRICS) {
+		for (const metric of sensorRows()) {
 			const current = model.sensors[metric.key] || (model.sensors[metric.key] = { choice: '', touched: false, origin: 'missing' });
 			if (current.touched) {
 				continue;
 			}
-			const configured = entries[matches[metric.key]];
+			const configured = configuredEntry(metric);
 			const suggestion = configured ? null : suggest(metric, entries);
 			current.choice = configured ? keyOf(configured) : (suggestion ? keyOf(suggestion) : '');
 			current.origin = configured ? 'configured' : (suggestion ? 'suggested' : 'missing');
@@ -216,29 +287,50 @@
 		const entries = model.hwinfo.entries;
 		$('sensorsEmpty').hidden = entries.length > 0;
 		const body = $('sensors').tBodies[0];
-		const entryKeys = entries.map(keyOf).join('\n');
+		const rows = sensorRows();
+		const entryKeys = entries.map(keyOf).join('\n') + '\n' + rows.map(r => r.key).join('\n');
 
 		// Rebuilding the lists would close an open dropdown: only when the entries themselves change
 		if (entryKeys !== renderedEntryKeys) {
 			renderedEntryKeys = entryKeys;
 			body.textContent = '';
-			const groups = new Map();
-			for (const entry of entries) {
-				if (!groups.has(entry.sensor)) {
-					groups.set(entry.sensor, []);
+			rows.forEach((metric, index) => {
+				if (metric.disk && (index === 0 || !rows[index - 1].disk)) {
+					const heading = body.insertRow();
+					heading.className = 'group';
+					const cell = heading.insertCell();
+					cell.colSpan = 3;
+					cell.textContent = 'Températures des disques';
 				}
-				groups.get(entry.sensor).push(entry);
-			}
-			for (const metric of METRICS) {
 				const row = body.insertRow();
 				row.dataset.key = metric.key;
 				const name = row.insertCell();
 				name.textContent = metric.name;
+				if (metric.detail) {
+					const detail = document.createElement('span');
+					detail.className = 'detail';
+					detail.textContent = metric.detail;
+					name.append(detail);
+				}
 				const tag = document.createElement('span');
 				tag.className = 'tag';
 				name.append(tag);
 				const select = document.createElement('select');
 				select.append(new Option('— Aucune —', ''));
+				const current = model.sensors[metric.key] && model.sensors[metric.key].choice;
+				const groups = new Map();
+				for (const entry of entries) {
+					if (!fits(metric, entry) && keyOf(entry) !== current) {
+						continue;
+					}
+					if (!groups.has(entry.sensor)) {
+						groups.set(entry.sensor, []);
+					}
+					groups.get(entry.sensor).push(entry);
+				}
+				if (groups.size === 0) {
+					select.options[0].text = '— Aucune valeur en ' + metric.unit + ' —';
+				}
 				for (const [sensor, items] of groups) {
 					const group = document.createElement('optgroup');
 					group.label = sensor;
@@ -251,11 +343,14 @@
 				});
 				row.insertCell().append(select);
 				row.insertCell().className = 'num';
-			}
+			});
 		}
 
 		const byKey = new Map(entries.map(e => [keyOf(e), e]));
 		for (const row of body.rows) {
+			if (!row.dataset.key) {
+				continue;
+			}
 			const sensor = model.sensors[row.dataset.key];
 			const select = row.cells[1].firstChild;
 			if (select.value !== sensor.choice) {
@@ -265,7 +360,7 @@
 			row.cells[2].textContent = entry ? entry.text : '--';
 			const tag = row.cells[0].querySelector('.tag');
 			const labels = { configured: 'configuré', suggested: 'suggéré', missing: 'non trouvé', chosen: 'choisi' };
-			const optional = METRICS.find(m => m.key === row.dataset.key).optional;
+			const optional = rows.find(m => m.key === row.dataset.key).optional;
 			tag.textContent = sensor.choice ? labels[sensor.origin] : (optional ? 'facultatif' : 'non attribué');
 			tag.className = 'tag ' + (sensor.choice ? sensor.origin : (optional ? '' : 'missing'));
 		}
@@ -314,6 +409,11 @@
 			const fps = model.sensors.gpuFps && model.sensors.gpuFps.choice;
 			add(assigned === required.length ? 'ok' : 'warn', 'Capteurs : <b>' + assigned + ' / ' + required.length + '</b> attribués'
 				+ (fps ? ', FPS en jeu compris' : ', sans FPS en jeu'));
+			const disks = sensorRows().filter(r => r.disk);
+			if (disks.length) {
+				const withTemp = disks.filter(r => model.sensors[r.key] && model.sensors[r.key].choice).length;
+				add('ok', 'Disques : <b>' + withTemp + ' / ' + disks.length + '</b> avec leur température');
+			}
 		}
 		else {
 			add('warn', 'Capteurs : réglage actuel conservé');
@@ -339,20 +439,30 @@
 		if (entries.length) {
 			const byKey = new Map(entries.map(e => [keyOf(e), e]));
 			message.sensors = {};
-			for (const metric of METRICS) {
+			message.drives = {};
+			for (const metric of sensorRows()) {
 				const choice = model.sensors[metric.key].choice;
-				const configured = entries[matches[metric.key]];
-				// Unchanged rows are left out so the existing selector (wildcards included) stays
-				if (configured && keyOf(configured) === choice) {
+				// Unchanged rows are left out so the existing selector (wildcards included) stays;
+				// a disk is unchanged only when every one of its drives already points to the choice
+				const keys = metric.disk ? metric.disk.names.map(name => DRIVE_PREFIX + name) : [metric.key];
+				if (choice && keys.every(key => entries[matches[key]] && keyOf(entries[matches[key]]) === choice)) {
 					continue;
 				}
-				// The RTSS entry only exists while a game runs: an empty optional row keeps its selector
+				// FPS only exist in games, disk entries may be unchecked: an empty optional row keeps its selector
 				if (metric.optional && !choice && !model.sensors[metric.key].touched) {
 					continue;
 				}
 				const entry = byKey.get(choice);
 				// PresentMon's sensor carries the foreground process name: saved without it
-				message.sensors[metric.key] = entry ? { sensor: entry.sensor.replace(/\[[^\]]+\.exe\]$/i, '[*]'), label: entry.label } : null;
+				const selector = entry ? { sensor: entry.sensor.replace(/\[[^\]]+\.exe\]$/i, '[*]'), label: entry.label } : null;
+				if (metric.disk) {
+					metric.disk.names.forEach(name => {
+						message.drives[name] = selector;
+					});
+				}
+				else {
+					message.sensors[metric.key] = selector;
+				}
 			}
 		}
 		$('saveError').hidden = true;
@@ -429,7 +539,12 @@
 			],
 			hardware: { cpuMaker: 'AMD', cpuModel: 'Ryzen 7 9800X3D', gpuMaker: 'NVIDIA', gpuModel: 'GeForce RTX 4090', vramTotalGb: 24 },
 			detected: { cpuMaker: 'AMD', cpuModel: 'Ryzen 7 9800X3D', gpuMaker: 'NVIDIA', gpuModel: 'GeForce RTX 4090', vramTotalGb: 24 },
-			hwInfoPath: 'C:\\Program Files\\HWiNFO64\\HWiNFO64.exe'
+			hwInfoPath: 'C:\\Program Files\\HWiNFO64\\HWiNFO64.exe',
+			drives: [
+				{ name: 'C:', label: 'Windows', disk: 0, model: 'Samsung SSD 9100 PRO 2TB' },
+				{ name: 'D:', label: 'Données', disk: 0, model: 'Samsung SSD 9100 PRO 2TB' },
+				{ name: 'E:', label: 'Jeux', disk: 1, model: 'Samsung SSD 990 PRO 4TB' }
+			]
 		});
 		dispatch({
 			type: 'hwinfo',
@@ -442,7 +557,10 @@
 				{ sensor: sensorGpu, label: 'Charge du cœur du GPU', text: '3.0 %' },
 				{ sensor: sensorGpu, label: 'Utilisation de la mémoire GPU', text: '11.2 %' },
 				{ sensor: 'PresentMon [dwm.exe]', label: "Fréquence d'images Presented (avg)", text: '38.0 FPS' },
-				{ sensor: 'PresentMon [dwm.exe]', label: "Fréquence d'images Displayed (avg)", text: '38.0 FPS' }
+				{ sensor: 'PresentMon [dwm.exe]', label: "Fréquence d'images Displayed (avg)", text: '38.0 FPS' },
+				{ sensor: 'S.M.A.R.T.: Samsung SSD 9100 PRO 2TB (S7YFNJ0Y123456Z) [C:, D:]', label: 'Température du disque', text: '53 °C' },
+				{ sensor: 'S.M.A.R.T.: Samsung SSD 9100 PRO 2TB (S7YFNJ0Y123456Z) [C:, D:]', label: 'Température du disque 2', text: '61 °C' },
+				{ sensor: 'S.M.A.R.T.: Samsung SSD 990 PRO 4TB (S7DPNU0X123456Y) [E:]', label: 'Température du disque', text: '40 °C' }
 			],
 			matches: { cpuTemp: 0, cpuPower: 1, gpuTemp: -1, gpuPower: -1, gpuLoad: 4, gpuVram: 5 }
 		});

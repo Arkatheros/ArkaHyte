@@ -18,7 +18,11 @@ internal sealed class SithMenuRenderer : ToolStripProfessionalRenderer
 	// Bahnschrift ships with Windows 10+ and is the closest system face to the display's Rajdhani
 	public static Font CreateFont() => new("Bahnschrift", 10.5f, FontStyle.Regular, GraphicsUnit.Point);
 
-	private const int TitleGap = 7;
+	private const int TitleGap = 4;
+	// At 96 dpi: brings the title's logo into the check box column
+	private const int TitleShift = 24;
+	// At 96 dpi, scaled with the menu
+	private const int CheckOffset = 6;
 
 	private readonly Font _titleFont = new("Bahnschrift", 10.5f, FontStyle.Bold, GraphicsUnit.Point);
 
@@ -46,6 +50,9 @@ internal sealed class SithMenuRenderer : ToolStripProfessionalRenderer
 			{
 				// Extra right padding makes room for the gap added before the title text
 				title.Padding = new Padding(4, 6, 4 + TitleGap, 6);
+				// Labels are laid out after the image margin: pulled back so the logo sits in the check
+				// box column and the title starts at the left like the rest of the menu
+				title.Margin = new Padding(-TitleShift * menu.DeviceDpi / 96, 0, 0, 0);
 				title.ImageScaling = ToolStripItemImageScaling.SizeToFit;
 			}
 		}
@@ -91,13 +98,10 @@ internal sealed class SithMenuRenderer : ToolStripProfessionalRenderer
 		var font = isTitle ? _titleFont : e.TextFont ?? e.Item.Font;
 		var color = isTitle ? Blade : e.Item.Selected ? Color.White : Bone;
 
-		// Bahnschrift has a tall ascent, so the stock line-box centering sits the letters too low.
-		// Centre the visible glyphs instead: put the middle of the x-to-cap height on the row centre.
 		var family = font.FontFamily;
 		var sizePx = font.SizeInPoints * e.Graphics.DpiY / 72f;
 		var ascentPx = sizePx * family.GetCellAscent(font.Style) / family.GetEmHeight(font.Style);
-		var baseline = e.Item.ContentRectangle.Top + e.Item.ContentRectangle.Height / 2f + sizePx * 0.30f;
-		var top = (int)Math.Round(baseline - ascentPx);
+		var top = (int)Math.Round(Baseline(e.Item, sizePx) - ascentPx);
 		TextRenderer.DrawText(
 			e.Graphics,
 			e.Text,
@@ -106,6 +110,32 @@ internal sealed class SithMenuRenderer : ToolStripProfessionalRenderer
 			new Point(e.TextRectangle.Left + (isTitle ? TitleGap : 0), top),
 			color,
 			TextFormatFlags.NoPadding | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
+	}
+
+	// Bahnschrift has a tall ascent, so the stock line-box centering sits the letters too low.
+	// Centre the visible glyphs instead: put the middle of the x-to-cap height on the row centre.
+	private static float Baseline(ToolStripItem item, float sizePx) =>
+		item.ContentRectangle.Top + item.ContentRectangle.Height / 2f + sizePx * 0.30f;
+
+	// Where the title's capitals end up, measured on the rendered menu: TextRenderer draws Bahnschrift
+	// lower than the computed line, so their middle sits only 0.12 em above that baseline
+	private const float CapMiddle = 0.12f;
+
+	protected override void OnRenderItemImage(ToolStripItemImageRenderEventArgs e)
+	{
+		// The label hands over no image in the event: take it from the item
+		if (e.Item is not ToolStripLabel || (e.Image ?? e.Item.Image) is not { } image)
+		{
+			base.OnRenderItemImage(e);
+			return;
+		}
+		// Title logo: centred on the title's capitals rather than on the row, which sits it too high
+		var sizePx = _titleFont.SizeInPoints * e.Graphics.DpiY / 72f;
+		var middle = Baseline(e.Item, sizePx) - sizePx * CapMiddle;
+		var bounds = e.ImageRectangle;
+		bounds.Y = (int)Math.Round(middle - bounds.Height / 2f);
+		e.Graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+		e.Graphics.DrawImage(image, bounds);
 	}
 
 	protected override void OnRenderSeparator(ToolStripSeparatorRenderEventArgs e)
@@ -117,10 +147,12 @@ internal sealed class SithMenuRenderer : ToolStripProfessionalRenderer
 
 	protected override void OnRenderItemCheck(ToolStripItemImageRenderEventArgs e)
 	{
-		// Centred on the whole row, not on the image slot, so it lines up with the text
+		// Centred on the whole row, not on the image slot, so it lines up with the text; nudged right so
+		// it keeps clear of the blade bar drawn on the hovered row
 		var size = Math.Min(e.ImageRectangle.Width, e.ImageRectangle.Height) - 2;
+		var offset = CheckOffset * (e.Item.Owner?.DeviceDpi ?? 96) / 96;
 		var box = new Rectangle(
-			e.ImageRectangle.Left + (e.ImageRectangle.Width - size) / 2,
+			e.ImageRectangle.Left + (e.ImageRectangle.Width - size) / 2 + offset,
 			(e.Item.Height - size) / 2,
 			size,
 			size);

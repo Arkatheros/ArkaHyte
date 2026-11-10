@@ -48,12 +48,15 @@ au prochain démarrage.
 
 ### Températures des disques
 
-1. Dans HWiNFO → onglet *HWiNFO Gadget*, cocher la température de chaque disque (capteurs S.M.A.R.T.).
-2. Lancer `bin\ArkaHyte\ArkaHyte.exe --dump dump.json` et repérer le nom exact dans `hwInfoEntries`.
-3. Renseigner `Drives[].Temp` dans `bin\ArkaHyte\appsettings.json`, par exemple :
-	```json
-	{ "Name": "C:", "Temp": { "Sensor": "S.M.A.R.T.: Samsung*", "Label": "Température du disque" } }
-	```
+1. Dans HWiNFO › onglet *HWiNFO Gadget*, cocher **Drive Temperature** (*Température du disque*) dans le
+   capteur S.M.A.R.T. de chaque disque.
+2. Assistant de configuration (menu de l'icône) › Capteurs › *Températures des disques* : une ligne par
+   disque physique (ses lecteurs, son modèle), la valeur correspondante proposée d'office.
+
+Le choix est écrit dans `Drives[].Temp` de `appsettings.json`, par exemple
+`{ "Name": "C:", "Temp": { "Sensor": "S.M.A.R.T.: Samsung SSD 990 PRO 2TB (S73W…)", "Label": "Température du disque" } }`.
+Sur l'écran, une accolade sous les lecteurs d'un même disque porte sa température (C: et D: sur un
+SSD : une seule valeur). Chaque lecteur garde son propre réglage : l'assistant écrit le même pour tous.
 
 ## Installer
 
@@ -81,7 +84,7 @@ raccourcis, journaux, réglages) sont conservées ; réactiver HYTE Nexus soi-m�
 Arka Hyte vérifie les releases GitHub 1 min après le démarrage puis toutes les 6 h. Une nouvelle
 version est annoncée sur l'écran et dans le menu de l'icône (**Installer la version X**) ; elle ne
 s'installe que sur ce clic (téléchargement, puis redémarrage de l'affichage). L'entrée sert aussi à
-vérifier tout de suite. Rien de tout cela pour une copie lancée depuis `bin\` (développement).
+vérifier tout de suite : le menu reste alors ouvert et affiche le résultat. Rien de tout cela pour une copie lancée depuis `bin\` (développement).
 
 ### Publier une version
 
@@ -199,6 +202,8 @@ Clic droit sur le sabre rouge dans la zone de notification : **mode démo** (CPU
 | `ArkaHyte.exe --open-editor 0` | Ouvre l'éditeur du 1er raccourci au démarrage |
 | `ArkaHyte.exe --setup` | Ouvre l'assistant de configuration au démarrage |
 | `ArkaHyte.exe --setup-preview out.png [--setup-step 2]` | Rend l'assistant seul (sans rien enregistrer), capture et quitte ; fonctionne à côté d'une instance lancée |
+| `ArkaHyte.exe --identify-screens` | Affiche le numéro de chaque écran 3 s (comme l'assistant) puis quitte |
+| `ArkaHyte.exe --simulate-updates` | Copie de dev : entrée de mise à jour du menu active, vérification fictive de 2 s (rien n'est téléchargé) |
 | `ArkaHyte.exe --preview-speedtest [done]` | Affiche le compteur (ou le résumé) du test de débit avec des valeurs d'exemple |
 | `ArkaHyte.exe --speedtest out.txt` | Lance un vrai test de débit et écrit chaque étape |
 | `ArkaHyte.exe --list-apps out.json` | Liste les applications proposées par l'éditeur |

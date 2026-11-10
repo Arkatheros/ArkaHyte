@@ -12,6 +12,8 @@ public sealed class TrayIcon : IDisposable
 	private readonly ToolStripMenuItem _demoItem;
 	private readonly ToolStripMenuItem _updateItem;
 	private readonly Icon _icon;
+	private UpdateStage _updateStage = UpdateStage.Unavailable;
+	private bool _keepMenuOpen;
 
 	public event Action<bool>? DemoToggled;
 	public event Action? ReloadRequested;
@@ -46,6 +48,18 @@ public sealed class TrayIcon : IDisposable
 		menu.Items.Add("Quitter", null, (_, _) => ExitRequested?.Invoke());
 		SithMenuRenderer.Apply(menu);
 
+		// A check stays in view: the menu remains open and its entry turns into the result
+		// ("Recherche…" then "À jour" or "Installer la version X"); installing still closes it
+		menu.ItemClicked += (_, args) => _keepMenuOpen = args.ClickedItem == _updateItem && _updateStage != UpdateStage.Available;
+		menu.Closing += (_, args) =>
+		{
+			if (_keepMenuOpen && args.CloseReason == ToolStripDropDownCloseReason.ItemClicked)
+			{
+				args.Cancel = true;
+			}
+			_keepMenuOpen = false;
+		};
+
 		_notifyIcon = new NotifyIcon
 		{
 			Icon = _icon,
@@ -61,6 +75,7 @@ public sealed class TrayIcon : IDisposable
 	/// <summary>Reflects the update flow in the menu entry (call on the UI thread).</summary>
 	public void SetUpdateState(UpdateState state)
 	{
+		_updateStage = state.Stage;
 		_updateItem.Visible = state.Stage != UpdateStage.Unavailable;
 		(_updateItem.Text, _updateItem.Enabled) = state.Stage switch
 		{
