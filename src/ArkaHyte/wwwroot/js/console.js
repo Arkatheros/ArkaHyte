@@ -1195,6 +1195,8 @@
 			applyConfig(message);
 		} else if (message.type === 'toast') {
 			showToast(message.text);
+		} else if (message.type === 'update') {
+			renderUpdate(message);
 		} else if (message.type === 'speedtest') {
 			renderSpeedTest(message);
 		} else if (message.type === 'apps') {
@@ -1602,6 +1604,23 @@
 		clearTimeout(showToast.timer);
 		showToast.timer = setTimeout(() => toast.classList.remove('show'), 1600);
 	}
+
+	// Update notice: { stage: available | downloading | failed | ..., version, progress }
+	function renderUpdate(update) {
+		const banner = $('updateBanner');
+		const labels = {
+			available: `Mise à jour ${update.version} · toucher pour installer`,
+			downloading: `Téléchargement de la ${update.version} · ${update.progress || 0} %`,
+			failed: `Échec de la ${update.version} · toucher pour réessayer`
+		};
+		const label = update.version ? labels[update.stage] : null;
+		banner.hidden = !label;
+		banner.disabled = update.stage === 'downloading';
+		if (label) {
+			text('updateText', label);
+		}
+	}
+	$('updateBanner').addEventListener('click', () => send({ type: 'update', action: 'install' }));
 
 	function send(message) {
 		if (host) {

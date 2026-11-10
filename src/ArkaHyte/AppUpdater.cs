@@ -34,8 +34,8 @@ public sealed class AppUpdater : IDisposable
 	private System.Threading.Timer? _timer;
 	private UpdateInfo? _available;
 
-	/// <summary>Raised whenever the state changes; the bool is true when a new version was just found.</summary>
-	public event Action<UpdateState, bool>? StateChanged;
+	/// <summary>Raised whenever the state changes.</summary>
+	public event Action<UpdateState>? StateChanged;
 
 	public UpdateState State { get; private set; } = new(UpdateStage.Unavailable);
 
@@ -54,7 +54,7 @@ public sealed class AppUpdater : IDisposable
 			Log.Info($"Updates off: not an installed copy (version {CurrentVersion})");
 			return;
 		}
-		SetState(new UpdateState(UpdateStage.Idle), found: false);
+		SetState(new UpdateState(UpdateStage.Idle));
 		_timer = new System.Threading.Timer(_ => _ = CheckAsync(), null, FirstCheckDelay, CheckPeriod);
 	}
 
@@ -69,18 +69,17 @@ public sealed class AppUpdater : IDisposable
 		}
 		try
 		{
-			SetState(new UpdateState(UpdateStage.Checking), found: false);
+			SetState(new UpdateState(UpdateStage.Checking));
 			var update = await _manager.CheckForUpdatesAsync();
-			var isNew = update is not null && update.TargetFullRelease.Version.ToString() != _available?.TargetFullRelease.Version.ToString();
 			_available = update;
 			if (update is null)
 			{
-				SetState(new UpdateState(UpdateStage.UpToDate), found: false);
+				SetState(new UpdateState(UpdateStage.UpToDate));
 			}
 			else
 			{
 				Log.Info($"Update available: {update.TargetFullRelease.Version}");
-				SetState(new UpdateState(UpdateStage.Available, update.TargetFullRelease.Version.ToString()), found: isNew);
+				SetState(new UpdateState(UpdateStage.Available, update.TargetFullRelease.Version.ToString()));
 			}
 		}
 		catch (Exception exception)
@@ -89,7 +88,7 @@ public sealed class AppUpdater : IDisposable
 			Log.Error("Update check failed", exception);
 			SetState(_available is null
 				? new UpdateState(UpdateStage.Failed)
-				: new UpdateState(UpdateStage.Available, _available.TargetFullRelease.Version.ToString()), found: false);
+				: new UpdateState(UpdateStage.Available, _available.TargetFullRelease.Version.ToString()));
 		}
 		finally
 		{
@@ -106,9 +105,9 @@ public sealed class AppUpdater : IDisposable
 		var version = update.TargetFullRelease.Version.ToString();
 		try
 		{
-			SetState(new UpdateState(UpdateStage.Downloading, version), found: false);
+			SetState(new UpdateState(UpdateStage.Downloading, version));
 			await _manager.DownloadUpdatesAsync(update, progress =>
-				SetState(new UpdateState(UpdateStage.Downloading, version, progress), found: false));
+				SetState(new UpdateState(UpdateStage.Downloading, version, progress)));
 			Log.Info($"Update {version} downloaded, restarting to apply it");
 			// The updater waits for this process to exit, swaps the files and starts the new version
 			_manager.WaitExitThenApplyUpdates(update.TargetFullRelease, silent: true, restart: true, []);
@@ -117,7 +116,7 @@ public sealed class AppUpdater : IDisposable
 		catch (Exception exception)
 		{
 			Log.Error($"Update {version} failed", exception);
-			SetState(new UpdateState(UpdateStage.Failed, version), found: false);
+			SetState(new UpdateState(UpdateStage.Failed, version));
 			_busy.Release();
 		}
 	}
@@ -125,10 +124,10 @@ public sealed class AppUpdater : IDisposable
 	/// <summary>Asks the app to close so the downloaded update can be applied.</summary>
 	public event Action? ExitRequested;
 
-	private void SetState(UpdateState state, bool found)
+	private void SetState(UpdateState state)
 	{
 		State = state;
-		StateChanged?.Invoke(state, found);
+		StateChanged?.Invoke(state);
 	}
 
 	public void Dispose()

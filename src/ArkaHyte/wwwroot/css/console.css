@@ -1368,6 +1368,44 @@ body {
 	opacity: 1;
 }
 
+/* Update notice, in the free band between the media panel and the dock */
+.update-banner {
+	top: 2262px;
+	left: 111px;
+	width: 460px;
+	z-index: 10;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 12px;
+	padding: 12px 18px;
+	box-sizing: border-box;
+	border: 1px solid var(--blade);
+	background: rgba(26, 7, 9, 0.92);
+	box-shadow: 0 0 22px rgba(255, 31, 51, 0.45);
+	color: var(--bone);
+	font: 600 18px var(--font-label);
+	letter-spacing: 0.06em;
+}
+.update-banner[hidden] {
+	display: none;
+}
+.update-banner:disabled {
+	border-color: var(--line);
+	box-shadow: none;
+	color: var(--ash);
+}
+.update-banner svg {
+	flex: none;
+	width: 24px;
+	height: 24px;
+	fill: none;
+	stroke: var(--blade);
+	stroke-width: 1.8;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
 @media (prefers-reduced-motion: reduce) {
 	.frame.ignite .ix {
 		animation: none;

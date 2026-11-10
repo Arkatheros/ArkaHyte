@@ -70,7 +70,7 @@ public sealed class DisplayForm : Form
 			_tray.ReloadRequested += () => _webView.CoreWebView2?.Reload();
 			_tray.ExitRequested += Close;
 			_tray.UpdateRequested += () => _ = _updater.ActAsync();
-			_updater.StateChanged += (state, found) => PostToUiThread(() => OnUpdateState(state, found));
+			_updater.StateChanged += state => PostToUiThread(() => OnUpdateState(state));
 			_updater.ExitRequested += () => PostToUiThread(Close);
 			Microsoft.Win32.SystemEvents.SessionSwitch += OnSessionSwitch;
 		}
@@ -184,14 +184,15 @@ public sealed class DisplayForm : Form
 		return true;
 	}
 
-	private void OnUpdateState(UpdateState state, bool found)
+	private void OnUpdateState(UpdateState state)
 	{
 		_tray?.SetUpdateState(state);
-		if (found)
-		{
-			Post(new { type = "toast", text = $"Mise à jour {state.Version} disponible · menu de l'icône" });
-		}
+		PostUpdateState(state);
 	}
+
+	// The page keeps a banner up while a version is available (also re-sent after a reload)
+	private void PostUpdateState(UpdateState state) =>
+		Post(new { type = "update", stage = state.Stage.ToString().ToLowerInvariant(), version = state.Version, progress = state.Progress });
 
 	private void OnSessionSwitch(object? sender, Microsoft.Win32.SessionSwitchEventArgs args)
 	{
@@ -374,6 +375,10 @@ public sealed class DisplayForm : Form
 			case "speedtest" when action == "cancel":
 				_speedTestRun?.Cancel();
 				break;
+			case "update" when action == "install":
+				// Tapping the banner: same as the tray entry (installs the version found)
+				_ = _updater.ActAsync();
+				break;
 		}
 	}
 
@@ -428,6 +433,7 @@ public sealed class DisplayForm : Form
 	{
 		_webReady = true;
 		SendConfig();
+		PostUpdateState(_updater.State);
 		if (_hub.LatestCover is { } cover)
 		{
 			Post(new { type = "cover", key = cover.Key, dataUrl = cover.DataUrl });
