@@ -22,7 +22,14 @@ internal static class Program
 	[STAThread]
 	private static int Main(string[] args)
 	{
-		var settings = AppSettings.Load(Path.Combine(AppContext.BaseDirectory, "appsettings.json"));
+		// Installer and updater hooks first: Velopack runs them and exits during install, update and uninstall
+		Velopack.VelopackApp.Build()
+			.OnAfterInstallFastCallback(_ => Installation.OnInstalled())
+			.OnAfterUpdateFastCallback(_ => Installation.OnUpdated())
+			.OnBeforeUninstallFastCallback(_ => Installation.OnUninstalling())
+			.Run();
+
+		var settings = AppSettings.Load();
 		var dumpPath = ArgumentValue(args, "--dump");
 		if (dumpPath is not null)
 		{
@@ -87,7 +94,9 @@ internal static class Program
 			ArgumentValue(args, "--demo"),
 			int.TryParse(ArgumentValue(args, "--open-editor"), out var editorIndex) ? editorIndex : null,
 			args.Contains("--preview-speedtest") ? (ArgumentValue(args, "--preview-speedtest") == "done" ? "done" : "preview") : null);
-		Application.Run(new DisplayForm(settings, hub, touchGuard, options));
+		using var updater = new AppUpdater();
+		Log.Info($"Version {updater.CurrentVersion}");
+		Application.Run(new DisplayForm(settings, hub, touchGuard, updater, options));
 		Log.Info("Stopped");
 		return 0;
 	}

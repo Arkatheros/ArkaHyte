@@ -38,23 +38,52 @@ dans Gadget n'a donc pas d'importance. Jokers `*` acceptés.
 	{ "Name": "C:", "Temp": { "Sensor": "S.M.A.R.T.: Samsung*", "Label": "Température du disque" } }
 	```
 
-## Construire
+## Installer
+
+**Avant tout, désinstaller ou désactiver HYTE Nexus** (sinon les deux se disputent l'écran du
+boîtier) : Arka Hyte n'y touche pas.
+
+Télécharger `ArkaHyte.App-win-Setup.exe` depuis les
+[releases GitHub](https://github.com/Arkatheros/ArkaHyte/releases) et le lancer (pas de droits admin) :
+
+- installe dans `%LOCALAPPDATA%\ArkaHyte.App` (le runtime .NET 10 Desktop est installé s'il manque)
+- lance Arka Hyte à l'ouverture de session (clé `Run` de l'utilisateur) et crée le raccourci du menu Démarrer
+- copie `appsettings.json` dans `%LOCALAPPDATA%\ArkaHyte\` : c'est cette copie qui fait foi, les
+  mises à jour ne l'écrasent pas.
+
+Désinstaller : Paramètres Windows › Applications. Les données (`%LOCALAPPDATA%\ArkaHyte` :
+raccourcis, journaux, réglages) sont conservées ; réactiver HYTE Nexus soi-même si besoin.
+
+### Mises à jour
+
+Arka Hyte vérifie les releases GitHub 1 min après le démarrage puis toutes les 6 h. Une nouvelle
+version est annoncée sur l'écran et dans le menu de l'icône (**Installer la version X**) ; elle ne
+s'installe que sur ce clic (téléchargement, puis redémarrage de l'affichage). L'entrée sert aussi à
+vérifier tout de suite. Rien de tout cela pour une copie lancée depuis `bin\` (développement).
+
+### Publier une version
+
+Le dépôt doit être **public** (les copies installées lisent les releases sans identifiant).
+
+```powershell
+scripts\New-Release.ps1 -Version 1.0.1             # installeur local dans artifacts\releases
+$env:GITHUB_TOKEN = '<jeton>'                       # droit de créer des releases
+scripts\New-Release.ps1 -Version 1.0.1 -Publish    # + release GitHub v1.0.1
+```
+
+Le script publie l'appli, récupère la release précédente (paquet delta), empaquette avec
+[Velopack](https://velopack.io) (`vpk`, outil local du dépôt : `dotnet-tools.json`) et envoie la release.
+
+### Développement
 
 ```powershell
 dotnet publish src\ArkaHyte -c Release -o bin\ArkaHyte
+scripts\Install.ps1              # (admin) tâche planifiée vers bin\ArkaHyte
+scripts\Install.ps1 -Uninstall   # retire la tâche et le raccourci
 ```
 
-## Installer (PowerShell administrateur)
-
-```powershell
-scripts\Install.ps1
-```
-
-- désactive la tâche planifiée `HYTE Nexus` et arrête Nexus
-- crée la tâche `Arka Hyte` à l'ouverture de session → `Start-ArkaHyte.ps1`
-- crée le raccourci **Arka Hyte** dans le menu Démarrer (pour relancer après « Quitter »)
-
-Retour à Nexus : `scripts\Install.ps1 -Uninstall`
+Ne pas cumuler avec la version installée : `scripts\Install.ps1 -Uninstall` avant d'installer
+(sinon la tâche planifiée lance la copie de dev, et l'instance unique ferme la version installée).
 
 ## Test de débit
 

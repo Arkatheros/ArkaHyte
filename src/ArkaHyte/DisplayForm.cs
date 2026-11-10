@@ -29,6 +29,7 @@ public sealed class DisplayForm : Form
 	private readonly ShortcutLauncher _launcher;
 	private readonly DisplayOptions _options;
 	private readonly TouchGuard _touchGuard;
+	private readonly AppUpdater _updater;
 	private readonly WebView2 _webView;
 	private readonly TrayIcon? _tray;
 	private readonly System.Windows.Forms.Timer _placementRetry = new() { Interval = 5000 };
@@ -41,11 +42,12 @@ public sealed class DisplayForm : Form
 	private bool _sessionLocked;
 	private List<object>? _dockButtons;
 
-	public DisplayForm(AppSettings settings, SensorHub hub, TouchGuard touchGuard, DisplayOptions options)
+	public DisplayForm(AppSettings settings, SensorHub hub, TouchGuard touchGuard, AppUpdater updater, DisplayOptions options)
 	{
 		_settings = settings;
 		_hub = hub;
 		_touchGuard = touchGuard;
+		_updater = updater;
 		_options = options;
 		_demo = options.Demo;
 		_shortcuts = new ShortcutStore(settings.Shortcuts);
@@ -63,10 +65,13 @@ public sealed class DisplayForm : Form
 		// Diagnostic screenshot runs are short-lived: no tray icon for them
 		if (options.ScreenshotPath is null)
 		{
-			_tray = new TrayIcon(_demo is not null);
+			_tray = new TrayIcon(_demo is not null, updater.CurrentVersion);
 			_tray.DemoToggled += enabled => SetDemo(enabled ? DemoScenario : null);
 			_tray.ReloadRequested += () => _webView.CoreWebView2?.Reload();
 			_tray.ExitRequested += Close;
+			_tray.UpdateRequested += () => _ = _updater.ActAsync();
+			_updater.StateChanged += (state, found) => PostToUiThread(() => OnUpdateState(state, found));
+			_updater.ExitRequested += () => PostToUiThread(Close);
 			Microsoft.Win32.SystemEvents.SessionSwitch += OnSessionSwitch;
 		}
 
@@ -179,6 +184,15 @@ public sealed class DisplayForm : Form
 		return true;
 	}
 
+	private void OnUpdateState(UpdateState state, bool found)
+	{
+		_tray?.SetUpdateState(state);
+		if (found)
+		{
+			Post(new { type = "toast", text = $"Mise à jour {state.Version} disponible · menu de l'icône" });
+		}
+	}
+
 	private void OnSessionSwitch(object? sender, Microsoft.Win32.SessionSwitchEventArgs args)
 	{
 		if (args.Reason is not (Microsoft.Win32.SessionSwitchReason.SessionLock or Microsoft.Win32.SessionSwitchReason.SessionUnlock))
@@ -265,6 +279,11 @@ public sealed class DisplayForm : Form
 
 		Navigate();
 		_ = WarmUpAppCatalogAsync();
+		if (_tray is not null)
+		{
+			_updater.Start();
+			_tray.SetUpdateState(_updater.State);
+		}
 	}
 
 	// Listing ~200 apps with icons takes a few seconds: do it ahead so the editor opens instantly

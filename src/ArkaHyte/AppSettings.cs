@@ -51,6 +51,15 @@ public sealed record AppSettings(
 		DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
 	};
 
+	public const string FileName = "appsettings.json";
+
+	/// <summary>Copy kept in the data folder by installed versions, so updates never overwrite it.</summary>
+	public static string UserFilePath => Path.Combine(Log.Directory, FileName);
+
+	/// <summary>The user copy when there is one, otherwise the file shipped next to the executable.</summary>
+	public static AppSettings Load() =>
+		Load(File.Exists(UserFilePath) ? UserFilePath : Path.Combine(AppContext.BaseDirectory, FileName));
+
 	public static AppSettings Load(string path)
 	{
 		var settings = File.Exists(path)

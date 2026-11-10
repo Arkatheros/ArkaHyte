@@ -16,9 +16,12 @@ Le [README](README.md) décrit l'usage ; [TODO.md](TODO.md) est la file d'attent
 # Build + publication (l'app installée tourne depuis bin\ArkaHyte : la quitter avant, fichiers verrouillés)
 dotnet publish src\ArkaHyte -c Release -o bin\ArkaHyte
 
-# Installation au démarrage (PowerShell admin) / retour à Nexus
+# Installation de dev au démarrage (PowerShell admin, tâche planifiée vers bin) / retrait
 scripts\Install.ps1
 scripts\Install.ps1 -Uninstall
+
+# Installeur Velopack (artifacts\releases\ArkaHyte.App-win-Setup.exe) ; -Publish = release GitHub (GITHUB_TOKEN)
+scripts\New-Release.ps1 -Version 1.0.1 [-Publish]
 ```
 
 Pas de tests automatisés ni de linter. Vérification par les options one-shot de `ArkaHyte.exe`
@@ -70,7 +73,16 @@ après un toucher sur le boîtier (+ watchdog). `TrayIcon` + `SithMenuRenderer` 
 
 **Données utilisateur** : `%LOCALAPPDATA%\ArkaHyte\` (logs `display.log`, `launcher.log`, shortcuts, tools).
 
-**Démarrage** : tâche planifiée `Arka Hyte` (AtLogOn) → `scripts/Start-ArkaHyte.ps1` → `bin\ArkaHyte\ArkaHyte.exe`.
+**Installation et mises à jour (Velopack).** `VelopackApp.Build()…Run()` en tête de `Main` (hooks
+d'install / mise à jour / désinstallation → `Installation.cs`, 30 s max puis exit). Installé dans
+`%LOCALAPPDATA%\ArkaHyte.App` : packId distinct du dossier de données, que la désinstallation supprimerait.
+Démarrage par la clé HKCU `Run`. HYTE Nexus n'est pas géré par l'appli ni l'installeur : c'est à
+l'utilisateur de le désactiver ou le désinstaller (choix du propriétaire). `AppUpdater` lit les releases de github.com/Arkatheros/ArkaHyte (dépôt public requis) et
+n'installe que sur clic du menu. `AppSettings.Load()` préfère `%LOCALAPPDATA%\ArkaHyte\appsettings.json`
+(copié à l'installation). Version = `<Version>` du csproj, passée par `New-Release.ps1`. Garder le paquet
+`Velopack` et l'outil `vpk` (`dotnet-tools.json`) à la même version.
+
+**Démarrage (dev)** : tâche planifiée `Arka Hyte` (AtLogOn) → `scripts/Start-ArkaHyte.ps1` → `bin\ArkaHyte\ArkaHyte.exe`.
 Sous PowerShell 5.1, ne pas utiliser `$PSScriptRoot` dans les valeurs par défaut de `param()` (vide).
 
 ## Règles de performance de l'UI (impératives)

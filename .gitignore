@@ -11,3 +11,6 @@ obj/
 # OS noise
 Thumbs.db
 Desktop.ini
+
+# Installer and update packages (scripts\New-Release.ps1)
+artifacts/

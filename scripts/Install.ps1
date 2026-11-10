@@ -1,13 +1,14 @@
 <#
 .SYNOPSIS
-	Switches the HYTE Y70 Touch display from HYTE Nexus to Arka Hyte (or back with -Uninstall).
+	Development install: starts the Arka Hyte build in bin\ArkaHyte at logon (removed with -Uninstall).
 
 .DESCRIPTION
 	Install:
-		- disables the "HYTE Nexus" scheduled task and stops Nexus
 		- registers the "Arka Hyte" logon task running Start-ArkaHyte.ps1
 		- creates the "Arka Hyte" Start menu shortcut
-	Uninstall reverts every step; Nexus itself is never uninstalled.
+	Uninstall reverts every step.
+	HYTE Nexus is left alone: disable or uninstall it yourself, or both fight over the case display.
+	Released versions use the installer instead (scripts\New-Release.ps1): do not combine both.
 
 	Build the binaries first:
 		dotnet publish src\ArkaHyte -c Release -o bin\ArkaHyte
@@ -24,8 +25,6 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$nexusTaskName = 'HYTE Nexus'
-$nexusProcesses = @('HYTE Nexus', 'HYTE.Nexus.Service')
 $launcherTaskName = 'Arka Hyte'
 $appProcess = 'ArkaHyte'
 
@@ -58,17 +57,6 @@ function Install-ArkaHyte {
 		throw "Arka Hyte is not built ($appExe). Run: dotnet publish src\ArkaHyte -c Release -o bin\ArkaHyte"
 	}
 
-	# Nexus off
-	if (Get-ScheduledTask -TaskName $nexusTaskName -ErrorAction SilentlyContinue) {
-		Disable-ScheduledTask -TaskName $nexusTaskName | Out-Null
-		Write-Host "Scheduled task '$nexusTaskName' disabled"
-	}
-	else {
-		Write-Warning "Scheduled task '$nexusTaskName' not found"
-	}
-	Get-Process -Name $nexusProcesses -ErrorAction SilentlyContinue | Stop-Process -Force
-	Write-Host 'Nexus processes stopped'
-
 	# Launcher at logon, in the user session (the display needs the interactive desktop)
 	$action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$launcherScript`""
 	$trigger = New-ScheduledTaskTrigger -AtLogOn -User $currentUser
@@ -93,12 +81,6 @@ function Uninstall-ArkaHyte {
 	if (Test-Path $startMenuShortcut) {
 		Remove-Item -LiteralPath $startMenuShortcut
 		Write-Host "Start menu shortcut removed: $startMenuShortcut"
-	}
-
-	if (Get-ScheduledTask -TaskName $nexusTaskName -ErrorAction SilentlyContinue) {
-		Enable-ScheduledTask -TaskName $nexusTaskName | Out-Null
-		Start-ScheduledTask -TaskName $nexusTaskName
-		Write-Host "Scheduled task '$nexusTaskName' re-enabled and started"
 	}
 }
 
