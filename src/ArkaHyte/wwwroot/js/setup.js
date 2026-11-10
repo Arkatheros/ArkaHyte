@@ -18,7 +18,7 @@
 		{ key: 'gpuVram', name: 'Mémoire GPU', unit: '%', sensor: /gpu/i, labels: [/memory usage|utilisation de la mémoire/i, /memory|mémoire/i] },
 		// HWiNFO's own PresentMon sensor first (no extra tool), RTSS otherwise; only filled in games,
 		// so not counted as missing
-		{ key: 'gpuFps', name: 'FPS en jeu', unit: 'FPS', sensor: /./, labels: [/framerate \(displayed\)/i, /framerate \(presented\)/i, /^framerate$/i, /^(framerate|fps)/i, /framerate|fps|images/i], optional: true }
+		{ key: 'gpuFps', name: 'FPS en jeu', unit: 'FPS', sensor: /./, labels: [/displayed.*avg|framerate \(displayed\)/i, /displayed/i, /presented/i, /^framerate$/i, /^(framerate|fps)/i, /framerate|fps|images/i], optional: true }
 	];
 
 	const $ = id => document.getElementById(id);
@@ -351,7 +351,8 @@
 					continue;
 				}
 				const entry = byKey.get(choice);
-				message.sensors[metric.key] = entry ? { sensor: entry.sensor, label: entry.label } : null;
+				// PresentMon's sensor carries the foreground process name: saved without it
+				message.sensors[metric.key] = entry ? { sensor: entry.sensor.replace(/\[[^\]]+\.exe\]$/i, '[*]'), label: entry.label } : null;
 			}
 		}
 		$('saveError').hidden = true;
@@ -440,8 +441,8 @@
 				{ sensor: sensorGpu, label: 'GPU Consommation d\'énergie', text: '28.410 W' },
 				{ sensor: sensorGpu, label: 'Charge du cœur du GPU', text: '3.0 %' },
 				{ sensor: sensorGpu, label: 'Utilisation de la mémoire GPU', text: '11.2 %' },
-				{ sensor: 'PresentMon', label: 'Framerate (Presented)', text: '146.2 FPS' },
-				{ sensor: 'PresentMon', label: 'Framerate (Displayed)', text: '143.8 FPS' }
+				{ sensor: 'PresentMon [dwm.exe]', label: "Fréquence d'images Presented (avg)", text: '38.0 FPS' },
+				{ sensor: 'PresentMon [dwm.exe]', label: "Fréquence d'images Displayed (avg)", text: '38.0 FPS' }
 			],
 			matches: { cpuTemp: 0, cpuPower: 1, gpuTemp: -1, gpuPower: -1, gpuLoad: 4, gpuVram: 5 }
 		});

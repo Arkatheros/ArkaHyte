@@ -9,7 +9,7 @@ namespace ArkaHyte.Sensors;
 /// Unlike shared memory, this channel has no 12 hour limit in the free edition.
 /// Entries are matched by sensor and label names so their order in HWiNFO does not matter.
 /// </summary>
-public sealed class HwInfoReader
+public sealed partial class HwInfoReader
 {
 	private const string GadgetKey = @"Software\HWiNFO64\VSB";
 
@@ -59,7 +59,7 @@ public sealed class HwInfoReader
 		}
 		if (!_patterns.TryGetValue(selector, out var patterns))
 		{
-			patterns = [ToRegex(selector.Sensor), ToRegex(selector.Label)];
+			patterns = [ToRegex(ProcessAgnostic(selector.Sensor)), ToRegex(selector.Label)];
 			_patterns[selector] = patterns;
 		}
 		for (var i = 0; i < _entries.Count; i++)
@@ -74,6 +74,15 @@ public sealed class HwInfoReader
 
 	public IEnumerable<string> Describe() =>
 		_entries.Select(e => $"{e.Sensor} | {e.Label} = {e.Value.ToString(CultureInfo.InvariantCulture)}");
+
+	/// <summary>
+	/// HWiNFO names its PresentMon sensor after the foreground process ("PresentMon [game.exe]"): a
+	/// selector saved with one process name must keep matching whichever process comes next.
+	/// </summary>
+	private static string ProcessAgnostic(string sensor) => ProcessSuffix().Replace(sensor, "[*]");
+
+	[GeneratedRegex(@"\[[^\]]+\.exe\]$", RegexOptions.IgnoreCase)]
+	private static partial Regex ProcessSuffix();
 
 	private static Regex ToRegex(string wildcard)
 	{

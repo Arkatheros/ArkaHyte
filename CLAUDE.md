@@ -62,7 +62,9 @@ Ajouter une fonctionnalité interactive = un type de message de chaque côté.
 
 **Sources** (`Sensors/`) : HWiNFO Gadget via registre `HKCU\Software\HWiNFO64\VSB` (capteurs
 retrouvés par nom/libellé avec jokers, configurés dans `appsettings.json` → `HwInfo`, `Drives[].Temp`),
-`wlanapi` natif lu à offsets fixes (`WifiReader`), `NetworkInterface` + `Ping` (statut
+FPS : capteur PresentMon de HWiNFO, nommé d'après le processus au premier plan (`PresentMon [x.exe]`,
+suffixe neutralisé par `HwInfoReader`) et ne comptant que si la fenêtre au premier plan couvre son
+écran (`ForegroundGame`). `wlanapi` natif lu à offsets fixes (`WifiReader`), `NetworkInterface` + `Ping` (statut
 online/no-internet/offline), SMTC pour la lecture en cours (`MediaMonitor`), API Windows pour CPU/RAM/disques.
 `SpeedTest` pilote le CLI Ookla (`--format=jsonl --progress=yes`), téléchargé au premier usage dans
 `%LOCALAPPDATA%\ArkaHyte\tools` (licence : ne pas l'inclure au dépôt). Cloudflare abandonné (blocage IP).
