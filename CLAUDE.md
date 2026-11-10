@@ -37,14 +37,15 @@ Pas de tests automatisés ni de linter. Vérification par les options one-shot d
 - `--screenshot out.png` : rend l'interface, capture, quitte. Moyen principal de valider un changement visuel.
 - `--dump out.json` : un échantillon de tous les capteurs + entrées HWiNFO disponibles.
 - `--demo stress|idle`, `--preview-speedtest [done]`, `--open-editor 0` : états à combiner avec `--screenshot`.
+- `--setup-preview out.png [--setup-step 0-4]` : capture de l'assistant, autonome (pas de mutex) et sans écriture.
 - `--speedtest out.txt` : vrai test de débit (sature la connexion, ne pas lancer sans raison).
 - `--devtools` : F12.
 
 Consommation : `scripts\Measure-ArkaHyte.ps1 [-Seconds 60] [-OutFile x.json]` sur l'instance en cours
 (CPU par processus en % d'un cœur, GPU, mémoire ; hôte + arbre WebView2 uniquement).
 
-Itération UI rapide : ouvrir `src/ArkaHyte/wwwroot/index.html` dans un navigateur. Sans hôte WebView2
-(`window.chrome.webview` absent), `console.js` passe en **mode design** avec données simulées.
+Itération UI rapide : ouvrir `src/ArkaHyte/wwwroot/index.html` (ou `setup.html`) dans un navigateur. Sans hôte
+WebView2 (`window.chrome.webview` absent), `console.js` / `setup.js` passent en **mode design** avec données simulées.
 
 ## Architecture
 
@@ -71,6 +72,15 @@ non activante (`WS_EX_NOACTIVATE`, `WS_EX_TOOLWINDOW`, `MA_NOACTIVATE`) pour ne 
 Hôte virtuel `https://hyte.local/` → `wwwroot`. Instance unique (mutex `Local\ArkaHyte`).
 `TouchGuard` : hook souris bas niveau sur thread dédié qui renvoie le curseur sur l'écran principal
 après un toucher sur le boîtier (+ watchdog). `TrayIcon` + `SithMenuRenderer` : menu de notification thématisé.
+
+**Assistant de configuration.** `SetupForm` : fenêtre normale sur l'écran principal, WebView2 sur `setup.html`
+(même dossier de données, donc même processus navigateur ; libéré à la fermeture). Ouvert depuis
+`DisplayForm.OnHandleCreated` tant que `SetupCompleted` est faux (pas `Load` : la fenêtre reste cachée
+sans écran du boîtier), ou par le menu. Messages : `state` (écrans, matériel détecté par
+`HardwareDetector` via le registre), `hwinfo` toutes les 2 s ; retour `save`/`skip`/`identify`/`startHwInfo`.
+`AppSettings.SaveUser` modifie l'arbre JSON (le reste du fichier est conservé) ; capteurs inchangés omis
+pour garder les jokers. Après `save`, `DisplayForm.RestartRequested` → `Program` relance l'exe avec
+`--restarted`, qui attend le mutex de l'instance sortante.
 
 **Raccourcis du dock.** Défauts dans `appsettings.json` → `Shortcuts`, surchargés par
 `%LOCALAPPDATA%\ArkaHyte\shortcuts.json` (`ShortcutStore`). L'éditeur (appui long) liste les applis via

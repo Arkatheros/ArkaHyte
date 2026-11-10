@@ -1,4 +1,6 @@
+using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 
 namespace ArkaHyte;
@@ -41,7 +43,8 @@ public sealed record AppSettings(
 	IReadOnlyList<DriveSettings> Drives,
 	NetworkSettings Network,
 	IReadOnlyList<ShortcutSettings> Shortcuts,
-	string CpuClickTarget = "taskmgr.exe")
+	string CpuClickTarget = "taskmgr.exe",
+	bool SetupCompleted = false)
 {
 	private static readonly JsonSerializerOptions Options = new()
 	{
@@ -57,8 +60,35 @@ public sealed record AppSettings(
 	public static string UserFilePath => Path.Combine(Log.Directory, FileName);
 
 	/// <summary>The user copy when there is one, otherwise the file shipped next to the executable.</summary>
-	public static AppSettings Load() =>
-		Load(File.Exists(UserFilePath) ? UserFilePath : Path.Combine(AppContext.BaseDirectory, FileName));
+	public static AppSettings Load() => Load(CurrentFilePath);
+
+	private static string CurrentFilePath =>
+		File.Exists(UserFilePath) ? UserFilePath : Path.Combine(AppContext.BaseDirectory, FileName);
+
+	/// <summary>
+	/// Applies changes to the settings file and writes the result to the user copy (created from the
+	/// shipped file when missing). Edits the JSON tree so entries the change does not touch stay as written.
+	/// </summary>
+	public static void SaveUser(Action<JsonObject> change)
+	{
+		var source = CurrentFilePath;
+		var root = File.Exists(source)
+			? JsonNode.Parse(File.ReadAllText(source), new JsonNodeOptions { PropertyNameCaseInsensitive = true }, new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true }) as JsonObject
+			: null;
+		root ??= new JsonObject();
+		change(root);
+		Directory.CreateDirectory(Log.Directory);
+		var json = root.ToJsonString(new JsonSerializerOptions
+		{
+			WriteIndented = true,
+			IndentCharacter = '\t',
+			IndentSize = 1,
+			// Keeps accents readable ("Tâches", "Température GPU") instead of \u escapes
+			Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+		});
+		File.WriteAllText(UserFilePath, json + Environment.NewLine);
+		Log.Info($"Settings saved to {UserFilePath}");
+	}
 
 	public static AppSettings Load(string path)
 	{

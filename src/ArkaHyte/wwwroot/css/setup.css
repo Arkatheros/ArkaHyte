@@ -1,0 +1,446 @@
+/* Setup wizard (desktop window, ~960x700): same palette and fonts as the case display */
+:root {
+	--void: #030104;
+	--panel: rgba(20, 8, 11, 0.86);
+	--ash: #8f7679;
+	--bone: #f3e9ea;
+	--blade: #ff1f33;
+	--core: #fff4f4;
+	--ok: #5fd38a;
+	--warn: #ffb020;
+	--line: rgba(255, 60, 75, 0.26);
+	--font-display: 'Advent Pro', 'Segoe UI', sans-serif;
+	--font-label: 'Rajdhani', 'Segoe UI', sans-serif;
+	--font-data: 'Share Tech Mono', Consolas, monospace;
+	color-scheme: dark;
+}
+
+[hidden] {
+	display: none !important;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	margin: 0;
+	height: 100%;
+	background: var(--void);
+	color: var(--bone);
+	font: 500 16px/1.45 var(--font-label);
+	user-select: none;
+}
+
+body {
+	background:
+		radial-gradient(ellipse 80% 45% at 70% 115%, rgba(255, 40, 30, 0.22), transparent 70%),
+		radial-gradient(ellipse 50% 40% at 0% 0%, rgba(120, 10, 20, 0.25), transparent 70%),
+		var(--void);
+}
+
+.wizard {
+	display: grid;
+	grid-template-columns: 210px 1fr;
+	grid-template-rows: auto 1fr auto;
+	grid-template-areas: "head head" "steps pages" "foot foot";
+	height: 100%;
+}
+
+/* ---------- Header ---------- */
+.head {
+	grid-area: head;
+	position: relative;
+	padding: 18px 28px 16px;
+}
+.brand {
+	display: flex;
+	align-items: baseline;
+	gap: 16px;
+}
+.brand-name {
+	font: 100 34px/1 var(--font-display);
+	letter-spacing: 0.32em;
+	color: var(--core);
+	text-shadow: 0 0 18px rgba(255, 31, 51, 0.55);
+}
+.brand-sub {
+	font-weight: 600;
+	font-size: 15px;
+	letter-spacing: 0.3em;
+	text-transform: uppercase;
+	color: var(--ash);
+}
+.blade {
+	position: absolute;
+	left: 28px;
+	right: 28px;
+	bottom: 0;
+	height: 2px;
+	background: linear-gradient(90deg, var(--core), var(--blade) 18%, rgba(255, 31, 51, 0.15));
+	box-shadow: 0 0 10px var(--blade), 0 0 22px rgba(255, 31, 51, 0.5);
+}
+
+/* ---------- Step list ---------- */
+.steps {
+	grid-area: steps;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 24px 0 24px 20px;
+}
+.steps button {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 10px 12px;
+	border: 0;
+	border-left: 2px solid transparent;
+	background: none;
+	color: var(--ash);
+	font: 600 15px var(--font-label);
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	text-align: left;
+	cursor: pointer;
+}
+.steps button:hover {
+	color: var(--bone);
+}
+.steps button.current {
+	color: var(--core);
+	border-left-color: var(--blade);
+	background: linear-gradient(90deg, rgba(255, 31, 51, 0.16), transparent);
+}
+.step-dot {
+	width: 9px;
+	height: 9px;
+	border-radius: 50%;
+	border: 1px solid currentColor;
+	flex: none;
+}
+.steps button.done .step-dot {
+	background: var(--ash);
+	border-color: var(--ash);
+}
+.steps button.current .step-dot {
+	background: var(--blade);
+	border-color: var(--blade);
+	box-shadow: 0 0 8px var(--blade);
+}
+
+/* ---------- Pages ---------- */
+.pages {
+	grid-area: pages;
+	overflow-y: auto;
+	padding: 22px 32px 12px 24px;
+}
+.page {
+	display: none;
+}
+.page.current {
+	display: block;
+}
+h1 {
+	margin: 0 0 6px;
+	font: 100 36px/1.1 var(--font-display);
+	letter-spacing: 0.06em;
+	color: var(--core);
+}
+.lead {
+	margin: 0 0 18px;
+	color: #d8c8ca;
+	max-width: 640px;
+}
+strong {
+	color: var(--core);
+	font-weight: 700;
+}
+em {
+	color: var(--ash);
+}
+.row {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	margin-top: 14px;
+	flex-wrap: wrap;
+}
+.hint {
+	color: var(--ash);
+	font-size: 14px;
+}
+.status {
+	margin: 16px 0 0;
+	padding: 10px 14px;
+	border-left: 2px solid var(--ok);
+	background: rgba(95, 211, 138, 0.08);
+}
+.status:empty {
+	display: none;
+}
+.status.warn {
+	border-left-color: var(--warn);
+	background: rgba(255, 176, 32, 0.08);
+}
+.status.bad {
+	border-left-color: var(--blade);
+	background: rgba(255, 31, 51, 0.1);
+}
+
+/* ---------- Buttons ---------- */
+button {
+	font-family: var(--font-label);
+}
+.primary,
+.ghost {
+	padding: 9px 22px;
+	border: 1px solid var(--blade);
+	font-weight: 700;
+	font-size: 15px;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	cursor: pointer;
+}
+.primary {
+	background: var(--blade);
+	color: #fff;
+	box-shadow: 0 0 16px rgba(255, 31, 51, 0.45);
+}
+.primary:hover {
+	background: #ff3a4b;
+}
+.ghost {
+	background: rgba(255, 31, 51, 0.06);
+	color: var(--bone);
+	border-color: var(--line);
+}
+.ghost:hover {
+	border-color: var(--blade);
+	color: var(--core);
+}
+.primary:disabled,
+.ghost:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+.link {
+	border: 0;
+	background: none;
+	color: var(--ash);
+	font-size: 15px;
+	text-decoration: underline;
+	text-underline-offset: 3px;
+	cursor: pointer;
+}
+.link:hover {
+	color: var(--bone);
+}
+
+/* ---------- Screen map ---------- */
+.screen-map {
+	position: relative;
+	height: 290px;
+	border: 1px solid var(--line);
+	background: rgba(10, 3, 5, 0.6);
+}
+.screen {
+	position: absolute;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 2px;
+	padding: 4px;
+	overflow: hidden;
+	border: 1px solid rgba(243, 233, 234, 0.25);
+	background: rgba(40, 18, 22, 0.75);
+	color: var(--ash);
+	font-size: 13px;
+	line-height: 1.15;
+	text-align: center;
+	cursor: pointer;
+}
+.screen:hover {
+	border-color: var(--bone);
+	color: var(--bone);
+}
+.screen.selected {
+	border: 2px solid var(--blade);
+	background: rgba(255, 31, 51, 0.2);
+	color: var(--core);
+	box-shadow: 0 0 18px rgba(255, 31, 51, 0.45), inset 0 0 18px rgba(255, 31, 51, 0.25);
+}
+.screen-number {
+	font: 100 30px/1 var(--font-display);
+	color: var(--core);
+}
+.screen-tag {
+	font-weight: 700;
+	font-size: 10px;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--blade);
+}
+
+/* ---------- Checks ---------- */
+.checks {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	max-width: 640px;
+}
+.check {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 10px 14px;
+	background: var(--panel);
+	border: 1px solid var(--line);
+}
+.mark {
+	flex: none;
+	width: 22px;
+	height: 22px;
+	border-radius: 50%;
+	display: grid;
+	place-items: center;
+	font: 700 14px/1 var(--font-label);
+	color: #050102;
+	background: var(--ash);
+}
+.check.ok .mark {
+	background: var(--ok);
+}
+.check.ok .mark::before {
+	content: '✓';
+}
+.check.warn .mark {
+	background: var(--warn);
+}
+.check.warn .mark::before,
+.check.bad .mark::before {
+	content: '!';
+}
+.check.bad .mark {
+	background: var(--blade);
+	color: #fff;
+}
+.check-text b {
+	color: var(--core);
+}
+
+.guide {
+	margin: 18px 0 0;
+	padding-left: 22px;
+	max-width: 680px;
+	color: #d8c8ca;
+}
+.guide li {
+	margin-bottom: 8px;
+	padding-left: 4px;
+}
+.guide li::marker {
+	color: var(--blade);
+	font-weight: 700;
+}
+
+/* ---------- Sensor table ---------- */
+.sensors {
+	width: 100%;
+	border-collapse: collapse;
+}
+.sensors th {
+	padding: 6px 8px;
+	text-align: left;
+	font-size: 13px;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--ash);
+	border-bottom: 1px solid var(--line);
+}
+.sensors td {
+	padding: 7px 8px;
+	border-bottom: 1px solid rgba(255, 60, 75, 0.1);
+	vertical-align: middle;
+}
+.sensors td:first-child {
+	white-space: nowrap;
+	font-weight: 600;
+}
+.sensors .num {
+	text-align: right;
+	white-space: nowrap;
+	font-family: var(--font-data);
+	color: var(--core);
+	min-width: 90px;
+}
+.sensors .tag {
+	display: block;
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--ash);
+}
+.sensors .tag.suggested {
+	color: var(--warn);
+}
+.sensors .tag.missing {
+	color: var(--blade);
+}
+select,
+input {
+	width: 100%;
+	padding: 7px 10px;
+	border: 1px solid var(--line);
+	background: #12070a;
+	color: var(--bone);
+	font: 500 15px var(--font-label);
+	user-select: text;
+}
+select:focus,
+input:focus {
+	outline: none;
+	border-color: var(--blade);
+}
+optgroup {
+	color: var(--ash);
+}
+option {
+	color: var(--bone);
+}
+
+/* ---------- Hardware form ---------- */
+.form {
+	display: grid;
+	grid-template-columns: 1fr 1.6fr;
+	gap: 14px 18px;
+	max-width: 640px;
+}
+.form label {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+	font-size: 13px;
+	font-weight: 700;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--ash);
+}
+
+/* ---------- Footer ---------- */
+.foot {
+	grid-area: foot;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 14px 32px 18px 28px;
+	border-top: 1px solid var(--line);
+	background: rgba(3, 1, 4, 0.75);
+}
+.foot-actions {
+	display: flex;
+	gap: 12px;
+}

@@ -13,12 +13,16 @@ public sealed class HwInfoReader
 {
 	private const string GadgetKey = @"Software\HWiNFO64\VSB";
 
-	private readonly record struct Entry(string Sensor, string Label, double Value);
+	/// <summary>One Gadget entry; Text is the value formatted by HWiNFO with its unit ("52.2 °C").</summary>
+	public readonly record struct Entry(string Sensor, string Label, double Value, string Text);
 
 	private readonly Dictionary<SensorSelector, Regex[]> _patterns = new();
 	private List<Entry> _entries = [];
 
 	public bool IsAvailable => _entries.Count > 0;
+
+	/// <summary>Entries of the last refresh, in HWiNFO order.</summary>
+	public IReadOnlyList<Entry> Entries => _entries;
 
 	/// <summary>Takes one consistent read of every Gadget entry; call once per refresh.</summary>
 	public void Refresh()
@@ -36,32 +40,36 @@ public sealed class HwInfoReader
 				var sensor = key.GetValue($"Sensor{i}") as string ?? string.Empty;
 				if (TryParse(key.GetValue($"ValueRaw{i}") as string, out var value))
 				{
-					entries.Add(new Entry(sensor, label, value));
+					var text = key.GetValue($"Value{i}") as string ?? value.ToString(CultureInfo.InvariantCulture);
+					entries.Add(new Entry(sensor, label, value, text));
 				}
 			}
 		}
 		_entries = entries;
 	}
 
-	public double? Get(SensorSelector? selector)
+	public double? Get(SensorSelector? selector) => IndexOf(selector) is var index and >= 0 ? _entries[index].Value : null;
+
+	/// <summary>Position in <see cref="Entries"/> of the first entry the selector matches, or -1.</summary>
+	public int IndexOf(SensorSelector? selector)
 	{
 		if (selector is null || string.IsNullOrWhiteSpace(selector.Label))
 		{
-			return null;
+			return -1;
 		}
 		if (!_patterns.TryGetValue(selector, out var patterns))
 		{
 			patterns = [ToRegex(selector.Sensor), ToRegex(selector.Label)];
 			_patterns[selector] = patterns;
 		}
-		foreach (var entry in _entries)
+		for (var i = 0; i < _entries.Count; i++)
 		{
-			if (patterns[0].IsMatch(entry.Sensor) && patterns[1].IsMatch(entry.Label))
+			if (patterns[0].IsMatch(_entries[i].Sensor) && patterns[1].IsMatch(_entries[i].Label))
 			{
-				return entry.Value;
+				return i;
 			}
 		}
-		return null;
+		return -1;
 	}
 
 	public IEnumerable<string> Describe() =>

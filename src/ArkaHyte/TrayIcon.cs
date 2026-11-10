@@ -17,6 +17,7 @@ public sealed class TrayIcon : IDisposable
 	public event Action? ReloadRequested;
 	public event Action? ExitRequested;
 	public event Action? UpdateRequested;
+	public event Action? SetupRequested;
 
 	public TrayIcon(bool demoEnabled, string? version = null)
 	{
@@ -38,6 +39,7 @@ public sealed class TrayIcon : IDisposable
 		menu.Items.Add(new ToolStripSeparator());
 		menu.Items.Add(_demoItem);
 		menu.Items.Add("Recharger l'affichage", null, (_, _) => ReloadRequested?.Invoke());
+		menu.Items.Add("Assistant de configuration", null, (_, _) => SetupRequested?.Invoke());
 		menu.Items.Add("Ouvrir le dossier des journaux", null, (_, _) => OpenLogs());
 		menu.Items.Add(new ToolStripSeparator());
 		menu.Items.Add(_updateItem);

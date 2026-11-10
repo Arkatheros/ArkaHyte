@@ -1,0 +1,444 @@
+using System.Diagnostics;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using ArkaHyte.Native;
+using ArkaHyte.Sensors;
+using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.WinForms;
+using Microsoft.Win32;
+
+namespace ArkaHyte;
+
+/// <summary>
+/// Setup wizard on the main screen (setup.html): picks the case display, checks that HWiNFO runs and
+/// reports to Gadget, maps each widget to a Gadget entry and fills in the hardware captions.
+/// Opens by itself until it has been completed once, then from the tray menu.
+/// </summary>
+public sealed class SetupForm : Form
+{
+	private const string VirtualHost = "hyte.local";
+	private const string HwInfoDownloadUrl = "https://www.hwinfo.com/download/";
+	private static readonly string[] HwInfoProcessNames = ["HWiNFO64", "HWiNFO32", "HWiNFO"];
+	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+	/// <summary>Widgets fed by HWiNFO: key shared with setup.js, property name in appsettings.json.</summary>
+	private static readonly (string Key, string Property, Func<HwInfoSettings, SensorSelector?> Read)[] Metrics =
+	[
+		("cpuTemp", nameof(HwInfoSettings.CpuTemp), s => s.CpuTemp),
+		("cpuPower", nameof(HwInfoSettings.CpuPower), s => s.CpuPower),
+		("gpuTemp", nameof(HwInfoSettings.GpuTemp), s => s.GpuTemp),
+		("gpuPower", nameof(HwInfoSettings.GpuPower), s => s.GpuPower),
+		("gpuLoad", nameof(HwInfoSettings.GpuLoad), s => s.GpuLoad),
+		("gpuVram", nameof(HwInfoSettings.GpuVramPercent), s => s.GpuVramPercent)
+	];
+
+	private readonly AppSettings _settings;
+	private readonly int _startStep;
+	private readonly string? _previewPath;
+	private readonly WebView2 _webView;
+	private readonly HwInfoReader _hwInfo = new();
+	private readonly System.Windows.Forms.Timer _poll = new() { Interval = 2000 };
+	private bool _webReady;
+
+	/// <summary>Settings written: the display restarts to apply them.</summary>
+	public event Action? Saved;
+
+	/// <param name="previewPath">Diagnostics: capture the page to this PNG and quit, never saving anything.</param>
+	public SetupForm(AppSettings settings, int startStep = 0, string? previewPath = null)
+	{
+		_settings = settings;
+		_startStep = startStep;
+		_previewPath = previewPath;
+
+		Text = $"{TrayIcon.AppName} · Configuration";
+		Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+		AutoScaleMode = AutoScaleMode.Dpi;
+		AutoScaleDimensions = new SizeF(96, 96);
+		ClientSize = new Size(960, 700);
+		MinimumSize = new Size(760, 560);
+		StartPosition = FormStartPosition.CenterScreen;
+		BackColor = Color.Black;
+		MaximizeBox = false;
+
+		_webView = new WebView2 { Dock = DockStyle.Fill, DefaultBackgroundColor = Color.Black };
+		Controls.Add(_webView);
+
+		_poll.Tick += (_, _) => SendHwInfo();
+		Load += async (_, _) => await InitializeAsync();
+	}
+
+	protected override void OnHandleCreated(EventArgs e)
+	{
+		base.OnHandleCreated(e);
+		var dark = 1;
+		NativeMethods.DwmSetWindowAttribute(Handle, NativeMethods.DWMWA_USE_IMMERSIVE_DARK_MODE, ref dark, sizeof(int));
+	}
+
+	private async Task InitializeAsync()
+	{
+		try
+		{
+			// Same data folder as the display: both windows share one browser process
+			var environment = await CoreWebView2Environment.CreateAsync(null, Path.Combine(Log.Directory, "WebView2"));
+			await _webView.EnsureCoreWebView2Async(environment);
+		}
+		catch (Exception exception)
+		{
+			Log.Error("Setup wizard WebView2 initialisation failed", exception);
+			Close();
+			return;
+		}
+
+		var core = _webView.CoreWebView2;
+		core.Settings.AreDefaultContextMenusEnabled = false;
+		core.Settings.AreDevToolsEnabled = false;
+		core.Settings.IsStatusBarEnabled = false;
+		core.Settings.IsZoomControlEnabled = false;
+		core.Settings.IsGeneralAutofillEnabled = false;
+		core.SetVirtualHostNameToFolderMapping(
+			VirtualHost,
+			Path.Combine(AppContext.BaseDirectory, "wwwroot"),
+			CoreWebView2HostResourceAccessKind.Deny);
+		core.WebMessageReceived += OnWebMessage;
+		core.NavigationStarting += (_, _) => _webReady = false;
+		_webView.Source = new Uri($"https://{VirtualHost}/setup.html?step={_startStep}");
+	}
+
+	private void OnWebMessage(object? sender, CoreWebView2WebMessageReceivedEventArgs args)
+	{
+		JsonElement root;
+		try
+		{
+			using var document = JsonDocument.Parse(args.WebMessageAsJson);
+			root = document.RootElement.Clone();
+		}
+		catch (JsonException exception)
+		{
+			Log.Error("Invalid message from the setup wizard", exception);
+			return;
+		}
+
+		switch (root.TryGetProperty("type", out var type) ? type.GetString() : null)
+		{
+			case "ready":
+				_webReady = true;
+				SendState();
+				_poll.Start();
+				if (_previewPath is not null)
+				{
+					_ = CaptureAndExitAsync(_previewPath);
+				}
+				break;
+			case "identify":
+				ScreenBadge.ShowAll();
+				break;
+			case "openHwInfoSite":
+				Open(HwInfoDownloadUrl);
+				break;
+			case "startHwInfo":
+				StartHwInfo();
+				break;
+			case "save":
+				Save(root);
+				break;
+			case "skip":
+				Complete(_ => { }, restart: false);
+				break;
+		}
+	}
+
+	// ---------- State sent to the page ----------
+
+	private void SendState()
+	{
+		var screens = Screen.AllScreens;
+		var detected = HardwareDetector.Detect(_settings.Hardware);
+		Post(new
+		{
+			type = "state",
+			preview = _previewPath is not null,
+			completed = _settings.SetupCompleted,
+			caseSize = new { width = _settings.Display.Width, height = _settings.Display.Height },
+			screens = screens.Select((screen, index) => new
+			{
+				number = index + 1,
+				name = screen.DeviceName.TrimStart('\\', '.'),
+				x = screen.Bounds.X,
+				y = screen.Bounds.Y,
+				width = screen.Bounds.Width,
+				height = screen.Bounds.Height,
+				primary = screen.Primary
+			}),
+			hardware = _settings.Hardware,
+			detected,
+			hwInfoPath = FindHwInfo()
+		});
+		SendHwInfo();
+	}
+
+	/// <summary>Repeated while the wizard is open: HWiNFO can be started or configured meanwhile.</summary>
+	private void SendHwInfo()
+	{
+		if (!_webReady)
+		{
+			return;
+		}
+		_hwInfo.Refresh();
+		Post(new
+		{
+			type = "hwinfo",
+			running = IsHwInfoRunning(),
+			entries = _hwInfo.Entries.Select(e => new { sensor = e.Sensor, label = e.Label, text = e.Text }),
+			matches = Metrics.ToDictionary(m => m.Key, m => _hwInfo.IndexOf(m.Read(_settings.HwInfo)))
+		});
+	}
+
+	private static bool IsHwInfoRunning()
+	{
+		foreach (var name in HwInfoProcessNames)
+		{
+			var processes = Process.GetProcessesByName(name);
+			var found = processes.Length > 0;
+			foreach (var process in processes)
+			{
+				process.Dispose();
+			}
+			if (found)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/// <summary>HWiNFO executable from its uninstall entry, or the default install folder.</summary>
+	private static string? FindHwInfo()
+	{
+		const string uninstallKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall";
+		try
+		{
+			foreach (var hive in new[] { Registry.LocalMachine, Registry.CurrentUser })
+			{
+				using var uninstall = hive.OpenSubKey(uninstallKey);
+				foreach (var name in uninstall?.GetSubKeyNames() ?? [])
+				{
+					if (!name.StartsWith("HWiNFO", StringComparison.OrdinalIgnoreCase))
+					{
+						continue;
+					}
+					using var entry = uninstall!.OpenSubKey(name);
+					if (entry?.GetValue("InstallLocation") is string folder)
+					{
+						var path = HwInfoProcessNames.Select(p => Path.Combine(folder, p + ".exe")).FirstOrDefault(File.Exists);
+						if (path is not null)
+						{
+							return path;
+						}
+					}
+				}
+			}
+		}
+		catch (Exception exception) when (exception is System.Security.SecurityException or UnauthorizedAccessException or IOException)
+		{
+			Log.Error("HWiNFO install lookup failed", exception);
+		}
+		var fallback = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "HWiNFO64", "HWiNFO64.exe");
+		return File.Exists(fallback) ? fallback : null;
+	}
+
+	private static void StartHwInfo()
+	{
+		if (FindHwInfo() is not { } path)
+		{
+			return;
+		}
+		try
+		{
+			// HWiNFO asks for elevation: the shell shows the UAC prompt
+			Process.Start(new ProcessStartInfo(path) { UseShellExecute = true })?.Dispose();
+		}
+		catch (Exception exception) when (exception is System.ComponentModel.Win32Exception or InvalidOperationException)
+		{
+			// Win32Exception also covers a UAC prompt the user declined
+			Log.Error("Starting HWiNFO failed", exception);
+		}
+	}
+
+	private static void Open(string url)
+	{
+		try
+		{
+			Process.Start(new ProcessStartInfo(url) { UseShellExecute = true })?.Dispose();
+		}
+		catch (Exception exception) when (exception is System.ComponentModel.Win32Exception or InvalidOperationException)
+		{
+			Log.Error($"Opening {url} failed", exception);
+		}
+	}
+
+	// ---------- Saving ----------
+
+	/// <summary>
+	/// { display: { width, height }, hardware: { cpuMaker, ... }, sensors: { cpuTemp: { sensor, label } | null } }.
+	/// Sensors left out of "sensors" keep their current selector (wildcards included).
+	/// </summary>
+	private void Save(JsonElement message)
+	{
+		Complete(root =>
+		{
+			if (message.TryGetProperty("display", out var display)
+				&& display.TryGetProperty("width", out var width) && width.TryGetInt32(out var w) && w > 0
+				&& display.TryGetProperty("height", out var height) && height.TryGetInt32(out var h) && h > 0)
+			{
+				root["Display"] = new JsonObject { ["Width"] = w, ["Height"] = h };
+			}
+			if (message.TryGetProperty("hardware", out var hardwareElement)
+				&& hardwareElement.Deserialize<HardwareSettings>(JsonOptions) is { } hardware)
+			{
+				root["Hardware"] = JsonSerializer.SerializeToNode(hardware);
+			}
+			if (message.TryGetProperty("sensors", out var sensors) && sensors.ValueKind == JsonValueKind.Object)
+			{
+				if (root["HwInfo"] is not JsonObject hwInfo)
+				{
+					hwInfo = new JsonObject();
+					root["HwInfo"] = hwInfo;
+				}
+				foreach (var (key, property, _) in Metrics)
+				{
+					if (!sensors.TryGetProperty(key, out var choice))
+					{
+						continue;
+					}
+					hwInfo[property] = choice.ValueKind == JsonValueKind.Object
+						? new JsonObject
+						{
+							["Sensor"] = choice.GetProperty("sensor").GetString(),
+							["Label"] = choice.GetProperty("label").GetString()
+						}
+						: null;
+				}
+			}
+		}, restart: true);
+	}
+
+	private void Complete(Action<JsonObject> change, bool restart)
+	{
+		if (_previewPath is not null)
+		{
+			return;
+		}
+		try
+		{
+			AppSettings.SaveUser(root =>
+			{
+				change(root);
+				root["SetupCompleted"] = true;
+			});
+		}
+		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException or KeyNotFoundException)
+		{
+			Log.Error("Saving the setup failed", exception);
+			Post(new { type = "saveFailed" });
+			return;
+		}
+		Close();
+		if (restart)
+		{
+			Saved?.Invoke();
+		}
+	}
+
+	private void Post(object message)
+	{
+		if (_webReady && !IsDisposed && _webView.CoreWebView2 is { } core)
+		{
+			core.PostWebMessageAsJson(JsonSerializer.Serialize(message, message.GetType(), JsonOptions));
+		}
+	}
+
+	private async Task CaptureAndExitAsync(string path)
+	{
+		await Task.Delay(TimeSpan.FromSeconds(3));
+		try
+		{
+			await using var file = File.Create(path);
+			await _webView.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, file);
+			Log.Info($"Setup capture saved to {path}");
+		}
+		catch (Exception exception)
+		{
+			Log.Error("Setup capture failed", exception);
+		}
+		Close();
+	}
+
+	protected override void Dispose(bool disposing)
+	{
+		if (disposing)
+		{
+			_poll.Dispose();
+			_webView.Dispose();
+		}
+		base.Dispose(disposing);
+	}
+}
+
+/// <summary>Large number shown for a few seconds in the middle of each screen, to tell them apart.</summary>
+internal sealed class ScreenBadge : Form
+{
+	private static readonly TimeSpan Duration = TimeSpan.FromSeconds(3);
+	private readonly string _number;
+	private readonly string _caption;
+
+	private ScreenBadge(int number, Screen screen)
+	{
+		_number = number.ToString();
+		_caption = $"{screen.Bounds.Width} × {screen.Bounds.Height}";
+		FormBorderStyle = FormBorderStyle.None;
+		ShowInTaskbar = false;
+		TopMost = true;
+		StartPosition = FormStartPosition.Manual;
+		BackColor = Color.FromArgb(10, 2, 4);
+		var size = Math.Min(260, Math.Min(screen.Bounds.Width, screen.Bounds.Height) - 40);
+		Bounds = new Rectangle(
+			screen.Bounds.X + (screen.Bounds.Width - size) / 2,
+			screen.Bounds.Y + (screen.Bounds.Height - size) / 2,
+			size,
+			size);
+		DoubleBuffered = true;
+	}
+
+	protected override bool ShowWithoutActivation => true;
+
+	public static void ShowAll()
+	{
+		var badges = Screen.AllScreens.Select((screen, index) => new ScreenBadge(index + 1, screen)).ToList();
+		var timer = new System.Windows.Forms.Timer { Interval = (int)Duration.TotalMilliseconds };
+		timer.Tick += (_, _) =>
+		{
+			timer.Dispose();
+			badges.ForEach(badge => badge.Close());
+		};
+		badges.ForEach(badge => badge.Show());
+		timer.Start();
+	}
+
+	protected override void OnPaint(PaintEventArgs e)
+	{
+		var graphics = e.Graphics;
+		graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+		graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAlias;
+		var bounds = ClientRectangle;
+		using var border = new Pen(Color.FromArgb(255, 31, 51), 4);
+		graphics.DrawRectangle(border, 2, 2, bounds.Width - 4, bounds.Height - 4);
+		using var numberFont = new Font("Segoe UI Light", bounds.Height * 0.42f, GraphicsUnit.Pixel);
+		using var captionFont = new Font("Segoe UI", bounds.Height * 0.08f, GraphicsUnit.Pixel);
+		using var center = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+		var numberArea = new RectangleF(0, 0, bounds.Width, bounds.Height * 0.78f);
+		var captionArea = new RectangleF(0, bounds.Height * 0.7f, bounds.Width, bounds.Height * 0.22f);
+		graphics.DrawString(_number, numberFont, Brushes.White, numberArea, center);
+		using var captionBrush = new SolidBrush(Color.FromArgb(255, 143, 118, 121));
+		graphics.DrawString(_caption, captionFont, captionBrush, captionArea, center);
+	}
+}

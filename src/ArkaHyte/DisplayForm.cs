@@ -10,7 +10,8 @@ namespace ArkaHyte;
 /// <param name="Demo">Scenario name forwarded to the page ("idle", "stress") to preview it with simulated data.</param>
 /// <param name="OpenEditor">Dock button whose shortcut editor opens at start (diagnostics).</param>
 /// <param name="PreviewSpeedTest">"preview" (dial during upload) or "done" (summary): speed test view with sample values, no network use.</param>
-public sealed record DisplayOptions(bool DevTools, string? ScreenshotPath, string? Demo, int? OpenEditor = null, string? PreviewSpeedTest = null);
+/// <param name="OpenSetup">Opens the setup wizard at start even when it was already completed.</param>
+public sealed record DisplayOptions(bool DevTools, string? ScreenshotPath, string? Demo, int? OpenEditor = null, string? PreviewSpeedTest = null, bool OpenSetup = false);
 
 /// <summary>
 /// Borderless, non-activating window pinned to the case display that hosts the web UI.
@@ -41,6 +42,10 @@ public sealed class DisplayForm : Form
 	private bool _displayOn = true;
 	private bool _sessionLocked;
 	private List<object>? _dockButtons;
+	private SetupForm? _setup;
+
+	/// <summary>Set when the window closed so that a new instance applies freshly saved settings.</summary>
+	public bool RestartRequested { get; private set; }
 
 	public DisplayForm(AppSettings settings, SensorHub hub, TouchGuard touchGuard, AppUpdater updater, DisplayOptions options)
 	{
@@ -70,6 +75,7 @@ public sealed class DisplayForm : Form
 			_tray.ReloadRequested += () => _webView.CoreWebView2?.Reload();
 			_tray.ExitRequested += Close;
 			_tray.UpdateRequested += () => _ = _updater.ActAsync();
+			_tray.SetupRequested += OpenSetup;
 			_updater.StateChanged += state => PostToUiThread(() => OnUpdateState(state));
 			_updater.ExitRequested += () => PostToUiThread(Close);
 			Microsoft.Win32.SystemEvents.SessionSwitch += OnSessionSwitch;
@@ -98,7 +104,38 @@ public sealed class DisplayForm : Form
 		{
 			var guid = NativeMethods.GuidConsoleDisplayState;
 			_displayStateNotification = NativeMethods.RegisterPowerSettingNotification(Handle, ref guid, NativeMethods.DEVICE_NOTIFY_WINDOW_HANDLE);
+
+			// From the handle rather than Load: the window stays hidden (no Load) while the case display
+			// is not found, which is exactly when the wizard is needed
+			if (!_settings.SetupCompleted || _options.OpenSetup)
+			{
+				BeginInvoke(async () =>
+				{
+					// Lets the display's own WebView2 start first
+					await Task.Delay(TimeSpan.FromSeconds(2));
+					OpenSetup();
+				});
+			}
 		}
+	}
+
+	/// <summary>Shows the setup wizard, or brings it forward when it is already open.</summary>
+	private void OpenSetup()
+	{
+		if (_setup is { IsDisposed: false })
+		{
+			_setup.Activate();
+			return;
+		}
+		_setup = new SetupForm(_settings);
+		_setup.Saved += () =>
+		{
+			RestartRequested = true;
+			Close();
+		};
+		_setup.FormClosed += (_, _) => _setup = null;
+		_setup.Show();
+		_setup.Activate();
 	}
 
 	protected override void OnHandleDestroyed(EventArgs e)
@@ -556,6 +593,7 @@ public sealed class DisplayForm : Form
 			Microsoft.Win32.SystemEvents.SessionSwitch -= OnSessionSwitch;
 			_speedTestRun?.Cancel();
 			_tray?.Dispose();
+			_setup?.Dispose();
 			_placementRetry.Dispose();
 			_webView.Dispose();
 		}

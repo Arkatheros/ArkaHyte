@@ -31,6 +31,20 @@ passe en mode design avec des données simulées.
 Les capteurs HWiNFO sont retrouvés **par nom** (voir `HwInfo` dans `appsettings.json`), l'ordre
 dans Gadget n'a donc pas d'importance. Jokers `*` acceptés.
 
+### Assistant de configuration
+
+Au premier lancement, une fenêtre s'ouvre sur l'écran principal (ensuite : menu de l'icône ›
+**Assistant de configuration**) :
+
+1. **Écran du boîtier** : choix sur la carte des écrans (bouton pour afficher leurs numéros).
+2. **HWiNFO** : vérifie qu'il tourne et transmet des valeurs à Gadget, guide sa configuration.
+3. **Capteurs** : une valeur HWiNFO par widget, avec suggestion quand le réglage ne trouve rien.
+4. **Matériel** : noms CPU / GPU et mémoire GPU, détectés depuis le registre.
+5. **Terminer** : écrit `%LOCALAPPDATA%\ArkaHyte\appsettings.json` (`SetupCompleted: true`) et redémarre l'affichage.
+
+« Passer l'assistant » ne change rien d'autre que `SetupCompleted` ; fermer la fenêtre le repropose
+au prochain démarrage.
+
 ### Températures des disques
 
 1. Dans HWiNFO → onglet *HWiNFO Gadget*, cocher la température de chaque disque (capteurs S.M.A.R.T.).
@@ -158,7 +172,8 @@ powershell -File scripts\New-AppIcon.ps1 -SourceImage src\ArkaHyte\Assets\empire
 ## Icône de notification
 
 Clic droit sur le sabre rouge dans la zone de notification : **mode démo** (CPU/GPU 100 %, sans internet),
-**recharger l'affichage**, **ouvrir le dossier des journaux**, **quitter**.
+**recharger l'affichage**, **assistant de configuration**, **ouvrir le dossier des journaux**,
+**mises à jour**, **quitter**.
 
 ## Diagnostic
 
@@ -168,6 +183,8 @@ Clic droit sur le sabre rouge dans la zone de notification : **mode démo** (CPU
 | `ArkaHyte.exe --screenshot out.png` | Affiche l'interface, enregistre une capture et quitte |
 | `ArkaHyte.exe --demo stress` | Démarre en mode démo (CPU/GPU 100 %, sans internet) |
 | `ArkaHyte.exe --open-editor 0` | Ouvre l'éditeur du 1er raccourci au démarrage |
+| `ArkaHyte.exe --setup` | Ouvre l'assistant de configuration au démarrage |
+| `ArkaHyte.exe --setup-preview out.png [--setup-step 2]` | Rend l'assistant seul (sans rien enregistrer), capture et quitte ; fonctionne à côté d'une instance lancée |
 | `ArkaHyte.exe --preview-speedtest [done]` | Affiche le compteur (ou le résumé) du test de débit avec des valeurs d'exemple |
 | `ArkaHyte.exe --speedtest out.txt` | Lance un vrai test de débit et écrit chaque étape |
 | `ArkaHyte.exe --list-apps out.json` | Liste les applications proposées par l'éditeur |

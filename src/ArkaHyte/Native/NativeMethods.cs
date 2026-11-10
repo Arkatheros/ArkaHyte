@@ -11,6 +11,12 @@ internal static class NativeMethods
 	public const int WM_DISPLAYCHANGE = 0x007E;
 	public const int MA_NOACTIVATE = 3;
 
+	// ---------- Dark title bar (Windows 10 2004+) ----------
+	public const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+
+	[DllImport("dwmapi.dll")]
+	public static extern int DwmSetWindowAttribute(IntPtr window, int attribute, ref int value, int size);
+
 	// ---------- Monitor power state ----------
 	public const int WM_POWERBROADCAST = 0x0218;
 	public const int PBT_POWERSETTINGCHANGE = 0x8013;

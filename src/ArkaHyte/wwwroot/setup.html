@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="fr">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Arka Hyte · Configuration</title>
+	<link rel="stylesheet" href="fonts/fonts.css">
+	<link rel="stylesheet" href="css/setup.css">
+</head>
+<body>
+	<div class="wizard">
+		<header class="head">
+			<div class="brand">
+				<span class="brand-name">ARKA HYTE</span>
+				<span class="brand-sub">Configuration</span>
+			</div>
+			<span class="blade" aria-hidden="true"></span>
+		</header>
+
+		<nav class="steps" id="steps" aria-label="Étapes">
+			<button type="button" data-step="0"><span class="step-dot"></span>Écran du boîtier</button>
+			<button type="button" data-step="1"><span class="step-dot"></span>HWiNFO</button>
+			<button type="button" data-step="2"><span class="step-dot"></span>Capteurs</button>
+			<button type="button" data-step="3"><span class="step-dot"></span>Matériel</button>
+			<button type="button" data-step="4"><span class="step-dot"></span>Terminer</button>
+		</nav>
+
+		<main class="pages">
+			<!-- Case display -->
+			<section class="page" data-page="0">
+				<h1>Écran du boîtier</h1>
+				<p class="lead">Arka Hyte s'affiche sur l'écran tactile du boîtier, reconnu à sa taille.
+					Sélectionnez-le ci-dessous (en principe 682 × 2560, en portrait).</p>
+				<div class="screen-map" id="screenMap"></div>
+				<div class="row">
+					<button type="button" class="ghost" id="identify">Identifier les écrans</button>
+					<span class="hint">Affiche le numéro de chaque écran pendant 3 secondes.</span>
+				</div>
+				<p class="status" id="screenStatus"></p>
+			</section>
+
+			<!-- HWiNFO -->
+			<section class="page" data-page="1">
+				<h1>HWiNFO</h1>
+				<p class="lead">Températures et consommations viennent de <strong>HWiNFO</strong> (gratuit),
+					qui les transmet par sa fonction <strong>Gadget</strong>. Sans lui, ces widgets affichent « -- ».</p>
+				<div class="checks">
+					<div class="check" id="checkRunning"><span class="mark"></span><span class="check-text"></span></div>
+					<div class="check" id="checkGadget"><span class="mark"></span><span class="check-text"></span></div>
+				</div>
+				<ol class="guide">
+					<li>Installez HWiNFO puis lancez-le en mode <strong>Capteurs seulement</strong> (<em>Sensors-only</em>).</li>
+					<li>Dans la fenêtre des capteurs, ouvrez les <strong>paramètres</strong> (roue dentée), onglet
+						<strong>HWiNFO Gadget</strong>, et cochez <strong>Enable reporting to Gadget</strong>.</li>
+					<li>Dans la même liste, sélectionnez chaque valeur utile (température et consommation du CPU,
+						température, consommation, charge et mémoire du GPU) et cochez
+						<strong>Report value in Gadget</strong>.</li>
+					<li>Pour qu'il démarre avec Windows : paramètres généraux de HWiNFO, cochez <strong>Auto Start</strong>
+						et <strong>Minimize Sensors on Startup</strong>.</li>
+				</ol>
+				<div class="row">
+					<button type="button" class="ghost" id="startHwInfo" hidden>Lancer HWiNFO</button>
+					<button type="button" class="ghost" id="downloadHwInfo">Télécharger HWiNFO</button>
+					<span class="hint">Cette page se met à jour toute seule.</span>
+				</div>
+			</section>
+
+			<!-- Sensors -->
+			<section class="page" data-page="2">
+				<h1>Capteurs</h1>
+				<p class="lead">Choisissez la valeur HWiNFO de chaque widget. Seules les valeurs cochées
+					<strong>Report value in Gadget</strong> apparaissent dans les listes.</p>
+				<p class="status warn" id="sensorsEmpty" hidden>Aucune valeur reçue de HWiNFO : revenez à l'étape précédente.</p>
+				<table class="sensors" id="sensors">
+					<thead><tr><th>Widget</th><th>Valeur HWiNFO</th><th class="num">Actuel</th></tr></thead>
+					<tbody></tbody>
+				</table>
+			</section>
+
+			<!-- Hardware -->
+			<section class="page" data-page="3">
+				<h1>Matériel</h1>
+				<p class="lead">Noms affichés en tête des sections CPU et GPU.</p>
+				<div class="form">
+					<label>Fabricant du CPU<input id="cpuMaker" maxlength="24"></label>
+					<label>Modèle du CPU<input id="cpuModel" maxlength="40"></label>
+					<label>Fabricant du GPU<input id="gpuMaker" maxlength="24"></label>
+					<label>Modèle du GPU<input id="gpuModel" maxlength="40"></label>
+					<label>Mémoire du GPU (Go)<input id="vramTotalGb" type="number" min="1" max="256" step="1"></label>
+				</div>
+				<div class="row">
+					<button type="button" class="ghost" id="useDetected">Reprendre la détection</button>
+					<span class="hint" id="detectedText"></span>
+				</div>
+			</section>
+
+			<!-- Summary -->
+			<section class="page" data-page="4">
+				<h1>Terminer</h1>
+				<p class="lead">Les réglages sont enregistrés dans votre dossier de données, puis l'affichage
+					du boîtier redémarre pour les appliquer. L'assistant reste accessible depuis le menu de l'icône.</p>
+				<div class="checks" id="summary"></div>
+				<p class="status bad" id="saveError" hidden>Enregistrement impossible : voir le journal (menu de l'icône › Ouvrir le dossier des journaux).</p>
+			</section>
+		</main>
+
+		<footer class="foot">
+			<button type="button" class="link" id="skip">Passer l'assistant</button>
+			<div class="foot-actions">
+				<button type="button" class="ghost" id="back">Précédent</button>
+				<button type="button" class="primary" id="next">Suivant</button>
+			</div>
+		</footer>
+	</div>
+	<script src="js/setup.js"></script>
+</body>
+</html>
