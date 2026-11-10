@@ -84,6 +84,10 @@ chaque clic vu par cette protection.
 - **Appui court** : lance l'application.
 - **Appui long** (~0,65 s) : ouvre l'éditeur à l'écran — liste des applications du menu Démarrer
   (bureau + Store) avec index A–Z, choix de l'icône (logo de l'appli ou icône intégrée).
+  Le logo est redessiné en blanc comme les icônes intégrées : plaque de fond retirée, détails
+  conservés en découpe quand c'est possible (`monochromeIcon` dans `console.js`).
+  Si le résultat ne convient pas, ~160 icônes intégrées sont proposées par catégorie (grille défilante) :
+  les 12 d'origine et une sélection de [Lucide](https://lucide.dev) (licence ISC), dans `js/icons.js`.
 - Les choix faits à l'écran sont stockés dans `%LOCALAPPDATA%\ArkaHyte\shortcuts.json` et priment
   sur `Shortcuts` de `appsettings.json` (supprimer ce fichier pour revenir aux valeurs par défaut).
 

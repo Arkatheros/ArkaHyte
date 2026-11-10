@@ -1067,9 +1067,10 @@ body {
 	stroke-linecap: round;
 	stroke-linejoin: round;
 }
+/* App logos are recoloured like the glyphs (monochromeIcon): same footprint as the glyphs */
 .dock-icon img {
-	width: 58px;
-	height: 58px;
+	width: 46px;
+	height: 46px;
 	object-fit: contain;
 }
 .dock-label {
@@ -1263,10 +1264,29 @@ body {
 .editor-letters button:active {
 	color: var(--blade);
 }
+/* ~160 icons by section: two and a half rows visible, so the cut row hints at scrolling */
 .editor-icons {
+	position: relative;
+	flex: none;
+	max-height: 345px;
 	display: grid;
 	grid-template-columns: repeat(6, 1fr);
 	gap: 12px;
+	padding: 4px 6px 10px;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	touch-action: pan-y;
+	scrollbar-width: none;
+	border-top: 1px solid rgba(255, 255, 255, 0.06);
+	border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.editor-icons-group {
+	grid-column: 1 / -1;
+	margin-top: 10px;
+	font: 700 14px var(--font-label);
+	letter-spacing: 0.18em;
+	text-transform: uppercase;
+	color: var(--ash);
 }
 .editor-icon {
 	aspect-ratio: 1;
@@ -1288,8 +1308,8 @@ body {
 	stroke-linejoin: round;
 }
 .editor-icon img {
-	width: 52px;
-	height: 52px;
+	width: 38px;
+	height: 38px;
 	object-fit: contain;
 }
 .editor-icon.selected {

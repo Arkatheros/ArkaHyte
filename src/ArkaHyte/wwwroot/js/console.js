@@ -600,18 +600,186 @@
 	const PRESS_MOVE_TOLERANCE = 14;
 	let dockShortcuts = [];
 
-	// Fills a container with a built-in glyph or an image icon
+	// ---------- App logos turned into single-colour glyphs ----------
+	// Colour logos clash with the line icons of the theme: each one is recoloured once, in the
+	// colour of the built-in glyphs, keeping its inner details as cut-outs where it can.
+	const monochromeCache = new Map();
+
+	const smoothstep = (edge0, edge1, value) => {
+		const t = clamp((value - edge0) / (edge1 - edge0), 0, 1);
+		return t * t * (3 - 2 * t);
+	};
+
+	function monochromePixels(data, size, color) {
+		const at = (x, y) => (y * size + x) * 4;
+		const luma = (i) => 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+		const distance = (i, c) => Math.hypot(data[i] - c[0], data[i + 1] - c[1], data[i + 2] - c[2]);
+
+		let left = size, top = size, right = -1, bottom = -1, opaque = 0;
+		for (let y = 0; y < size; y++) {
+			for (let x = 0; x < size; x++) {
+				if (data[at(x, y) + 3] > 128) {
+					opaque++;
+					left = Math.min(left, x);
+					right = Math.max(right, x);
+					top = Math.min(top, y);
+					bottom = Math.max(bottom, y);
+				}
+			}
+		}
+		if (opaque === 0) {
+			return;
+		}
+
+		// A logo on a plate (square tile) fills its bounding box: the line just inside each side is opaque
+		const inset = Math.max(2, Math.round((right - left) * 0.06));
+		const ring = [];
+		for (let x = left + inset; x <= right - inset; x++) {
+			ring.push(at(x, top + inset), at(x, bottom - inset));
+		}
+		for (let y = top + inset; y <= bottom - inset; y++) {
+			ring.push(at(left + inset, y), at(right - inset, y));
+		}
+		const ringOpaque = ring.filter((i) => data[i + 3] > 200);
+		const plate = ringOpaque.length >= ring.length * 0.9;
+
+		// Dominant colour (plate colour, or body colour of a cut-out logo): most frequent 4-bit bucket
+		const buckets = new Map();
+		const addBucket = (i) => {
+			const key = ((data[i] >> 4) << 8) | ((data[i + 1] >> 4) << 4) | (data[i + 2] >> 4);
+			const bucket = buckets.get(key) || { n: 0, r: 0, g: 0, b: 0 };
+			bucket.n++;
+			bucket.r += data[i];
+			bucket.g += data[i + 1];
+			bucket.b += data[i + 2];
+			buckets.set(key, bucket);
+		};
+		if (plate) {
+			ringOpaque.forEach(addBucket);
+		} else {
+			for (let i = 0; i < data.length; i += 4) {
+				if (data[i + 3] > 128) {
+					addBucket(i);
+				}
+			}
+		}
+		let best = null;
+		for (const bucket of buckets.values()) {
+			if (!best || bucket.n > best.n) {
+				best = bucket;
+			}
+		}
+		const dominant = [best.r / best.n, best.g / best.n, best.b / best.n];
+		const dominantShare = best.n / (plate ? ringOpaque.length : opaque);
+
+		// Multicolour logo: split its light and dark tones (Otsu threshold on luminance)
+		let split = null;
+		if (!plate && dominantShare < 0.35) {
+			const histogram = new Array(256).fill(0);
+			let sum = 0;
+			for (let i = 0; i < data.length; i += 4) {
+				if (data[i + 3] > 128) {
+					const level = Math.round(luma(i));
+					histogram[level]++;
+					sum += level;
+				}
+			}
+			const mean = sum / opaque;
+			let variance = 0;
+			for (let level = 0; level < 256; level++) {
+				variance += histogram[level] * (level - mean) ** 2;
+			}
+			variance /= opaque;
+			let below = 0, sumBelow = 0, bestBetween = -1, threshold = 128, darkCount = 0;
+			for (let level = 0; level < 256; level++) {
+				below += histogram[level];
+				sumBelow += level * histogram[level];
+				const above = opaque - below;
+				if (below === 0 || above === 0) {
+					continue;
+				}
+				const between = (below * above * (sumBelow / below - (sum - sumBelow) / above) ** 2) / (opaque * opaque);
+				if (between > bestBetween) {
+					bestBetween = between;
+					threshold = level;
+					darkCount = below;
+				}
+			}
+			let nearThreshold = 0;
+			for (let level = Math.max(0, threshold - 16); level <= Math.min(255, threshold + 16); level++) {
+				nearThreshold += histogram[level];
+			}
+			const darkShare = darkCount / opaque;
+			// Two clear tones with a real minority; a gradient piles up around the threshold instead
+			if (bestBetween / variance > 0.6 && Math.min(darkShare, 1 - darkShare) > 0.06 && nearThreshold / opaque < 0.4) {
+				split = { threshold, keepDark: darkShare >= 0.5 };
+			}
+		}
+
+		for (let i = 0; i < data.length; i += 4) {
+			let alpha = data[i + 3];
+			if (plate) {
+				// Plate dropped, what stands out from it kept
+				alpha *= smoothstep(45, 120, distance(i, dominant));
+			} else if (dominantShare >= 0.35) {
+				// Body kept, details of another colour cut out
+				alpha *= 1 - smoothstep(70, 150, distance(i, dominant));
+			} else if (split) {
+				const light = smoothstep(split.threshold - 12, split.threshold + 12, luma(i));
+				alpha *= split.keepDark ? 1 - light : light;
+			}
+			data[i] = color[0];
+			data[i + 1] = color[1];
+			data[i + 2] = color[2];
+			data[i + 3] = alpha;
+		}
+	}
+
+	// Resolves to a PNG data URL of the logo in the given CSS colour ("rgb(r, g, b)")
+	function monochromeIcon(source, cssColor) {
+		const key = `${cssColor}|${source}`;
+		if (!monochromeCache.has(key)) {
+			monochromeCache.set(key, new Promise((resolve) => {
+				const image = new Image();
+				image.onload = () => {
+					const size = Math.max(image.naturalWidth, image.naturalHeight);
+					const canvas = document.createElement('canvas');
+					canvas.width = size;
+					canvas.height = size;
+					const ctx = canvas.getContext('2d', { willReadFrequently: true });
+					ctx.drawImage(image, (size - image.naturalWidth) / 2, (size - image.naturalHeight) / 2);
+					const pixels = ctx.getImageData(0, 0, size, size);
+					const color = (cssColor.match(/\d+/g) || [243, 233, 234]).slice(0, 3).map(Number);
+					monochromePixels(pixels.data, size, color);
+					ctx.putImageData(pixels, 0, 0);
+					resolve(canvas.toDataURL('image/png'));
+				};
+				// Unreadable image: show it as it is
+				image.onerror = () => resolve(source);
+				image.src = source;
+			}));
+		}
+		return monochromeCache.get(key);
+	}
+
+	// Fills a container with a built-in glyph or an app logo drawn in the glyphs' colour
 	function renderIcon(container, icon) {
 		const resolved = icon || { kind: 'builtin', value: 'app' };
 		if (resolved.kind === 'image') {
 			const img = document.createElement('img');
-			img.src = resolved.value;
 			img.alt = '';
+			// Hidden until recoloured, so the colour logo never flashes
+			img.style.visibility = 'hidden';
 			container.replaceChildren(img);
+			monochromeIcon(resolved.value, getComputedStyle(container).color).then((url) => {
+				img.src = url;
+				img.style.visibility = '';
+			});
 		} else {
 			const svg = document.createElementNS(SVG_NS, 'svg');
 			svg.setAttribute('viewBox', '0 0 24 24');
-			svg.innerHTML = BUILTIN_ICONS[resolved.value] || BUILTIN_ICONS.app;
+			// Own glyphs first (names saved by older versions), then the Lucide selection (js/icons.js)
+			svg.innerHTML = BUILTIN_ICONS[resolved.value] || (window.LUCIDE_ICONS || {})[resolved.value] || BUILTIN_ICONS.app;
 			container.replaceChildren(svg);
 		}
 	}
@@ -701,7 +869,9 @@
 			$('editorLetters').replaceChildren();
 			requestApps();
 		}
+		buildEditorIcons();
 		renderEditorState();
+		revealSelectedIcon();
 	}
 
 	function closeEditor() {
@@ -792,19 +962,52 @@
 		$('editorSave').disabled = !editor.appId;
 		document.querySelectorAll('.editor-app').forEach((row) => row.classList.toggle('selected', row.dataset.id === editor.appId));
 
-		$('editorIcons').replaceChildren(...EDITOR_ICONS.map((name) => {
-			const tile = document.createElement('button');
-			tile.type = 'button';
-			tile.className = 'editor-icon';
-			tile.classList.toggle('selected', editor.icon === name);
-			tile.setAttribute('aria-label', name === 'app' ? "Icône de l'application" : name);
-			renderIcon(tile, name === 'app' && editor.appIcon ? { kind: 'image', value: editor.appIcon } : { kind: 'builtin', value: name });
-			tile.addEventListener('click', () => {
-				editor.icon = name;
-				renderEditorState();
-			});
-			return tile;
-		}));
+		for (const tile of editorIconTiles.values()) {
+			tile.classList.toggle('selected', editor.icon === tile.dataset.icon);
+		}
+		const appTile = editorIconTiles.get('app');
+		if (appTile && appTile.dataset.source !== (editor.appIcon || '')) {
+			appTile.dataset.source = editor.appIcon || '';
+			renderIcon(appTile, editor.appIcon ? { kind: 'image', value: editor.appIcon } : { kind: 'builtin', value: 'app' });
+		}
+	}
+
+	// Built once per opening (~160 tiles): rebuilding at each tap would also reset the scroll
+	const editorIconTiles = new Map();
+	function buildEditorIcons() {
+		const sections = [{ label: 'Essentiels', icons: EDITOR_ICONS }, ...(window.LUCIDE_GROUPS || [])];
+		editorIconTiles.clear();
+		const children = [];
+		for (const section of sections) {
+			const heading = document.createElement('span');
+			heading.className = 'editor-icons-group';
+			heading.textContent = section.label;
+			children.push(heading);
+			for (const name of section.icons) {
+				const tile = document.createElement('button');
+				tile.type = 'button';
+				tile.className = 'editor-icon';
+				tile.dataset.icon = name;
+				tile.setAttribute('aria-label', name === 'app' ? "Icône de l'application" : name);
+				if (name !== 'app') {
+					renderIcon(tile, { kind: 'builtin', value: name });
+				}
+				tile.addEventListener('click', () => {
+					editor.icon = name;
+					renderEditorState();
+				});
+				editorIconTiles.set(name, tile);
+				children.push(tile);
+			}
+		}
+		$('editorIcons').replaceChildren(...children);
+	}
+
+	// Brings the current choice into view, within the icon grid only
+	function revealSelectedIcon() {
+		const grid = $('editorIcons');
+		const tile = editorIconTiles.get(editor.icon);
+		grid.scrollTop = tile && editor.icon !== 'app' ? tile.offsetTop - 40 : 0;
 	}
 
 	function saveEditor() {

@@ -64,7 +64,9 @@ après un toucher sur le boîtier (+ watchdog). `TrayIcon` + `SithMenuRenderer` 
 
 **Raccourcis du dock.** Défauts dans `appsettings.json` → `Shortcuts`, surchargés par
 `%LOCALAPPDATA%\ArkaHyte\shortcuts.json` (`ShortcutStore`). L'éditeur (appui long) liste les applis via
-`shell:AppsFolder` (`AppCatalog`, icônes `Native/ShellIcons.cs`).
+`shell:AppsFolder` (`AppCatalog`, icônes `Native/ShellIcons.cs`). Logos d'applis recolorés en blanc côté web
+(`monochromeIcon`) ; icônes intégrées = `BUILTIN_ICONS` (`console.js`, noms déjà enregistrés : ne pas renommer)
++ sélection Lucide générée dans `js/icons.js` (`LUCIDE_ICONS`, `LUCIDE_GROUPS`).
 
 **Données utilisateur** : `%LOCALAPPDATA%\ArkaHyte\` (logs `display.log`, `launcher.log`, shortcuts, tools).
 
