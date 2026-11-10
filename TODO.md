@@ -15,7 +15,6 @@ du non fait.
 ---
 
 # Liste des tâches
-- [ ] renomme le dossier Hyte en ArkaHyte sur d:\dev
-- [ ] nettoyer le dossier enlever ce qui ne sert pas. ( dossier mockup, skins ???)
 - [ ] bench le programme, pouvoir voir combien il prends de processeur et combien de mémoire
+- [ ] il faudrait trouver un moyen pour quand on selection une application, faire en sorte que son icons doit automatique transformer en mode blanc comme les icons de la liste afin de rester dans le theme
 - [ ] Faire un installeur

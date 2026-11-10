@@ -10,10 +10,11 @@ alimentée par des données réelles lues en C#.
 |---|---|
 | `src/ArkaHyte` | Application C# .NET 10 (WinForms + WebView2) |
 | `src/ArkaHyte/wwwroot` | Interface : `index.html`, `css/console.css`, `js/console.js`, polices, fond |
-| `mockup/sith-console.html` | Maquette de design validée (données simulées) |
-| `scripts/` | Lanceur au démarrage et installation |
-| `bin/` | Binaires publiés |
-| `Skins/` | Ancien skin Rainmeter (obsolète) |
+| `scripts/` | Lanceur au démarrage, installation, génération de l'icône |
+| `bin/` | Binaires publiés (non versionnés) |
+
+Itération sur le design : ouvrir `src/ArkaHyte/wwwroot/index.html` dans un navigateur, l'interface
+passe en mode design avec des données simulées.
 
 ## Sources de données
 
@@ -51,7 +52,6 @@ scripts\Install.ps1
 
 - désactive la tâche planifiée `HYTE Nexus` et arrête Nexus
 - crée la tâche `Arka Hyte` à l'ouverture de session → `Start-ArkaHyte.ps1`
-  (et supprime les anciennes tâches `HYTE Display (Rainmeter)` / `HyteDisplay`, l'ancien raccourci et le relais `Start-HyteDisplay.ps1`)
 - crée le raccourci **Arka Hyte** dans le menu Démarrer (pour relancer après « Quitter »)
 
 Retour à Nexus : `scripts\Install.ps1 -Uninstall`

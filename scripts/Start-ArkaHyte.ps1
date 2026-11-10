@@ -38,9 +38,6 @@ trap {
 
 Write-Log '--- Launcher started'
 
-# Programs of earlier versions (before the rename and the built-in touch guard)
-Get-Process -Name 'HyteDisplay', 'HyteTouchGuard' -ErrorAction SilentlyContinue | Stop-Process -Force
-
 if (-not (Test-Path $ExePath)) {
 	Write-Log "Warning: ArkaHyte not found at '$ExePath'"
 }

@@ -21,7 +21,6 @@ internal static class Program
 	[STAThread]
 	private static int Main(string[] args)
 	{
-		Log.MigrateLegacyData();
 		var settings = AppSettings.Load(Path.Combine(AppContext.BaseDirectory, "appsettings.json"));
 		var dumpPath = ArgumentValue(args, "--dump");
 		if (dumpPath is not null)

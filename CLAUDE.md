@@ -64,7 +64,6 @@ après un toucher sur le boîtier (+ watchdog). `TrayIcon` + `SithMenuRenderer` 
 `shell:AppsFolder` (`AppCatalog`, icônes `Native/ShellIcons.cs`).
 
 **Données utilisateur** : `%LOCALAPPDATA%\ArkaHyte\` (logs `display.log`, `launcher.log`, shortcuts, tools).
-`Log.MigrateLegacyData()` migre l'ancien `%LOCALAPPDATA%\HyteDisplay`.
 
 **Démarrage** : tâche planifiée `Arka Hyte` (AtLogOn) → `scripts/Start-ArkaHyte.ps1` → `bin\ArkaHyte\ArkaHyte.exe`.
 Sous PowerShell 5.1, ne pas utiliser `$PSScriptRoot` dans les valeurs par défaut de `param()` (vide).
@@ -82,5 +81,4 @@ L'écran tourne en permanence : cible ~16 % d'un cœur.
 - Tabulations partout (C#, JS, CSS, JSON, PowerShell).
 - Code, commentaires, logs, messages d'erreur en anglais ; textes affichés à l'utilisateur en français.
 - Branche de travail `dev` (remote `origin` = github.com/Arkatheros/ArkaHyte). Commit/push uniquement sur demande.
-- `mockup/sith-console.html` = référence de design validée, pas du code exécuté. `Skins/` = ancien skin Rainmeter obsolète.
 - Icône : régénérer `src/ArkaHyte/Assets/app.ico` avec `scripts/New-AppIcon.ps1` (commande dans le README).

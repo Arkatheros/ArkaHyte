@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-	Draws the HyteDisplay emblem (kyber ring + vertical lightsaber) and writes a multi-size .ico.
+	Draws the Arka Hyte emblem (kyber ring + vertical lightsaber) and writes a multi-size .ico.
 
 .DESCRIPTION
 	Each size is rendered on its own (not downscaled) so the small tray sizes stay crisp.

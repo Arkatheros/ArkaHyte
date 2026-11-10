@@ -5,7 +5,7 @@ using ThreadingTimer = System.Threading.Timer;
 namespace ArkaHyte;
 
 /// <summary>
-/// Sends the cursor back off the case display after each touch (formerly HyteTouchGuard.exe).
+/// Sends the cursor back off the case display after each touch.
 /// Windows promotes touch to mouse input and parks the cursor at the touch point, so after a tap
 /// the mouse would start from the case display. Detection relies on the monitor under the click,
 /// not on the touch signature, which some digitizer drivers do not set.
