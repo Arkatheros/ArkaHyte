@@ -1,22 +1,108 @@
-/* Layout: fixed 682x2560 portrait frame scaled to the window; volcanic background behind,
-   CPU and GPU sections open with a header rule, widgets float over the landscape. */
+/* Layout: fixed 682x2560 portrait frame scaled to the window; landscape background behind,
+   CPU and GPU sections open with a header rule, widgets float over the landscape.
+   Themes: the colours below are the Sith theme (red blade, volcanic world); :root[data-theme]
+   blocks redefine them. Triplets ("r, g, b") feed rgba() here and the canvas drawings in console.js. */
 :root {
-	--void: #030104;
+	--blade-rgb: 255, 31, 51;
+	--line-rgb: 255, 60, 75;
+	--core-rgb: 255, 244, 244;
+	--bone-rgb: 243, 233, 234;
+	--ash-rgb: 143, 118, 121;
+	--void-rgb: 3, 1, 4;
+	--panel-rgb: 14, 6, 8;
+	--panel-hi-rgb: 26, 7, 9;
+	/* Album art placeholder gradient */
+	--art-top-rgb: 42, 5, 8;
+	--art-bottom-rgb: 7, 1, 2;
+	/* Light tint of the blade, for the glow edge of the clock digits */
+	--blade-soft: var(--blade-soft);
+	/* Veils drifting over the sky: dark smoke here, light haze in the desert */
+	--veil-a: rgba(18, 5, 5, 0.75);
+	--veil-b: rgba(30, 8, 6, 0.3);
+	/* Unlit part of gauges, segments and LEDs */
+	--track: rgba(255, 255, 255, 0.07);
+
+	--void: rgb(var(--void-rgb));
 	/* Panels are opaque enough to read without backdrop-filter, which re-blurs the moving embers every frame */
-	--obsidian: rgba(14, 6, 8, 0.8);
-	--ash: #8f7679;
-	--bone: #f3e9ea;
-	--blade: #ff1f33;
-	--core: #fff4f4;
+	--obsidian: rgba(var(--panel-rgb), 0.8);
+	--ash: rgb(var(--ash-rgb));
+	--bone: rgb(var(--bone-rgb));
+	--blade: rgb(var(--blade-rgb));
+	--core: rgb(var(--core-rgb));
+	/* Alerts (high values, no internet): a hue that stands out from both the blade and the backdrop,
+	   orange over the volcano */
+	--ember-rgb: 255, 122, 69;
+	--ember-glow-rgb: 255, 90, 40;
 	--warm: #ffb08a;
-	--ember: #ff7a45;
-	/* Speed test upload phase, to tell it apart from the red download */
+	--alert-panel: rgba(52, 7, 4, 0.9);
+	--ember: rgb(var(--ember-rgb));
+	/* Speed test upload phase, to tell it apart from the download (blade colour) */
 	--upload: #ffb020;
-	--line: rgba(255, 60, 75, 0.26);
+	--line: rgba(var(--line-rgb), 0.26);
 	--font-display: 'Advent Pro', 'Segoe UI', sans-serif;
 	--font-label: 'Rajdhani', 'Segoe UI', sans-serif;
 	--font-data: 'Share Tech Mono', Consolas, monospace;
 	color-scheme: dark;
+}
+/* Jedi: Obi-Wan's blue blade, cool steel greys, sunlit desert world. The picture stays as bright
+   as it is: the theme makes itself readable on it instead (halo, thicker digits, dark tracks). */
+:root[data-theme="jedi"] {
+	--blade-rgb: 40, 140, 255;
+	--line-rgb: 80, 165, 255;
+	--core-rgb: 240, 248, 255;
+	--bone-rgb: 240, 245, 250;
+	--ash-rgb: 196, 210, 226;
+	--void-rgb: 1, 3, 8;
+	--panel-rgb: 5, 10, 19;
+	--panel-hi-rgb: 9, 17, 32;
+	--art-top-rgb: 6, 24, 52;
+	--art-bottom-rgb: 1, 4, 10;
+	--blade-soft: #7cc2ff;
+	--veil-a: transparent;
+	--veil-b: transparent;
+	--track: rgba(4, 16, 34, 0.5);
+	/* Orange disappears against the sand and the suns: alerts take Mace Windu's violet blade */
+	--ember-rgb: 168, 28, 255;
+	--ember-glow-rgb: 150, 20, 255;
+	--warm: #c070ff;
+	--alert-panel: rgba(34, 8, 54, 0.9);
+	--halo: 0 1px 2px rgba(2, 10, 24, 0.95), 0 0 4px rgba(2, 10, 24, 0.75), 0 0 12px rgba(2, 10, 24, 0.5);
+}
+/* A dark halo under every text over the landscape: set once on the frame, text-shadow is inherited */
+:root[data-theme="jedi"] .frame {
+	text-shadow: var(--halo);
+}
+:root[data-theme="jedi"] .ico,
+:root[data-theme="jedi"] .rule,
+:root[data-theme="jedi"] .media-controls svg {
+	filter: drop-shadow(0 0 2px rgba(2, 10, 24, 0.9));
+}
+/* Blue on blue sky: the maker names take the light tint of the blade */
+:root[data-theme="jedi"] .section-head .maker {
+	color: var(--blade-soft);
+}
+:root[data-theme="jedi"] .dock-label {
+	color: var(--bone);
+}
+/* Over the sand the play button gets a dark disc, like the dock buttons */
+:root[data-theme="jedi"] .media-controls button.main {
+	background: rgba(var(--panel-rgb), 0.75);
+}
+/* The display font only ships its thinnest weight: a stroke thickens the digits on the bright sky */
+:root[data-theme="jedi"] .time,
+:root[data-theme="jedi"] .date,
+:root[data-theme="jedi"] .gpu-load .big,
+:root[data-theme="jedi"] .metric-value {
+	-webkit-text-stroke: 1px currentColor;
+}
+:root[data-theme="jedi"] .time .mm {
+	text-shadow: var(--halo), 0 0 2px var(--blade-soft), 0 0 22px rgba(var(--blade-rgb), 0.6);
+}
+/* Each theme shows its own hilt in the VRAM saber, and lava only exists on the volcanic world */
+:root[data-theme="jedi"] .hilt-sith,
+:root:not([data-theme="jedi"]) .hilt-jedi,
+:root[data-theme="jedi"] .lava-spot {
+	display: none;
 }
 
 * {
@@ -77,7 +163,7 @@ body {
 	opacity: 0.5;
 	will-change: opacity;
 }
-/* Dark smoke veils drifting across the sky (transform only: compositor, no repaint) */
+/* Veils drifting across the sky, smoke or haze by theme (transform only: compositor, no repaint) */
 .smoke {
 	left: -210px;
 	width: 1100px;
@@ -85,7 +171,7 @@ body {
 	z-index: 1;
 	pointer-events: none;
 	opacity: 0.55;
-	background: radial-gradient(ellipse 48% 42% at 50% 50%, rgba(18, 5, 5, 0.75), rgba(30, 8, 6, 0.3) 45%, transparent 72%);
+	background: radial-gradient(ellipse 48% 42% at 50% 50%, var(--veil-a), var(--veil-b) 45%, transparent 72%);
 	will-change: transform;
 }
 /* Looping effects are driven by the 24 fps JS loop through these variables: infinite CSS
@@ -126,7 +212,7 @@ body {
 	height: 100%;
 	border-radius: 99px;
 	background: linear-gradient(180deg, var(--blade) 0%, var(--core) 38%, var(--core) 62%, var(--blade) 100%);
-	box-shadow: 0 0 6px var(--blade), 0 0 18px var(--blade), 0 0 46px rgba(255, 31, 51, 0.5);
+	box-shadow: 0 0 6px var(--blade), 0 0 18px var(--blade), 0 0 46px rgba(var(--blade-rgb), 0.5);
 }
 .ix {
 	height: 100%;
@@ -171,7 +257,7 @@ body {
 }
 .time .mm {
 	color: var(--blade);
-	text-shadow: 0 0 2px #ff6b78, 0 0 22px rgba(255, 31, 51, 0.6);
+	text-shadow: 0 0 2px #ff6b78, 0 0 22px rgba(var(--blade-rgb), 0.6);
 }
 .time .colon {
 	display: inline-block;
@@ -192,7 +278,7 @@ body {
 	width: 40px;
 	height: 40px;
 	stroke-width: 1.5;
-	filter: drop-shadow(0 0 6px rgba(255, 31, 51, 0.7));
+	filter: drop-shadow(0 0 6px rgba(var(--blade-rgb), 0.7));
 }
 .section-head .name {
 	display: flex;
@@ -214,8 +300,8 @@ body {
 .section-head .rule {
 	flex: 1;
 	height: 2px;
-	background: linear-gradient(90deg, var(--blade), rgba(255, 31, 51, 0.15) 60%, transparent);
-	box-shadow: 0 0 8px rgba(255, 31, 51, 0.6);
+	background: linear-gradient(90deg, var(--blade), rgba(var(--blade-rgb), 0.15) 60%, transparent);
+	box-shadow: 0 0 8px rgba(var(--blade-rgb), 0.6);
 }
 .cpu-head { top: 312px; }
 .gpu-head { top: 872px; }
@@ -302,7 +388,7 @@ body {
 	height: 7px;
 	margin-top: 8px;
 	border-radius: 99px;
-	background: rgba(255, 255, 255, 0.07);
+	background: var(--track);
 }
 .gauge-fill {
 	height: 100%;
@@ -323,7 +409,7 @@ body {
 }
 .metric.hot .metric-value {
 	color: var(--ember);
-	text-shadow: 0 0 calc(10px + 14px * var(--alarm)) rgba(255, 122, 69, calc(0.45 + 0.5 * var(--alarm)));
+	text-shadow: 0 0 calc(10px + 14px * var(--alarm)) rgba(var(--ember-rgb), calc(0.45 + 0.5 * var(--alarm)));
 }
 
 /* ---------- GPU load + VRAM saber ---------- */
@@ -378,11 +464,11 @@ body {
 }
 .seg-bar {
 	transform: skewX(-18deg);
-	background: rgba(255, 255, 255, 0.07);
+	background: var(--track);
 }
 .seg-bar.on {
 	background: var(--blade);
-	box-shadow: 0 0 8px rgba(255, 31, 51, 0.8);
+	box-shadow: 0 0 8px rgba(var(--blade-rgb), 0.8);
 }
 .seg-bar.on.peak {
 	background: var(--core);
@@ -425,7 +511,7 @@ body {
 	right: 0;
 	top: 5px;
 	height: 2px;
-	background: rgba(255, 255, 255, 0.07);
+	background: var(--track);
 }
 .vram-fill {
 	position: relative;
@@ -474,11 +560,11 @@ body {
 }
 .led {
 	height: 16px;
-	background: rgba(255, 255, 255, 0.07);
+	background: var(--track);
 }
 .led.on {
 	background: var(--blade);
-	box-shadow: 0 0 8px rgba(255, 31, 51, 0.8);
+	box-shadow: 0 0 8px rgba(var(--blade-rgb), 0.8);
 }
 .disks {
 	display: grid;
@@ -507,7 +593,7 @@ body {
 	transform: rotate(-90deg);
 }
 .disk-arc {
-	filter: drop-shadow(0 0 5px rgba(255, 31, 51, 0.8));
+	filter: drop-shadow(0 0 5px rgba(var(--blade-rgb), 0.8));
 }
 .disk-ring .inner {
 	position: absolute;
@@ -574,13 +660,13 @@ body {
 	flex: 1;
 	height: 9px;
 	margin-bottom: 9px;
-	border-bottom: 1px solid rgba(255, 60, 75, 0.45);
+	border-bottom: 1px solid rgba(var(--line-rgb), 0.45);
 }
 .disk-group::before {
-	border-left: 1px solid rgba(255, 60, 75, 0.45);
+	border-left: 1px solid rgba(var(--line-rgb), 0.45);
 }
 .disk-group::after {
-	border-right: 1px solid rgba(255, 60, 75, 0.45);
+	border-right: 1px solid rgba(var(--line-rgb), 0.45);
 }
 .disk-temp {
 	display: flex;
@@ -639,7 +725,7 @@ body {
 }
 .signal .arc.on {
 	stroke: var(--blade);
-	filter: drop-shadow(0 0 4px rgba(255, 31, 51, 0.9));
+	filter: drop-shadow(0 0 4px rgba(var(--blade-rgb), 0.9));
 }
 /* Lit arcs stay lit; JS sweeps a light wave through them (opacity never drops below 0.7) */
 .signal .arc.on {
@@ -698,7 +784,7 @@ body {
 	gap: 6px;
 	padding: 4px 12px;
 	border: 1px solid var(--line);
-	background: rgba(255, 31, 51, 0.08);
+	background: rgba(var(--blade-rgb), 0.08);
 	color: var(--bone);
 	font: 700 13px var(--font-label);
 	letter-spacing: 0.16em;
@@ -846,7 +932,7 @@ body {
 }
 .st-stat.down .st-big {
 	color: var(--blade);
-	text-shadow: 0 0 22px rgba(255, 31, 51, 0.55);
+	text-shadow: 0 0 22px rgba(var(--blade-rgb), 0.55);
 }
 .st-stat.up .st-big {
 	color: var(--upload);
@@ -875,10 +961,10 @@ body {
 
 /* Connectivity alarm, pulsing with the shared --alarm variable */
 .holonet.alert {
-	background: rgba(52, 7, 4, 0.9);
+	background: var(--alert-panel);
 	box-shadow:
-		inset 0 0 0 2px rgba(255, 122, 69, calc(0.35 + 0.55 * var(--alarm))),
-		inset 0 0 46px rgba(255, 90, 40, calc(0.12 + 0.25 * var(--alarm)));
+		inset 0 0 0 2px rgba(var(--ember-rgb), calc(0.35 + 0.55 * var(--alarm))),
+		inset 0 0 46px rgba(var(--ember-glow-rgb), calc(0.12 + 0.25 * var(--alarm)));
 }
 /* The inset border is a rectangle that the bevelled corners cut off: a 2px diagonal stroke along each
    bevel, on its inner side, closes the outline */
@@ -889,7 +975,7 @@ body {
 	width: 24px;
 	height: 24px;
 	pointer-events: none;
-	--edge: rgba(255, 122, 69, calc(0.35 + 0.55 * var(--alarm)));
+	--edge: rgba(var(--ember-rgb), calc(0.35 + 0.55 * var(--alarm)));
 }
 .holonet.alert::before {
 	left: 0;
@@ -910,11 +996,11 @@ body {
 	color: #1a0505;
 	background: var(--ember);
 	border-color: var(--ember);
-	box-shadow: 0 0 calc(8px + 14px * var(--alarm)) rgba(255, 122, 69, 0.8);
+	box-shadow: 0 0 calc(8px + 14px * var(--alarm)) rgba(var(--ember-rgb), 0.8);
 }
 .holonet.alert .signal .arc.on {
 	stroke: var(--ember);
-	filter: drop-shadow(0 0 4px rgba(255, 122, 69, 0.9));
+	filter: drop-shadow(0 0 4px rgba(var(--ember-rgb), 0.9));
 }
 .netgrid dd.rate {
 	font-size: 28px;
@@ -922,7 +1008,7 @@ body {
 }
 .netgrid dd.rate.down {
 	color: var(--blade);
-	text-shadow: 0 0 10px rgba(255, 31, 51, 0.5);
+	text-shadow: 0 0 10px rgba(var(--blade-rgb), 0.5);
 }
 
 /* ---------- Now playing ---------- */
@@ -955,7 +1041,7 @@ body {
 	width: 4px;
 	height: 100%;
 	background: var(--blade);
-	box-shadow: 0 0 6px rgba(255, 31, 51, 0.8);
+	box-shadow: 0 0 6px rgba(var(--blade-rgb), 0.8);
 	transform: scaleY(0.3);
 	transform-origin: bottom;
 	will-change: transform;
@@ -975,7 +1061,7 @@ body {
 	position: relative;
 	width: 200px;
 	height: 200px;
-	box-shadow: 0 0 0 1px rgba(255, 60, 75, 0.3), 0 14px 46px rgba(255, 31, 51, 0.3);
+	box-shadow: 0 0 0 1px rgba(var(--line-rgb), 0.3), 0 14px 46px rgba(var(--blade-rgb), 0.3);
 }
 #mediaArt,
 #mediaCover {
@@ -1035,7 +1121,7 @@ body {
 	color: var(--core);
 	background: var(--blade);
 	padding: 2px 8px;
-	box-shadow: 0 0 12px rgba(255, 31, 51, 0.7);
+	box-shadow: 0 0 12px rgba(var(--blade-rgb), 0.7);
 }
 .media-controls {
 	display: flex;
@@ -1058,7 +1144,7 @@ body {
 	width: 86px;
 	height: 86px;
 	border: 1.5px solid var(--blade);
-	box-shadow: 0 0 16px rgba(255, 31, 51, 0.5);
+	box-shadow: 0 0 16px rgba(var(--blade-rgb), 0.5);
 }
 .media-controls button.main svg {
 	width: 40px;
@@ -1106,13 +1192,13 @@ body {
 	place-items: center;
 	border-radius: 50%;
 	border: 1px solid var(--line);
-	background: rgba(14, 6, 8, 0.85);
+	background: rgba(var(--panel-rgb), 0.85);
 	transition: box-shadow 0.2s, border-color 0.2s;
 }
 .dock-item:active .dock-icon,
 .dock-item:focus-visible .dock-icon {
 	border-color: var(--blade);
-	box-shadow: 0 0 22px rgba(255, 31, 51, 0.7);
+	box-shadow: 0 0 22px rgba(var(--blade-rgb), 0.7);
 }
 .dock-item:active {
 	transform: scale(0.94);
@@ -1154,8 +1240,8 @@ body {
 	animation: charge 0.65s linear forwards;
 }
 @keyframes charge {
-	from { box-shadow: 0 0 0 0 rgba(255, 31, 51, 0); }
-	to { box-shadow: 0 0 0 7px rgba(255, 31, 51, 0.9), 0 0 30px rgba(255, 31, 51, 0.8); }
+	from { box-shadow: 0 0 0 0 rgba(var(--blade-rgb), 0); }
+	to { box-shadow: 0 0 0 7px rgba(var(--blade-rgb), 0.9), 0 0 30px rgba(var(--blade-rgb), 0.8); }
 }
 
 /* ---------- Shortcut editor ---------- */
@@ -1165,7 +1251,7 @@ body {
 	width: 682px;
 	height: 2560px;
 	z-index: 10;
-	background: rgba(3, 1, 4, 0.86);
+	background: rgba(var(--void-rgb), 0.86);
 }
 .editor-panel {
 	position: absolute;
@@ -1177,9 +1263,9 @@ body {
 	padding: 26px 28px 28px;
 	display: flex;
 	flex-direction: column;
-	background: #0f0607;
+	background: rgb(var(--panel-rgb));
 	border: 1px solid var(--line);
-	box-shadow: 0 0 60px rgba(255, 31, 51, 0.25);
+	box-shadow: 0 0 60px rgba(var(--blade-rgb), 0.25);
 }
 .editor-head {
 	display: flex;
@@ -1214,8 +1300,8 @@ body {
 	gap: 22px;
 	margin: 22px 0 8px;
 	padding: 18px;
-	background: rgba(255, 31, 51, 0.06);
-	border: 1px solid rgba(255, 60, 75, 0.15);
+	background: rgba(var(--blade-rgb), 0.06);
+	border: 1px solid rgba(var(--line-rgb), 0.15);
 }
 .editor-preview .dock-icon {
 	flex: none;
@@ -1295,7 +1381,7 @@ body {
 	text-overflow: ellipsis;
 }
 .editor-app.selected {
-	background: rgba(255, 31, 51, 0.16);
+	background: rgba(var(--blade-rgb), 0.16);
 	border-color: var(--blade);
 }
 .editor-status {
@@ -1356,7 +1442,7 @@ body {
 	place-items: center;
 	border: 1px solid var(--line);
 	border-radius: 50%;
-	background: rgba(14, 6, 8, 0.85);
+	background: rgba(var(--panel-rgb), 0.85);
 	color: var(--bone);
 	padding: 0;
 }
@@ -1376,7 +1462,7 @@ body {
 }
 .editor-icon.selected {
 	border: 2px solid var(--blade);
-	box-shadow: 0 0 18px rgba(255, 31, 51, 0.7);
+	box-shadow: 0 0 18px rgba(var(--blade-rgb), 0.7);
 }
 .editor-actions {
 	display: grid;
@@ -1397,7 +1483,7 @@ body {
 	background: var(--blade);
 	border-color: var(--blade);
 	color: var(--core);
-	box-shadow: 0 0 22px rgba(255, 31, 51, 0.6);
+	box-shadow: 0 0 22px rgba(var(--blade-rgb), 0.6);
 }
 .editor-btn:disabled {
 	opacity: 0.35;
@@ -1419,9 +1505,9 @@ body {
 	text-align: center;
 	font-family: var(--font-data);
 	font-size: 18px;
-	background: #1a0709;
+	background: rgb(var(--panel-hi-rgb));
 	border: 1px solid var(--blade);
-	box-shadow: 0 0 24px rgba(255, 31, 51, 0.45);
+	box-shadow: 0 0 24px rgba(var(--blade-rgb), 0.45);
 	opacity: 0;
 	transition: opacity 0.25s;
 	pointer-events: none;
@@ -1443,8 +1529,8 @@ body {
 	padding: 12px 18px;
 	box-sizing: border-box;
 	border: 1px solid var(--blade);
-	background: rgba(26, 7, 9, 0.92);
-	box-shadow: 0 0 22px rgba(255, 31, 51, 0.45);
+	background: rgba(var(--panel-hi-rgb), 0.92);
+	box-shadow: 0 0 22px rgba(var(--blade-rgb), 0.45);
 	color: var(--bone);
 	font: 600 18px var(--font-label);
 	letter-spacing: 0.06em;

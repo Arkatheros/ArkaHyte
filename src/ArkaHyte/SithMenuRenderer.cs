@@ -9,11 +9,22 @@ namespace ArkaHyte;
 /// </summary>
 internal sealed class SithMenuRenderer : ToolStripProfessionalRenderer
 {
-	private static readonly Color Panel = Color.FromArgb(15, 6, 7);
-	private static readonly Color Hover = Color.FromArgb(58, 10, 16);
-	private static readonly Color Blade = Color.FromArgb(255, 31, 51);
-	private static readonly Color Bone = Color.FromArgb(243, 233, 234);
-	private static readonly Color Line = Color.FromArgb(110, 255, 31, 51);
+	// Colours of the active theme (Sith by default), same palette as console.css
+	private static Color Panel = Color.FromArgb(15, 6, 7);
+	private static Color Hover = Color.FromArgb(58, 10, 16);
+	private static Color Blade = Color.FromArgb(255, 31, 51);
+	private static Color Bone = Color.FromArgb(243, 233, 234);
+	private static Color Line = Color.FromArgb(110, 255, 31, 51);
+
+	public static void SetTheme(string theme)
+	{
+		var jedi = theme == Themes.Jedi;
+		Panel = jedi ? Color.FromArgb(5, 10, 19) : Color.FromArgb(15, 6, 7);
+		Hover = jedi ? Color.FromArgb(10, 32, 62) : Color.FromArgb(58, 10, 16);
+		Blade = jedi ? Color.FromArgb(40, 140, 255) : Color.FromArgb(255, 31, 51);
+		Bone = jedi ? Color.FromArgb(232, 239, 246) : Color.FromArgb(243, 233, 234);
+		Line = Color.FromArgb(110, Blade);
+	}
 
 	// Bahnschrift ships with Windows 10+ and is the closest system face to the display's Rajdhani
 	public static Font CreateFont() => new("Bahnschrift", 10.5f, FontStyle.Regular, GraphicsUnit.Point);
@@ -41,10 +52,25 @@ internal sealed class SithMenuRenderer : ToolStripProfessionalRenderer
 		menu.Padding = new Padding(2, 6, 2, 6);
 		foreach (ToolStripItem item in menu.Items)
 		{
-			if (item is ToolStripMenuItem)
+			if (item is ToolStripMenuItem menuItem)
 			{
 				item.Padding = new Padding(4, 7, 4, 7);
 				item.ForeColor = Bone;
+				// Submenus (theme choice) get the same look
+				if (menuItem.HasDropDownItems)
+				{
+					var dropDown = (ToolStripDropDownMenu)menuItem.DropDown;
+					dropDown.Renderer = menu.Renderer;
+					dropDown.Font = menu.Font;
+					dropDown.ShowImageMargin = true;
+					dropDown.Padding = menu.Padding;
+					foreach (ToolStripItem child in dropDown.Items)
+					{
+						child.Padding = new Padding(4, 7, 4, 7);
+						child.ForeColor = Bone;
+					}
+					dropDown.Opened += (_, _) => RoundCorners(dropDown.Handle);
+				}
 			}
 			else if (item is ToolStripLabel title)
 			{

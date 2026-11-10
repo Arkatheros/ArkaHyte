@@ -15,6 +15,5 @@ du non fait.
 ---
 
 # Liste des tâches
-- [ ] Thèmes : variantes de couleur, chacune avec son fond d'écran
 - [ ] Réglages à l'écran : choisir les capteurs HWiNFO et les seuils d'alerte depuis le boîtier, sans éditer `appsettings.json`
 - [ ] Météo locale dans la zone de l'horloge

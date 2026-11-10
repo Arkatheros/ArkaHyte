@@ -14,6 +14,7 @@ internal static class Program
 	///   ArkaHyte.exe --memory-log         same, logging the memory use every 10 s (hourly otherwise)
 	///   ArkaHyte.exe --setup              same, opening the setup wizard at start
 	///   ArkaHyte.exe --simulate-updates   development build: tray update entry with a fake check (nothing downloaded)
+	///   ArkaHyte.exe --theme jedi         use a theme for this run only (with --screenshot, --menu-preview...)
 	///   ArkaHyte.exe --identify-screens   show each screen's number for 3 s (as the setup wizard does) and exit
 	///   ArkaHyte.exe --setup-preview out.png [--setup-step 2]  render the setup wizard alone, capture it and exit
 	///   ArkaHyte.exe --screenshot out.png render, save a capture of the page and exit
@@ -35,6 +36,11 @@ internal static class Program
 			.Run();
 
 		var settings = AppSettings.Load();
+		// Diagnostics: show a theme without changing the saved choice (captures, menu preview)
+		if (ArgumentValue(args, "--theme") is { } themeOverride)
+		{
+			settings = settings with { Theme = Themes.Normalize(themeOverride) };
+		}
 		var dumpPath = ArgumentValue(args, "--dump");
 		if (dumpPath is not null)
 		{
@@ -68,7 +74,7 @@ internal static class Program
 		if (menuPreviewPath is not null)
 		{
 			ApplicationConfiguration.Initialize();
-			return MenuPreview(menuPreviewPath);
+			return MenuPreview(menuPreviewPath, settings.Theme);
 		}
 
 		if (args.Contains("--identify-screens"))
@@ -170,9 +176,10 @@ internal static class Program
 	}
 
 	// Renders the tray menu (demo checked, one item hovered) to a PNG without showing it
-	private static int MenuPreview(string path)
+	private static int MenuPreview(string path, string theme)
 	{
 		using var tray = new TrayIcon(demoEnabled: true);
+		tray.SetTheme(Themes.Normalize(theme));
 		var menu = tray.Menu;
 		menu.CreateControl();
 		menu.Size = menu.GetPreferredSize(Size.Empty);

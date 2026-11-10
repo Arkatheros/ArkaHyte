@@ -25,8 +25,54 @@
 		frame.style.transform = `scale(${scale})`;
 	}
 
+	// ---------- Themes ----------
+	// Colours come from the active theme's CSS variables (console.css); the background picture and
+	// the particle effect belong to the theme as well
+	// skyShade: darkening of the sky behind the clock (the Jedi theme keeps its sunlit sky and makes its
+	// text readable with a halo instead, see console.css)
+	const THEMES = {
+		sith: { background: 'assets/background.jpg', particles: 'embers', skyShade: 0.5 },
+		jedi: { background: 'assets/background-jedi.jpg', particles: 'sand', skyShade: 0 }
+	};
+	// "r, g, b" triplets for the canvas drawings, read from the CSS when the theme changes
+	const palette = {};
+	let themeName = null;
+	let theme = THEMES.sith;
+
+	function readPalette() {
+		const style = getComputedStyle(document.documentElement);
+		const read = (name) => style.getPropertyValue(name).trim();
+		palette.blade = read('--blade-rgb');
+		palette.core = read('--core-rgb');
+		palette.bone = read('--bone-rgb');
+		palette.ash = read('--ash-rgb');
+		palette.void = read('--void-rgb');
+		palette.panel = read('--panel-rgb');
+		palette.panelHi = read('--panel-hi-rgb');
+		palette.artTop = read('--art-top-rgb');
+		palette.artBottom = read('--art-bottom-rgb');
+		palette.ember = read('--ember-rgb');
+	}
+
+	function applyTheme(name) {
+		const next = THEMES[name] ? name : 'sith';
+		if (next === themeName) {
+			return;
+		}
+		themeName = next;
+		theme = THEMES[next];
+		// Set once per change, on the root: every themed colour follows from these variables
+		document.documentElement.dataset.theme = next;
+		readPalette();
+		drawBackground();
+		// Embers belong to the volcano, sand to the desert: the next frames respawn the right ones
+		embers.length = 0;
+		if ($('mediaCover').hidden) {
+			drawArtPlaceholder(placeholderLabel);
+		}
+	}
+
 	// ---------- Background image + hot spots (frame coordinates) ----------
-	const BACKGROUND_SRC = 'assets/background.jpg';
 	const LAVA_POOL = { x: 170, y: 1210 };
 	const FISSURE = { x: 215, y: 1290 };
 	const CRACKS = { x: 520, y: 1520 };
@@ -58,24 +104,100 @@
 		ctx.fillRect(0, 0, W, H);
 	}
 
+	// Desert world drawn in code: the Jedi theme's backdrop until assets/background-jedi.jpg exists
+	function drawDesert(ctx) {
+		const horizon = 1000;
+		const sky = ctx.createLinearGradient(0, 0, 0, horizon);
+		sky.addColorStop(0, '#040d22');
+		sky.addColorStop(0.42, '#16325a');
+		sky.addColorStop(0.72, '#5d5a6e');
+		sky.addColorStop(0.9, '#c9814a');
+		sky.addColorStop(1, '#f0b36e');
+		ctx.fillStyle = sky;
+		ctx.fillRect(0, 0, W, horizon);
+		// Twin suns low over the horizon
+		haze(ctx, 420, 925, 260, 'rgba(255, 200, 130, 0.35)');
+		for (const [x, y, r, color] of [[420, 925, 40, '255, 244, 214'], [505, 958, 26, '255, 206, 150']]) {
+			haze(ctx, x, y, r * 3, `rgba(${color}, 0.45)`);
+			ctx.fillStyle = `rgb(${color})`;
+			ctx.beginPath();
+			ctx.arc(x, y, r, 0, Math.PI * 2);
+			ctx.fill();
+		}
+		// Distant mesas
+		ctx.fillStyle = 'rgba(122, 74, 46, 0.85)';
+		ctx.beginPath();
+		ctx.moveTo(0, horizon);
+		for (const [x, y] of [[0, 968], [60, 968], [78, 948], [170, 946], [186, 972], [300, 975], [330, 990], [560, 988], [585, 955], [640, 952], [655, 970], [682, 972], [682, horizon]]) {
+			ctx.lineTo(x, y);
+		}
+		ctx.fill();
+		// Dune ridges, lit from the suns, darker towards the bottom
+		const dunes = [
+			{ base: 1010, amp: 26, k: 0.011, phase: 0.6, top: '#e3a868', bottom: '#a8683b' },
+			{ base: 1120, amp: 40, k: 0.008, phase: 2.1, top: '#d18d52', bottom: '#7c4727' },
+			{ base: 1300, amp: 60, k: 0.006, phase: 4.0, top: '#b06f3d', bottom: '#4e2a17' },
+			{ base: 1560, amp: 80, k: 0.005, phase: 1.3, top: '#7e4c2a', bottom: '#2a160c' }
+		];
+		for (const dune of dunes) {
+			const fill = ctx.createLinearGradient(0, dune.base - dune.amp, 0, H);
+			fill.addColorStop(0, dune.top);
+			fill.addColorStop(0.25, dune.bottom);
+			fill.addColorStop(1, '#0b0603');
+			ctx.fillStyle = fill;
+			ctx.beginPath();
+			ctx.moveTo(0, H);
+			for (let x = 0; x <= W; x += 6) {
+				const y = dune.base + Math.sin(x * dune.k + dune.phase) * dune.amp + Math.sin(x * dune.k * 2.7 + dune.phase * 1.9) * dune.amp * 0.35;
+				ctx.lineTo(x, y);
+			}
+			ctx.lineTo(W, H);
+			ctx.fill();
+		}
+	}
+
+	// Each change of theme bumps the token: a picture still loading for the previous theme is dropped
+	let backgroundToken = 0;
+
 	function drawBackground() {
+		const token = ++backgroundToken;
 		const ctx = $('bg').getContext('2d');
-		ctx.fillStyle = '#0e0707';
+		ctx.fillStyle = `rgb(${palette.void})`;
 		ctx.fillRect(0, 0, W, H);
-		const photo = new Image();
-		photo.onload = () => {
-			ctx.drawImage(photo, 0, 0, W, H);
+		const finish = () => {
 			// Darken the bright sky behind the clock so the digits keep their contrast
-			const shade = ctx.createLinearGradient(0, 0, 0, 560);
-			shade.addColorStop(0, 'rgba(0, 0, 0, 0.5)');
-			shade.addColorStop(0.6, 'rgba(0, 0, 0, 0.18)');
-			shade.addColorStop(1, 'rgba(0, 0, 0, 0)');
-			ctx.fillStyle = shade;
-			ctx.fillRect(0, 0, W, 560);
+			if (theme.skyShade > 0) {
+				const shade = ctx.createLinearGradient(0, 0, 0, 560);
+				shade.addColorStop(0, `rgba(0, 0, 0, ${theme.skyShade})`);
+				shade.addColorStop(0.6, `rgba(0, 0, 0, ${theme.skyShade * 0.36})`);
+				shade.addColorStop(1, 'rgba(0, 0, 0, 0)');
+				ctx.fillStyle = shade;
+				ctx.fillRect(0, 0, W, 560);
+			}
 			addGrain(ctx);
 		};
-		photo.onerror = () => addGrain(ctx);
-		photo.src = BACKGROUND_SRC;
+		const photo = new Image();
+		photo.onload = () => {
+			if (token !== backgroundToken) {
+				return;
+			}
+			// Any picture fills the frame: scaled to cover it, centred, the overflow cropped
+			const scale = Math.max(W / photo.naturalWidth, H / photo.naturalHeight);
+			const width = photo.naturalWidth * scale;
+			const height = photo.naturalHeight * scale;
+			ctx.drawImage(photo, (W - width) / 2, (H - height) / 2, width, height);
+			finish();
+		};
+		photo.onerror = () => {
+			if (token !== backgroundToken) {
+				return;
+			}
+			if (theme.particles === 'sand') {
+				drawDesert(ctx);
+			}
+			finish();
+		};
+		photo.src = theme.background;
 	}
 
 	// ---------- State fed by the host (or the design-mode simulator) ----------
@@ -301,7 +423,8 @@
 		error: 'Échec du test'
 	};
 	const SPEEDTEST_AUTO_CLOSE_MS = 30000;
-	const SPEED_COLORS = { download: '255, 31, 51', upload: '255, 176, 32' };
+	// Download in the blade colour, upload in amber
+	const speedColor = (dial) => (dial === 'upload' ? '255, 176, 32' : palette.blade);
 	// Speedometer scales, graduations evenly spaced like Speedtest's dial; the wide one kicks in above 1 Gbit/s
 	const GAUGE_SCALES = [
 		[0, 5, 10, 50, 100, 250, 500, 750, 1000],
@@ -480,7 +603,7 @@
 
 		const ctx = gaugeCtx;
 		const { width, height, cx, cy, radius, start, sweep } = GAUGE;
-		const color = SPEED_COLORS[speedTest.dial];
+		const color = speedColor(speedTest.dial);
 		const fraction = speedTest.fraction;
 		const angle = start + sweep * fraction;
 		ctx.clearRect(0, 0, width, height);
@@ -506,7 +629,7 @@
 			ctx.moveTo(cx + Math.cos(a) * (radius - 11), cy + Math.sin(a) * (radius - 11));
 			ctx.lineTo(cx + Math.cos(a) * (radius - 18), cy + Math.sin(a) * (radius - 18));
 			ctx.stroke();
-			ctx.fillStyle = lit ? 'rgba(243, 233, 234, 0.95)' : 'rgba(143, 118, 121, 0.9)';
+			ctx.fillStyle = lit ? `rgba(${palette.bone}, 0.95)` : `rgba(${palette.ash}, 0.9)`;
 			ctx.fillText(value >= 1000 ? `${value / 1000}G` : String(value), cx + Math.cos(a) * (radius - 31), cy + Math.sin(a) * (radius - 31));
 		});
 
@@ -521,7 +644,7 @@
 			ctx.stroke();
 			ctx.shadowBlur = 4;
 			ctx.lineWidth = 3;
-			ctx.strokeStyle = '#fff4f4';
+			ctx.strokeStyle = `rgb(${palette.core})`;
 			ctx.beginPath();
 			ctx.arc(cx, cy, radius, start, angle);
 			ctx.stroke();
@@ -533,7 +656,7 @@
 			const sx = cx + Math.cos(angle) * radius;
 			const sy = cy + Math.sin(angle) * radius;
 			const spark = ctx.createRadialGradient(sx, sy, 0, sx, sy, 11);
-			spark.addColorStop(0, 'rgba(255, 246, 246, 0.95)');
+			spark.addColorStop(0, `rgba(${palette.core}, 0.95)`);
 			spark.addColorStop(0.35, `rgba(${color}, 0.8)`);
 			spark.addColorStop(1, `rgba(${color}, 0)`);
 			ctx.fillStyle = spark;
@@ -554,7 +677,7 @@
 		const body = ctx.createLinearGradient(0, 0, reach, 0);
 		body.addColorStop(0, `rgba(${color}, 0.25)`);
 		body.addColorStop(0.55, `rgba(${color}, 0.95)`);
-		body.addColorStop(1, '#fff6f6');
+		body.addColorStop(1, `rgb(${palette.core})`);
 		ctx.shadowColor = `rgb(${color})`;
 		ctx.shadowBlur = 12;
 		ctx.fillStyle = body;
@@ -566,7 +689,7 @@
 		ctx.closePath();
 		ctx.fill();
 		ctx.shadowBlur = 0;
-		ctx.strokeStyle = 'rgba(255, 246, 246, 0.9)';
+		ctx.strokeStyle = `rgba(${palette.core}, 0.9)`;
 		ctx.lineWidth = 1.2;
 		ctx.beginPath();
 		ctx.moveTo(reach * 0.4, 0);
@@ -574,12 +697,12 @@
 		ctx.stroke();
 
 		// Hub: notched dark disc, coloured ring, glowing core
-		ctx.fillStyle = '#2a2324';
+		ctx.fillStyle = `rgb(${palette.panelHi})`;
 		for (let i = 0; i < 8; i++) {
 			ctx.rotate(Math.PI / 4);
 			ctx.fillRect(9, -1.6, 5, 3.2);
 		}
-		ctx.fillStyle = '#120d0e';
+		ctx.fillStyle = `rgb(${palette.panel})`;
 		ctx.beginPath();
 		ctx.arc(0, 0, 11, 0, Math.PI * 2);
 		ctx.fill();
@@ -1097,35 +1220,39 @@
 		return h ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`;
 	};
 
+	// Redrawn with the same caption when the theme changes
+	let placeholderLabel = null;
+
 	function drawArtPlaceholder(label) {
+		placeholderLabel = label;
 		const canvas = $('mediaArt');
 		const ctx = canvas.getContext('2d');
 		// Artwork is designed on a 132 px grid and scaled to the canvas
 		const size = 132;
 		ctx.setTransform(canvas.width / size, 0, 0, canvas.height / size, 0, 0);
 		const g = ctx.createLinearGradient(0, 0, size, size);
-		g.addColorStop(0, '#2a0508');
-		g.addColorStop(1, '#070102');
+		g.addColorStop(0, `rgb(${palette.artTop})`);
+		g.addColorStop(1, `rgb(${palette.artBottom})`);
 		ctx.fillStyle = g;
 		ctx.fillRect(0, 0, size, size);
-		haze(ctx, 52, 46, 90, 'rgba(255, 31, 51, 0.45)');
+		haze(ctx, 52, 46, 90, `rgba(${palette.blade}, 0.45)`);
 		ctx.lineCap = 'round';
 		for (const [x1, y1, x2, y2] of [[26, 110, 106, 22], [26, 22, 106, 110]]) {
-			ctx.shadowColor = '#ff1f33';
+			ctx.shadowColor = `rgb(${palette.blade})`;
 			ctx.shadowBlur = 14;
-			ctx.strokeStyle = '#ff1f33';
+			ctx.strokeStyle = `rgb(${palette.blade})`;
 			ctx.lineWidth = 6;
 			ctx.beginPath();
 			ctx.moveTo(x1, y1);
 			ctx.lineTo(x2, y2);
 			ctx.stroke();
 			ctx.shadowBlur = 0;
-			ctx.strokeStyle = '#fff4f4';
+			ctx.strokeStyle = `rgb(${palette.core})`;
 			ctx.lineWidth = 2;
 			ctx.stroke();
 		}
 		if (label) {
-			ctx.fillStyle = 'rgba(243, 233, 234, 0.85)';
+			ctx.fillStyle = `rgba(${palette.bone}, 0.85)`;
 			ctx.font = "600 13px 'Rajdhani', sans-serif";
 			ctx.textAlign = 'center';
 			ctx.fillText(label.toUpperCase(), size / 2, size - 10);
@@ -1214,6 +1341,7 @@
 		if (config.gpuMaker) text('gpuMaker', config.gpuMaker);
 		if (config.gpuModel) text('gpuModel', config.gpuModel);
 		if (Array.isArray(config.shortcuts)) buildDock(config.shortcuts);
+		if (config.theme) applyTheme(config.theme);
 	}
 
 	function onHostMessage(message) {
@@ -1288,7 +1416,7 @@
 
 	function ringColor() {
 		const cpuTemp = current && current.cpu ? current.cpu.temp : null;
-		return isNum(cpuTemp) && cpuTemp >= 85 ? '255, 122, 69' : '255, 31, 51';
+		return isNum(cpuTemp) && cpuTemp >= 85 ? palette.ember : palette.blade;
 	}
 
 	function renderSpikes(color, grow) {
@@ -1343,9 +1471,9 @@
 
 		// Dark lens behind the load value
 		const lens = ctx.createRadialGradient(cx, cy, 16, cx, cy, RING_LENS);
-		lens.addColorStop(0, 'rgba(3, 1, 4, 0.92)');
-		lens.addColorStop(0.8, 'rgba(8, 2, 4, 0.85)');
-		lens.addColorStop(1, 'rgba(20, 4, 8, 0.6)');
+		lens.addColorStop(0, `rgba(${palette.void}, 0.92)`);
+		lens.addColorStop(0.8, `rgba(${palette.panel}, 0.85)`);
+		lens.addColorStop(1, `rgba(${palette.panelHi}, 0.6)`);
 		ctx.fillStyle = lens;
 		ctx.beginPath();
 		ctx.arc(cx, cy, RING_LENS, 0, Math.PI * 2);
@@ -1374,7 +1502,7 @@
 		ctx.arc(cx, cy, arcR, start, end);
 		ctx.stroke();
 		ctx.shadowBlur = 6;
-		ctx.strokeStyle = '#fff4f4';
+		ctx.strokeStyle = `rgb(${palette.core})`;
 		ctx.lineWidth = 3;
 		ctx.beginPath();
 		ctx.arc(cx, cy, arcR, start, end);
@@ -1382,8 +1510,8 @@
 		ctx.shadowBlur = 0;
 	}
 
-	// ---------- Embers from the lava + volcano eruptions ----------
-	// Embers live on a half-resolution canvas covering only the lava band of the background
+	// ---------- Particles: embers from the lava + volcano eruptions (Sith), blowing sand (Jedi) ----------
+	// They live on a half-resolution canvas covering only the middle band of the background
 	const FX_TOP = 450;
 	const FX_SCALE = 0.5;
 	const fxCanvas = $('fx');
@@ -1397,7 +1525,26 @@
 		{ x: VOLCANO.x, y: VOLCANO.y, rx: 8, ry: 4, weight: 0.15 }
 	];
 
+	// Sand grains carried by the wind across the dunes, left to right
+	function spawnSand() {
+		return {
+			x: Math.random() * W,
+			y: FX_TOP + 450 + Math.random() * 800,
+			vx: 0.35 + Math.random() * 0.9,
+			vy: 0,
+			phase: Math.random() * Math.PI * 2,
+			life: 0,
+			maxLife: 220 + Math.random() * 260,
+			size: 0.5 + Math.random() * 1.1,
+			rgb: '236, 206, 160',
+			sand: true
+		};
+	}
+
 	function spawnEmber() {
+		if (theme.particles === 'sand') {
+			return spawnSand();
+		}
 		let pick = Math.random();
 		let source = EMBER_SOURCES[EMBER_SOURCES.length - 1];
 		for (const candidate of EMBER_SOURCES) {
@@ -1448,7 +1595,7 @@
 			return;
 		}
 
-		if (now > nextEruption) {
+		if (now > nextEruption && theme.particles === 'embers') {
 			erupt();
 			nextEruption = now + 12000 + Math.random() * 13000;
 		}
@@ -1469,17 +1616,20 @@
 			if (e.burst) {
 				e.vy += e.gravity * ticks;
 				e.x += e.vx * ticks;
+			} else if (e.sand) {
+				e.x += e.vx * ticks;
+				e.y += Math.sin(e.phase + e.life / 30) * 0.25 * ticks;
 			} else {
 				e.x += Math.sin(e.phase + e.life / 40) * 0.35 * ticks;
 			}
 			e.y += e.vy * ticks;
 			const t = e.life / e.maxLife;
-			if (t >= 1 || e.y < FX_TOP) {
+			if (t >= 1 || e.y < FX_TOP || e.x > W) {
 				embers.splice(i, 1);
 				continue;
 			}
-			const alpha = Math.sin(t * Math.PI) * 0.85;
-			ctx.fillStyle = `rgba(255, ${e.green | 0}, 60, ${alpha})`;
+			const alpha = Math.sin(t * Math.PI) * (e.sand ? 0.5 : 0.85);
+			ctx.fillStyle = e.rgb ? `rgba(${e.rgb}, ${alpha})` : `rgba(255, ${e.green | 0}, 60, ${alpha})`;
 			ctx.beginPath();
 			ctx.arc(e.x * FX_SCALE, (e.y - FX_TOP) * FX_SCALE, Math.max(e.size * FX_SCALE, 0.6), 0, Math.PI * 2);
 			ctx.fill();
@@ -1762,7 +1912,8 @@
 	window.addEventListener('resize', applyScale);
 	applyScale();
 	document.fonts.ready.then(fitGpuLoadBox);
-	drawBackground();
+	// "?theme=jedi" (set by the host from the settings, or by hand in design mode); config messages switch it live
+	applyTheme(new URLSearchParams(location.search).get('theme') || 'sith');
 	drawArtPlaceholder(null);
 	// "?demo=<scenario>" (ArkaHyte.exe --demo stress) replaces live sensor data with a scenario
 	const demo = new URLSearchParams(location.search).get('demo');

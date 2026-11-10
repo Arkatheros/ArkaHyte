@@ -110,6 +110,17 @@ n'installe que sur clic du menu. `AppSettings.Load()` préfère `%LOCALAPPDATA%\
 **Démarrage (dev)** : tâche planifiée `Arka Hyte` (AtLogOn) → `scripts/Start-ArkaHyte.ps1` → `bin\ArkaHyte\ArkaHyte.exe`.
 Sous PowerShell 5.1, ne pas utiliser `$PSScriptRoot` dans les valeurs par défaut de `param()` (vide).
 
+**Thèmes.** `Themes` (`AppSettings.cs`) : `sith` / `jedi`, `Theme` dans `appsettings.json`, choisi par le menu
+de l'icône (`DisplayForm.SetTheme` → message `config` `{ theme }`, sans recharger). Dans `console.css`, toute
+couleur liée au thème passe par une variable (`--blade-rgb`, `--line-rgb`, `--panel-rgb`…, triplets pour
+`rgba()`), redéfinie par `:root[data-theme="jedi"]` ; ne jamais réintroduire de rouge en dur. `console.js` lit
+ces triplets dans `palette` (`readPalette`) pour le canvas ; `THEMES` y donne le fond, les particules et
+l'ombrage du ciel (`skyShade`). Fond clair (Jedi) : ne pas assombrir l'image (choix du propriétaire), rendre
+le thème lisible (`--halo` hérité depuis `.frame`, `-webkit-text-stroke` sur les chiffres, `--track` foncé).
+Alertes : `--ember-rgb` par thème (orange Sith, violet Jedi), rien de plus qu'un changement de couleur
+(une plaque sombre derrière les valeurs a été refusée). Fourreaux `.hilt-sith` / `.hilt-jedi` dans le SVG du sabre VRAM. Le menu de
+l'icône suit le thème (`SithMenuRenderer.SetTheme`).
+
 ## Règles de performance de l'UI (impératives)
 
 L'écran tourne en permanence : cible ~16 % d'un cœur.

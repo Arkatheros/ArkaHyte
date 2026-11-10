@@ -43,6 +43,7 @@ public sealed class DisplayForm : Form
 	private bool _sessionLocked;
 	private List<object>? _dockButtons;
 	private SetupForm? _setup;
+	private string _theme;
 
 	/// <summary>Set when the window closed so that a new instance applies freshly saved settings.</summary>
 	public bool RestartRequested { get; private set; }
@@ -56,6 +57,7 @@ public sealed class DisplayForm : Form
 		_options = options;
 		_demo = options.Demo;
 		_shortcuts = new ShortcutStore(settings.Shortcuts);
+		_theme = Themes.Normalize(settings.Theme);
 		_launcher = new ShortcutLauncher(_shortcuts, settings.CpuClickTarget);
 
 		Text = TrayIcon.AppName;
@@ -77,6 +79,8 @@ public sealed class DisplayForm : Form
 			_tray.ExitRequested += Close;
 			_tray.UpdateRequested += () => _ = _updater.ActAsync();
 			_tray.SetupRequested += OpenSetup;
+			_tray.ThemeSelected += SetTheme;
+			_tray.SetTheme(_theme);
 			_updater.StateChanged += state => PostToUiThread(() => OnUpdateState(state));
 			_updater.ExitRequested += () => PostToUiThread(Close);
 			Microsoft.Win32.SystemEvents.SessionSwitch += OnSessionSwitch;
@@ -341,7 +345,8 @@ public sealed class DisplayForm : Form
 
 	private void Navigate()
 	{
-		var parameters = new List<string>();
+		// In the address so the first paint already has the theme's colours
+		var parameters = new List<string> { $"theme={_theme}" };
 		if (!string.IsNullOrWhiteSpace(_demo))
 		{
 			parameters.Add($"demo={Uri.EscapeDataString(_demo)}");
@@ -356,6 +361,28 @@ public sealed class DisplayForm : Form
 		}
 		var query = parameters.Count == 0 ? string.Empty : "?" + string.Join('&', parameters);
 		_webView.Source = new Uri($"https://{VirtualHost}/index.html{query}");
+	}
+
+	/// <summary>Tray choice: switched live on the page, kept in the user settings.</summary>
+	private void SetTheme(string theme)
+	{
+		theme = Themes.Normalize(theme);
+		if (theme == _theme)
+		{
+			return;
+		}
+		_theme = theme;
+		_tray?.SetTheme(theme);
+		Post(new { type = "config", theme });
+		try
+		{
+			AppSettings.SaveUser(root => root["Theme"] = theme);
+		}
+		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+		{
+			Log.Error("Saving the theme failed", exception);
+		}
+		Log.Info($"Theme '{theme}'");
 	}
 
 	private void SetDemo(string? scenario)
@@ -500,6 +527,7 @@ public sealed class DisplayForm : Form
 			cpuModel = hardware.CpuModel,
 			gpuMaker = hardware.GpuMaker,
 			gpuModel = hardware.GpuModel,
+			theme = _theme,
 			shortcuts = _dockButtons
 		});
 	}

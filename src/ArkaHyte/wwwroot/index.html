@@ -22,7 +22,7 @@
 
 	<div class="frame ignite" id="frame">
 		<canvas class="layer" id="bg" width="682" height="2560"></canvas>
-		<!-- Drifting smoke over the sky and breathing lava hot spots (positions match background.jpg) -->
+		<!-- Drifting veils over the sky (smoke or haze) and breathing lava hot spots (Sith only, positions match background.jpg) -->
 		<div class="smoke" data-period="90" data-amplitude="160" style="top: 80px"></div>
 		<div class="smoke" data-period="130" data-amplitude="220" style="top: 520px"></div>
 		<div class="lava-spot" style="left: -30px; top: 1010px; width: 400px; height: 400px"></div>
@@ -30,7 +30,7 @@
 		<div class="lava-spot" style="left: 360px; top: 1360px; width: 320px; height: 320px"></div>
 		<div class="lava-spot" style="left: 590px; top: 835px; width: 110px; height: 110px"></div>
 		<div class="lava-spot" style="left: 370px; top: 920px; width: 140px; height: 140px"></div>
-		<!-- Embers only exist around the lava: half-resolution canvas over that band (y 450 to 1750) -->
+		<!-- Particles (embers or blowing sand by theme): half-resolution canvas over the band y 450 to 1750 -->
 		<canvas id="fx" width="341" height="650"></canvas>
 
 		<section class="widget clock" aria-label="Horloge">
@@ -105,6 +105,8 @@
 							<stop offset="1" stop-color="#050506"/>
 						</linearGradient>
 					</defs>
+					<!-- Sith theme: Vader's hilt -->
+					<g class="hilt-sith">
 					<!-- Pommel with hanging ring -->
 					<circle cx="7" cy="36" r="4.5" fill="none" stroke="url(#chrome)" stroke-width="2"/>
 					<rect x="2" y="12" width="11" height="20" rx="3" fill="url(#chrome)"/>
@@ -122,7 +124,7 @@
 					<rect x="65" y="11" width="26" height="22" fill="url(#chrome)"/>
 					<rect x="67" y="29" width="22" height="2" fill="#3a3a3f"/>
 					<rect x="68" y="3" width="20" height="9" rx="1" fill="#141416"/>
-					<circle cx="73" cy="7.5" r="2.2" fill="#ff1f33"/>
+					<circle cx="73" cy="7.5" r="2.2" style="fill: var(--blade)"/>
 					<rect x="78" y="5" width="8" height="5" rx="1" fill="#55555b"/>
 					<!-- Flared emitter shroud -->
 					<path d="M91 12 L110 12 L126 6 L126 38 L110 32 L91 32 Z" fill="url(#chrome)"/>
@@ -131,6 +133,50 @@
 						<rect x="103" y="15" width="3" height="14" rx="1"/>
 					</g>
 					<rect x="124" y="8" width="4" height="28" fill="#2a2a2e"/>
+					</g>
+					<!-- Jedi theme: Obi-Wan style hilt, same length so the blade starts at the same place -->
+					<g class="hilt-jedi">
+						<!-- Ribbed pommel -->
+						<rect x="2" y="12.5" width="12" height="19" rx="4" fill="url(#chrome)"/>
+						<g fill="#1a1a1d">
+							<rect x="5" y="12.5" width="1.6" height="19"/>
+							<rect x="9" y="12.5" width="1.6" height="19"/>
+						</g>
+						<!-- Grip: steel tube with black ribs -->
+						<rect x="14" y="14" width="46" height="16" fill="url(#chrome)"/>
+						<g fill="url(#grip)">
+							<rect x="17" y="12.5" width="4" height="19" rx="1.2"/>
+							<rect x="24" y="12.5" width="4" height="19" rx="1.2"/>
+							<rect x="31" y="12.5" width="4" height="19" rx="1.2"/>
+							<rect x="38" y="12.5" width="4" height="19" rx="1.2"/>
+							<rect x="45" y="12.5" width="4" height="19" rx="1.2"/>
+							<rect x="52" y="12.5" width="4" height="19" rx="1.2"/>
+						</g>
+						<!-- Collar with the activation button -->
+						<rect x="60" y="11" width="13" height="22" rx="1.5" fill="url(#chrome)"/>
+						<rect x="63" y="6" width="7" height="6" rx="1" fill="#141416"/>
+						<rect x="64.5" y="7.5" width="4" height="3" rx="0.8" style="fill: var(--blade)"/>
+						<!-- Upper body with vent slots -->
+						<rect x="73" y="13.5" width="30" height="17" fill="url(#chrome)"/>
+						<g fill="#1a1a1d">
+							<rect x="78" y="17" width="8" height="2.2" rx="1"/>
+							<rect x="78" y="24.8" width="8" height="2.2" rx="1"/>
+							<rect x="91" y="15.5" width="2" height="13" rx="1"/>
+							<rect x="96" y="15.5" width="2" height="13" rx="1"/>
+						</g>
+						<!-- Emitter: dark ring then a toothed steel cap -->
+						<rect x="103" y="10.5" width="4" height="23" rx="1" fill="#2a2a2e"/>
+						<rect x="107" y="12" width="17" height="20" fill="url(#chrome)"/>
+						<g fill="#1a1a1d">
+							<rect x="110" y="12" width="2.4" height="4"/>
+							<rect x="115" y="12" width="2.4" height="4"/>
+							<rect x="120" y="12" width="2.4" height="4"/>
+							<rect x="110" y="28" width="2.4" height="4"/>
+							<rect x="115" y="28" width="2.4" height="4"/>
+							<rect x="120" y="28" width="2.4" height="4"/>
+						</g>
+						<rect x="124" y="11" width="4" height="22" fill="#2a2a2e"/>
+					</g>
 				</svg>
 				<div class="saber-zone">
 					<div class="vram-fill" id="vramFill"><div class="ix" style="--d:0.6s"><div class="blade-h"></div></div></div>
@@ -168,7 +214,7 @@
 					<div class="disk-ring">
 						<svg width="108" height="108" viewBox="0 0 108 108" aria-hidden="true">
 							<circle cx="54" cy="54" r="47" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="7"/>
-							<circle class="disk-arc" cx="54" cy="54" r="47" fill="none" stroke="#ff1f33" stroke-width="7" stroke-linecap="round" stroke-dasharray="0 296"/>
+							<circle class="disk-arc" cx="54" cy="54" r="47" fill="none" style="stroke: var(--blade)" stroke-width="7" stroke-linecap="round" stroke-dasharray="0 296"/>
 						</svg>
 						<div class="inner"><span class="free">--</span><span class="unit">Go libres</span></div>
 					</div>
@@ -204,7 +250,7 @@
 							<path class="arc" id="arc2" d="M39.54 66.54 A36 36 0 0 1 90.46 66.54"/>
 							<path class="arc" id="arc3" d="M26.82 53.82 A54 54 0 0 1 103.18 53.82"/>
 							<path class="arc" id="arc4" d="M14.09 41.09 A72 72 0 0 1 115.91 41.09"/>
-							<circle class="source" cx="65" cy="90" r="6" fill="#ff1f33"/>
+							<circle class="source" cx="65" cy="90" r="6" style="fill: var(--blade)"/>
 						</svg>
 						<span class="signal-pct"><span id="sigPct">--</span><small> %</small></span>
 						<span class="data" id="rssi">&nbsp;</span>

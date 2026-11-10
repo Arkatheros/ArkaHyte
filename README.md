@@ -180,16 +180,34 @@ chaque clic vu par cette protection.
 ## Icône de l'application
 
 `src/ArkaHyte/Assets/app.ico` (exe + zone de notification), générée depuis le logo découpé
-`src/ArkaHyte/Assets/empire-logo.png` en rouge sabre sur fond sombre :
+`src/ArkaHyte/Assets/empire-logo.png` en gris clair sur fond sombre (lisible avec les deux thèmes), puis les images de l'installeur
+(`powershell -File scripts\New-InstallerArt.ps1`) :
 
 ```powershell
-powershell -File scripts\New-AppIcon.ps1 -SourceImage src\ArkaHyte\Assets\empire-logo.png -Background dark -Recolor '#ff1f33' -LumaMask
+powershell -File scripts\New-AppIcon.ps1 -SourceImage src\ArkaHyte\Assets\empire-logo.png -Background dark -Recolor '#d4d9df' -LumaMask
 ```
+
+## Thèmes
+
+Menu de l'icône › **Thème** : changement immédiat, retenu dans `appsettings.json` (`Theme`).
+
+| Thème | Sabre | Fourreau | Alertes | Décor | Particules |
+|---|---|---|---|---|---|
+| **Sith** (`sith`, défaut) | rouge | Dark Vador | orange | monde volcanique (`assets/background.jpg`) | braises, éruptions |
+| **Jedi** (`jedi`) | bleu | Obi-Wan | violet (Mace Windu) | Tatooine (`assets/background-jedi.jpg`) | sable porté par le vent |
+
+Les couleurs sont des variables CSS (`console.css`, bloc `:root[data-theme="jedi"]`) reprises par les
+dessins du canvas ; les alertes (valeurs élevées, pas d'internet) ont leur propre couleur par thème. Une image de fond de n'importe quelle
+taille est recadrée pour couvrir l'écran (idéalement en portrait, 682 × 2560). Le désert ensoleillé du thème
+Jedi n'est pas assombri : le thème s'y adapte (halo sombre sous les textes et icônes, chiffres épaissis,
+pistes de jauge foncées). Un désert dessiné par le code remplace l'image si elle manque.
+Aperçu sans changer le choix enregistré : `--theme jedi` (avec `--screenshot`, `--menu-preview`), ou
+`index.html?theme=jedi` dans un navigateur.
 
 ## Icône de notification
 
-Clic droit sur le sabre rouge dans la zone de notification : **mode démo** (CPU/GPU 100 %, sans internet),
-**recharger l'affichage**, **assistant de configuration**, **ouvrir le dossier des journaux**,
+Clic droit sur l'emblème gris dans la zone de notification : **mode démo** (CPU/GPU 100 %, sans internet),
+**thème**, **recharger l'affichage**, **assistant de configuration**, **ouvrir le dossier des journaux**,
 **mises à jour**, **quitter**.
 
 ## Diagnostic

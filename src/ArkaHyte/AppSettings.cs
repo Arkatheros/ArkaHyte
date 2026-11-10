@@ -27,6 +27,18 @@ public sealed record HwInfoSettings(
 	// Game framerate: HWiNFO's PresentMon sensor (or RTSS), only present while a game runs
 	SensorSelector? GpuFps = null);
 
+/// <summary>Display themes: colours, hilt, background and particles (console.css, console.js).</summary>
+public static class Themes
+{
+	public const string Sith = "sith";
+	public const string Jedi = "jedi";
+
+	/// <summary>Theme id and the name shown in the tray menu.</summary>
+	public static readonly IReadOnlyList<(string Id, string Name)> All = [(Sith, "Sith · sabre rouge"), (Jedi, "Jedi · sabre bleu")];
+
+	public static string Normalize(string? theme) => All.Any(t => t.Id == theme) ? theme! : Sith;
+}
+
 public sealed record DriveSettings(string Name, SensorSelector? Temp = null);
 
 public sealed record NetworkSettings(string Adapter = "", string PingHost = "1.1.1.1", string FallbackPingHost = "8.8.8.8");
@@ -46,7 +58,8 @@ public sealed record AppSettings(
 	NetworkSettings Network,
 	IReadOnlyList<ShortcutSettings> Shortcuts,
 	string CpuClickTarget = "taskmgr.exe",
-	bool SetupCompleted = false)
+	bool SetupCompleted = false,
+	string Theme = Themes.Sith)
 {
 	private static readonly JsonSerializerOptions Options = new()
 	{
