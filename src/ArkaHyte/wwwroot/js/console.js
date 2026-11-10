@@ -234,6 +234,7 @@
 	}
 
 	// ---------- Speed test (runs in the host through the Speedtest by Ookla CLI) ----------
+	// Shown inside the network panel, in place of its body, so the panel never changes size.
 	const SPEEDTEST_PHASES = {
 		install: 'Installation de Speedtest…',
 		ping: 'Mesure du ping…',
@@ -243,22 +244,29 @@
 		cancelled: 'Test annulé',
 		error: 'Échec du test'
 	};
-	const SPEEDTEST_AUTO_CLOSE_MS = 90000;
+	const SPEEDTEST_AUTO_CLOSE_MS = 30000;
 	const SPEED_COLORS = { download: '255, 31, 51', upload: '255, 176, 32' };
 	// Speedometer scales, graduations evenly spaced like Speedtest's dial; the wide one kicks in above 1 Gbit/s
 	const GAUGE_SCALES = [
 		[0, 5, 10, 50, 100, 250, 500, 750, 1000],
 		[0, 10, 50, 100, 250, 500, 1000, 2500, 5000]
 	];
-	const GAUGE = { cx: 280, cy: 262, radius: 222, start: Math.PI * 5 / 6, sweep: Math.PI * 4 / 3 };
+	const GAUGE = { width: 236, height: 176, cx: 118, cy: 100, radius: 92, start: Math.PI * 5 / 6, sweep: Math.PI * 4 / 3 };
+	// Needle speed limits, in dial sweeps per second: a steady climb, a quicker fall back to zero
+	const NEEDLE_RISE = 0.55;
+	const NEEDLE_FALL = 1.4;
 
 	const speedTest = {
 		running: false,
+		open: false,
 		closeTimer: 0,
 		server: null,
 		phase: 'ping',
+		// Direction the dial currently shows: it lags the test phase while the needle falls back to zero
+		dial: 'download',
 		target: 0,
-		shown: 0,
+		fraction: 0,
+		shownText: '',
 		scale: GAUGE_SCALES[0]
 	};
 	const gaugeCtx = $('stGauge').getContext('2d');
@@ -274,17 +282,23 @@
 			return update.reason === 'install' ? 'Échec du téléchargement de Speedtest' : 'Échec du test : connexion indisponible';
 		}
 		const title = SPEEDTEST_PHASES[update.phase] || 'Test de débit';
-		return speedTest.server && !['install', 'cancelled', 'done'].includes(update.phase) ? `${title} · ${speedTest.server}` : title;
+		return speedTest.server && !['install', 'cancelled'].includes(update.phase) ? `${title} · ${speedTest.server}` : title;
 	}
 
-	function openSpeedTestView() {
+	function setSpeedTestOpen(open) {
 		clearTimeout(speedTest.closeTimer);
-		$('speedtest').hidden = false;
+		speedTest.open = open;
+		$('holonet').classList.toggle('testing', open);
+		$('speedtest').hidden = !open;
+		$('netTestBtn').hidden = open;
+		$('stAction').hidden = !open;
 	}
 
-	function closeSpeedTestView() {
-		clearTimeout(speedTest.closeTimer);
-		$('speedtest').hidden = true;
+	// Colour and label of the dial follow the direction it shows, not the phase reported by the test
+	function setDial(dial) {
+		speedTest.dial = dial;
+		$('speedtest').classList.toggle('upload', dial === 'upload');
+		text('stDir', dial === 'upload' ? '↑ Envoi' : '↓ Réception');
 	}
 
 	function startSpeedTest() {
@@ -293,10 +307,10 @@
 		}
 		['stPing', 'stDown', 'stUp'].forEach((id) => text(id, '--'));
 		speedTest.server = null;
-		speedTest.shown = 0;
+		speedTest.fraction = 0;
 		speedTest.target = 0;
 		speedTest.scale = GAUGE_SCALES[0];
-		renderSpeedTest({ phase: 'ping', progress: 0 });
+		renderSpeedTest({ phase: 'ping' });
 		if (host) {
 			host.postMessage({ type: 'speedtest', action: 'start' });
 		} else {
@@ -305,57 +319,61 @@
 	}
 
 	function renderSpeedTest(update) {
-		openSpeedTestView();
-		const view = $('speedtest');
+		setSpeedTestOpen(true);
 		const running = ['install', 'ping', 'download', 'upload'].includes(update.phase);
 		const finished = update.phase === 'done';
+		const transferring = update.phase === 'download' || update.phase === 'upload';
+		const enteringTransfer = transferring && speedTest.phase !== 'download' && speedTest.phase !== 'upload';
 		speedTest.running = running;
 		speedTest.phase = update.phase;
-		$('netTestBtn').disabled = running;
 		text('stPhase', speedTestTitle(update));
 		text('stAction', running ? 'Annuler' : 'Fermer');
-		view.classList.toggle('upload', update.phase === 'upload');
-		view.classList.toggle('failed', update.phase === 'error');
+		$('speedtest').classList.toggle('failed', update.phase === 'error');
 
 		if (isNum(update.pingMs)) text('stPing', `${nf1.format(update.pingMs)} ms`);
 		if (isNum(update.downMbps)) text('stDown', formatMbps(update.downMbps));
 		if (isNum(update.upMbps)) text('stUp', formatMbps(update.upMbps));
 
-		// Live figure in the dial: ping while measuring it, then the rate of the running direction
-		if (update.phase === 'download' || update.phase === 'upload') {
+		if (transferring) {
 			const mbps = isNum(update.mbps) ? update.mbps : 0;
-			if (mbps > 1000) {
+			if (mbps > 1000 && speedTest.scale !== GAUGE_SCALES[1]) {
+				// Keep the needle where it is when the dial switches to the wide scale
+				const value = gaugeValue(speedTest.fraction, speedTest.scale);
 				speedTest.scale = GAUGE_SCALES[1];
+				speedTest.fraction = gaugeFraction(value, speedTest.scale);
 			}
 			speedTest.target = mbps;
-			text('stDir', update.phase === 'download' ? '↓ Réception' : '↑ Envoi');
-			text('stUnit', 'Mbit/s');
-		} else if (update.phase === 'ping' || update.phase === 'install') {
+			if (enteringTransfer) {
+				setDial(update.phase);
+				speedTest.shownText = '';
+				text('stUnit', 'Mbit/s');
+			}
+		} else {
 			speedTest.target = 0;
-			text('stDir', update.phase === 'install' ? 'Installation' : 'Ping');
-			text('stValue', isNum(update.pingMs) ? nf1.format(update.pingMs) : '--');
-			text('stUnit', 'ms');
-		} else if (!finished) {
-			speedTest.target = 0;
-			text('stDir', update.phase === 'error' ? 'Erreur' : 'Annulé');
-			text('stValue', '--');
-			text('stUnit', '');
+			setDial('download');
+			if (update.phase === 'ping' || update.phase === 'install') {
+				text('stDir', update.phase === 'install' ? 'Installation' : 'Ping');
+				text('stValue', isNum(update.pingMs) ? nf1.format(update.pingMs) : '--');
+				text('stUnit', 'ms');
+			} else if (!finished) {
+				text('stDir', update.phase === 'error' ? 'Erreur' : 'Annulé');
+				text('stValue', '--');
+				text('stUnit', '');
+			}
 		}
 
-		// End of test: the dial gives way to a summary of both speeds and the ping
-		$('stGaugeBox').hidden = finished;
-		$('stResults').hidden = finished;
+		// End of test: the dial gives way to the result, download, upload and ping
+		$('stLive').hidden = finished;
 		$('stSummary').hidden = !finished;
 		if (finished) {
 			text('stSumDown', isNum(update.downMbps) ? formatMbps(update.downMbps) : '--');
 			text('stSumUp', isNum(update.upMbps) ? formatMbps(update.upMbps) : '--');
 			text('stSumPing', isNum(update.pingMs) ? nf1.format(update.pingMs) : '--');
-			text('stServer', speedTest.server ? `Serveur ${speedTest.server}` : ' ');
+			text('stServer', speedTest.server ? `Serveur ${speedTest.server}` : ' ');
 		}
-		$('stFill').style.width = `${clamp((update.progress || 0) * 100, finished ? 100 : 1, 100)}%`;
 
 		if (!running) {
-			speedTest.closeTimer = setTimeout(closeSpeedTestView, SPEEDTEST_AUTO_CLOSE_MS);
+			speedTest.closeTimer = setTimeout(() => setSpeedTestOpen(false), SPEEDTEST_AUTO_CLOSE_MS);
 		}
 	}
 
@@ -371,35 +389,56 @@
 		return 1;
 	}
 
-	// Called from the main loop while the view is open: the needle eases towards the live rate
+	// Inverse of gaugeFraction: the rate the needle points at, so the figure always matches the needle
+	function gaugeValue(fraction, scale) {
+		const position = clamp(fraction, 0, 1) * (scale.length - 1);
+		const i = Math.min(Math.floor(position), scale.length - 2);
+		return scale[i] + (scale[i + 1] - scale[i]) * (position - i);
+	}
+
+	// Called from the main loop while the view is open. The needle moves at a capped speed; when the
+	// test switches to upload it first falls back to zero in the download colour, then climbs again.
 	function drawSpeedGauge(ticks) {
-		if ($('speedtest').hidden || !$('stGaugeBox').offsetParent) {
+		if (!speedTest.open || $('stLive').hidden) {
 			return;
 		}
-		const ease = Math.min(0.18 * ticks, 1);
-		speedTest.shown += (speedTest.target - speedTest.shown) * ease;
+		const seconds = ticks / 60;
 		const transferring = speedTest.phase === 'download' || speedTest.phase === 'upload';
+		const returning = transferring && speedTest.dial !== speedTest.phase;
+		const goal = transferring && !returning ? gaugeFraction(speedTest.target, speedTest.scale) : 0;
+		const delta = goal - speedTest.fraction;
+		const eased = delta * Math.min(0.14 * ticks, 1);
+		const limit = (delta > 0 ? NEEDLE_RISE : NEEDLE_FALL) * seconds;
+		speedTest.fraction += clamp(eased, -limit, limit);
+		if (returning && speedTest.fraction < 0.004) {
+			speedTest.fraction = 0;
+			setDial(speedTest.phase);
+		}
 		if (transferring) {
-			text('stValue', formatMbps(Math.max(0, speedTest.shown)));
+			const label = formatMbps(gaugeValue(speedTest.fraction, speedTest.scale));
+			if (label !== speedTest.shownText) {
+				speedTest.shownText = label;
+				text('stValue', label);
+			}
 		}
 
 		const ctx = gaugeCtx;
-		const { cx, cy, radius, start, sweep } = GAUGE;
-		const color = SPEED_COLORS[speedTest.phase === 'upload' ? 'upload' : 'download'];
-		const fraction = gaugeFraction(speedTest.shown, speedTest.scale);
+		const { width, height, cx, cy, radius, start, sweep } = GAUGE;
+		const color = SPEED_COLORS[speedTest.dial];
+		const fraction = speedTest.fraction;
 		const angle = start + sweep * fraction;
-		ctx.clearRect(0, 0, 560, 390);
+		ctx.clearRect(0, 0, width, height);
 
 		// Track
 		ctx.lineCap = 'round';
-		ctx.lineWidth = 22;
+		ctx.lineWidth = 12;
 		ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
 		ctx.beginPath();
 		ctx.arc(cx, cy, radius, start, start + sweep);
 		ctx.stroke();
 
 		// Graduations and labels
-		ctx.font = "18px 'Share Tech Mono', monospace";
+		ctx.font = "12px 'Share Tech Mono', monospace";
 		ctx.textAlign = 'center';
 		ctx.textBaseline = 'middle';
 		speedTest.scale.forEach((value, i) => {
@@ -408,24 +447,24 @@
 			ctx.strokeStyle = lit ? `rgba(${color}, 0.9)` : 'rgba(255, 255, 255, 0.25)';
 			ctx.lineWidth = 2;
 			ctx.beginPath();
-			ctx.moveTo(cx + Math.cos(a) * (radius - 22), cy + Math.sin(a) * (radius - 22));
-			ctx.lineTo(cx + Math.cos(a) * (radius - 34), cy + Math.sin(a) * (radius - 34));
+			ctx.moveTo(cx + Math.cos(a) * (radius - 11), cy + Math.sin(a) * (radius - 11));
+			ctx.lineTo(cx + Math.cos(a) * (radius - 18), cy + Math.sin(a) * (radius - 18));
 			ctx.stroke();
 			ctx.fillStyle = lit ? 'rgba(243, 233, 234, 0.95)' : 'rgba(143, 118, 121, 0.9)';
-			ctx.fillText(value >= 1000 ? `${value / 1000}G` : String(value), cx + Math.cos(a) * (radius - 58), cy + Math.sin(a) * (radius - 58));
+			ctx.fillText(value >= 1000 ? `${value / 1000}G` : String(value), cx + Math.cos(a) * (radius - 31), cy + Math.sin(a) * (radius - 31));
 		});
 
 		// Glowing blade arc up to the current rate
 		if (fraction > 0.002) {
-			ctx.lineWidth = 22;
+			ctx.lineWidth = 12;
 			ctx.shadowColor = `rgb(${color})`;
-			ctx.shadowBlur = 26;
+			ctx.shadowBlur = 16;
 			ctx.strokeStyle = `rgb(${color})`;
 			ctx.beginPath();
 			ctx.arc(cx, cy, radius, start, angle);
 			ctx.stroke();
-			ctx.shadowBlur = 6;
-			ctx.lineWidth = 6;
+			ctx.shadowBlur = 4;
+			ctx.lineWidth = 3;
 			ctx.strokeStyle = '#fff4f4';
 			ctx.beginPath();
 			ctx.arc(cx, cy, radius, start, angle);
@@ -433,21 +472,73 @@
 			ctx.shadowBlur = 0;
 		}
 
-		// Needle with its hub
-		ctx.lineCap = 'round';
-		ctx.lineWidth = 5;
+		// Spark at the head of the arc
+		if (fraction > 0.002) {
+			const sx = cx + Math.cos(angle) * radius;
+			const sy = cy + Math.sin(angle) * radius;
+			const spark = ctx.createRadialGradient(sx, sy, 0, sx, sy, 11);
+			spark.addColorStop(0, 'rgba(255, 246, 246, 0.95)');
+			spark.addColorStop(0.35, `rgba(${color}, 0.8)`);
+			spark.addColorStop(1, `rgba(${color}, 0)`);
+			ctx.fillStyle = spark;
+			ctx.beginPath();
+			ctx.arc(sx, sy, 11, 0, Math.PI * 2);
+			ctx.fill();
+		}
+
+		drawNeedle(ctx, cx, cy, angle, radius - 20, color);
+	}
+
+	// Tapered needle, dark at the base and white-hot at the tip, on a notched hub with a glowing ring
+	function drawNeedle(ctx, x, y, angle, reach, color) {
+		ctx.save();
+		ctx.translate(x, y);
+		ctx.rotate(angle);
+
+		const body = ctx.createLinearGradient(0, 0, reach, 0);
+		body.addColorStop(0, `rgba(${color}, 0.25)`);
+		body.addColorStop(0.55, `rgba(${color}, 0.95)`);
+		body.addColorStop(1, '#fff6f6');
 		ctx.shadowColor = `rgb(${color})`;
-		ctx.shadowBlur = 14;
-		ctx.strokeStyle = '#fff4f4';
+		ctx.shadowBlur = 12;
+		ctx.fillStyle = body;
 		ctx.beginPath();
-		ctx.moveTo(cx + Math.cos(angle) * 40, cy + Math.sin(angle) * 40);
-		ctx.lineTo(cx + Math.cos(angle) * (radius - 40), cy + Math.sin(angle) * (radius - 40));
-		ctx.stroke();
+		ctx.moveTo(-10, 0);
+		ctx.lineTo(0, -4.5);
+		ctx.lineTo(reach, 0);
+		ctx.lineTo(0, 4.5);
+		ctx.closePath();
+		ctx.fill();
 		ctx.shadowBlur = 0;
+		ctx.strokeStyle = 'rgba(255, 246, 246, 0.9)';
+		ctx.lineWidth = 1.2;
+		ctx.beginPath();
+		ctx.moveTo(reach * 0.4, 0);
+		ctx.lineTo(reach, 0);
+		ctx.stroke();
+
+		// Hub: notched dark disc, coloured ring, glowing core
+		ctx.fillStyle = '#2a2324';
+		for (let i = 0; i < 8; i++) {
+			ctx.rotate(Math.PI / 4);
+			ctx.fillRect(9, -1.6, 5, 3.2);
+		}
+		ctx.fillStyle = '#120d0e';
+		ctx.beginPath();
+		ctx.arc(0, 0, 11, 0, Math.PI * 2);
+		ctx.fill();
+		ctx.shadowColor = `rgb(${color})`;
+		ctx.shadowBlur = 8;
+		ctx.strokeStyle = `rgb(${color})`;
+		ctx.lineWidth = 2;
+		ctx.beginPath();
+		ctx.arc(0, 0, 8, 0, Math.PI * 2);
+		ctx.stroke();
 		ctx.fillStyle = `rgb(${color})`;
 		ctx.beginPath();
-		ctx.arc(cx, cy, 9, 0, Math.PI * 2);
+		ctx.arc(0, 0, 3, 0, Math.PI * 2);
 		ctx.fill();
+		ctx.restore();
 	}
 
 	// Design mode: plausible fake run to preview the view without the host
@@ -462,16 +553,16 @@
 				return;
 			}
 			if (t < 2) {
-				renderSpeedTest({ phase: 'ping', progress: t / 20, pingMs: ping, server });
+				renderSpeedTest({ phase: 'ping', pingMs: ping, server });
 			} else if (t < 10) {
 				const ramp = Math.min(1, (t - 2) / 1.5);
-				renderSpeedTest({ phase: 'download', progress: 0.1 + 0.45 * ((t - 2) / 8), mbps: ramp * (900 + Math.random() * 40), pingMs: ping, server });
+				renderSpeedTest({ phase: 'download', mbps: ramp * (900 + Math.random() * 40), pingMs: ping, server });
 			} else if (t < 18) {
-				const ramp = Math.min(1, (t - 10) / 1.5);
-				renderSpeedTest({ phase: 'upload', progress: 0.55 + 0.45 * ((t - 10) / 8), mbps: ramp * (910 + Math.random() * 40), pingMs: ping, downMbps: 924.7, server });
+				// Ookla's first upload samples already report a high rate: no ramp, like the real thing
+				renderSpeedTest({ phase: 'upload', mbps: 910 + Math.random() * 40, pingMs: ping, downMbps: 924.7, server });
 			} else {
 				clearInterval(timer);
-				renderSpeedTest({ phase: 'done', progress: 1, pingMs: ping, downMbps: 924.7, upMbps: 935.6, server });
+				renderSpeedTest({ phase: 'done', pingMs: ping, downMbps: 924.7, upMbps: 935.6, server });
 			}
 		}, 250);
 	}
@@ -479,12 +570,12 @@
 	$('netTestBtn').addEventListener('click', startSpeedTest);
 	$('stAction').addEventListener('click', () => {
 		if (!speedTest.running) {
-			closeSpeedTestView();
+			setSpeedTestOpen(false);
 		} else if (host) {
 			host.postMessage({ type: 'speedtest', action: 'cancel' });
 		} else {
 			speedTest.running = false;
-			renderSpeedTest({ phase: 'cancelled', progress: 0 });
+			renderSpeedTest({ phase: 'cancelled' });
 		}
 	});
 
@@ -1368,10 +1459,11 @@
 	// "?speedtest=preview|done" (ArkaHyte.exe --preview-speedtest [done]) shows the test view with sample values
 	const speedTestPreview = new URLSearchParams(location.search).get('speedtest');
 	if (speedTestPreview === 'preview') {
-		speedTest.shown = 640;
-		renderSpeedTest({ phase: 'upload', progress: 0.78, mbps: 640, pingMs: 5.6, downMbps: 924.7, server: 'Scaleway · Paris' });
+		renderSpeedTest({ phase: 'upload', mbps: 640, pingMs: 5.6, downMbps: 924.7, server: 'Scaleway · Paris' });
+		setDial('upload');
+		speedTest.fraction = gaugeFraction(640, speedTest.scale);
 	} else if (speedTestPreview === 'done') {
-		renderSpeedTest({ phase: 'done', progress: 1, pingMs: 5.97, downMbps: 924.7, upMbps: 935.6, server: 'Scaleway · Paris' });
+		renderSpeedTest({ phase: 'done', pingMs: 5.97, downMbps: 924.7, upMbps: 935.6, server: 'Scaleway · Paris' });
 	}
 	// "?editor=<index>" (ArkaHyte.exe --open-editor N) opens a shortcut editor once the dock is known
 	const editorParam = new URLSearchParams(location.search).get('editor');

@@ -186,58 +186,55 @@
 						<svg viewBox="0 0 24 24"><path d="M4 18a8 8 0 1 1 16 0"/><path d="m12 18 4-6"/><path d="M6.6 13.6h.01M8.6 9.6h.01M12 8h.01M15.4 9.6h.01"/></svg>
 						<span>Test débit</span>
 					</button>
+					<button type="button" class="net-test" id="stAction" hidden>Annuler</button>
 					<span class="chip" id="netChip">--</span>
 				</div>
 			</div>
-			<div class="net-body">
-				<div class="signal">
-					<svg width="130" height="100" viewBox="0 0 130 100" aria-hidden="true">
-						<path class="arc" id="arc1" d="M52.27 79.27 A18 18 0 0 1 77.73 79.27"/>
-						<path class="arc" id="arc2" d="M39.54 66.54 A36 36 0 0 1 90.46 66.54"/>
-						<path class="arc" id="arc3" d="M26.82 53.82 A54 54 0 0 1 103.18 53.82"/>
-						<path class="arc" id="arc4" d="M14.09 41.09 A72 72 0 0 1 115.91 41.09"/>
-						<circle class="source" cx="65" cy="90" r="6" fill="#ff1f33"/>
-					</svg>
-					<span class="signal-pct"><span id="sigPct">--</span><small> %</small></span>
-					<span class="data" id="rssi">&nbsp;</span>
+			<!-- The speed test view takes the place of the network body, in the same box -->
+			<div class="net-stack" id="netStack">
+				<div class="net-body">
+					<div class="signal">
+						<svg width="130" height="100" viewBox="0 0 130 100" aria-hidden="true">
+							<path class="arc" id="arc1" d="M52.27 79.27 A18 18 0 0 1 77.73 79.27"/>
+							<path class="arc" id="arc2" d="M39.54 66.54 A36 36 0 0 1 90.46 66.54"/>
+							<path class="arc" id="arc3" d="M26.82 53.82 A54 54 0 0 1 103.18 53.82"/>
+							<path class="arc" id="arc4" d="M14.09 41.09 A72 72 0 0 1 115.91 41.09"/>
+							<circle class="source" cx="65" cy="90" r="6" fill="#ff1f33"/>
+						</svg>
+						<span class="signal-pct"><span id="sigPct">--</span><small> %</small></span>
+						<span class="data" id="rssi">&nbsp;</span>
+					</div>
+					<dl class="netgrid">
+						<div><dt>SSID</dt><dd id="ssid">--</dd></div>
+						<div><dt>Canal</dt><dd id="channel">--</dd></div>
+						<div><dt>↓ Réception</dt><dd class="rate down" id="rateDown">--</dd></div>
+						<div><dt>↑ Envoi</dt><dd class="rate" id="rateUp">--</dd></div>
+						<div><dt>Lien</dt><dd id="link">--</dd></div>
+						<div><dt>Ping</dt><dd id="ping">--</dd></div>
+					</dl>
 				</div>
-				<dl class="netgrid">
-					<div><dt>SSID</dt><dd id="ssid">--</dd></div>
-					<div><dt>Canal</dt><dd id="channel">--</dd></div>
-					<div><dt>↓ Réception</dt><dd class="rate down" id="rateDown">--</dd></div>
-					<div><dt>↑ Envoi</dt><dd class="rate" id="rateUp">--</dd></div>
-					<div><dt>Lien</dt><dd id="link">--</dd></div>
-					<div><dt>Ping</dt><dd id="ping">--</dd></div>
-				</dl>
-			</div>
-
-		</section>
-
-		<!-- Speed test: speedometer view over the network and now-playing area -->
-		<section class="widget speedtest" id="speedtest" aria-label="Test de débit" hidden>
-			<div class="st-top">
-				<span class="label" id="stPhase">Test de débit</span>
-				<button type="button" class="st-btn" id="stAction">Annuler</button>
-			</div>
-			<div class="st-gauge-box" id="stGaugeBox">
-				<canvas id="stGauge" width="560" height="390"></canvas>
-				<div class="st-center">
-					<span class="st-dir" id="stDir">Ping</span>
-					<div class="st-reading"><span class="st-value" id="stValue">--</span><span class="st-unit" id="stUnit">ms</span></div>
+				<div class="speedtest" id="speedtest" aria-label="Test de débit" hidden>
+					<div class="st-live" id="stLive">
+						<canvas id="stGauge" width="236" height="176"></canvas>
+						<div class="st-readout">
+							<span class="st-dir" id="stDir">Ping</span>
+							<div class="st-reading"><span class="st-value" id="stValue">--</span><span class="st-unit" id="stUnit">ms</span></div>
+							<dl class="st-results">
+								<div><dt>Ping</dt><dd id="stPing">--</dd></div>
+								<div class="down"><dt>↓</dt><dd id="stDown">--</dd></div>
+								<div class="up"><dt>↑</dt><dd id="stUp">--</dd></div>
+							</dl>
+							<span class="data st-phase" id="stPhase">Test de débit</span>
+						</div>
+					</div>
+					<div class="st-summary" id="stSummary" hidden>
+						<div class="st-stat down"><span class="label">↓ Réception</span><span class="st-big" id="stSumDown">--</span><span class="st-u">Mbit/s</span></div>
+						<div class="st-stat up"><span class="label">↑ Envoi</span><span class="st-big" id="stSumUp">--</span><span class="st-u">Mbit/s</span></div>
+						<div class="st-stat ping"><span class="label">Ping</span><span class="st-big" id="stSumPing">--</span><span class="st-u">ms</span></div>
+						<span class="data st-server" id="stServer">&nbsp;</span>
+					</div>
 				</div>
 			</div>
-			<dl class="st-results" id="stResults">
-				<div><dt>Ping</dt><dd id="stPing">--</dd></div>
-				<div class="down"><dt>↓ Réception</dt><dd id="stDown">--</dd></div>
-				<div class="up"><dt>↑ Envoi</dt><dd id="stUp">--</dd></div>
-			</dl>
-			<div class="st-summary" id="stSummary" hidden>
-				<div class="st-stat down"><span class="label">↓ Réception</span><span class="st-big" id="stSumDown">--</span><span class="st-u">Mbit/s</span></div>
-				<div class="st-stat up"><span class="label">↑ Envoi</span><span class="st-big" id="stSumUp">--</span><span class="st-u">Mbit/s</span></div>
-				<div class="st-stat ping"><span class="label">Ping</span><span class="st-big" id="stSumPing">--</span><span class="st-u">ms</span></div>
-				<span class="data st-server" id="stServer">&nbsp;</span>
-			</div>
-			<div class="gauge st-bar"><div class="gauge-fill" id="stFill"><div class="blade-h"></div></div></div>
 		</section>
 
 		<!-- ===== Now playing ===== -->

@@ -58,8 +58,10 @@ Retour à Nexus : `scripts\Install.ps1 -Uninstall`
 
 ## Test de débit
 
-Bouton **Test débit** du panneau Réseau : compteur de vitesse façon Speedtest (rouge en réception,
-ambre en envoi) puis résumé ↓ / ↑ / ping, affiché 90 s.
+Bouton **Test débit** du panneau Réseau : le test s'affiche dans le panneau, sans en changer la taille.
+Compteur de vitesse façon Speedtest à gauche et vitesse en cours à droite. L'aiguille est rouge en
+réception, puis redescend à zéro et remonte en ambre pour l'envoi. Le résultat (↓ / ↑ / ping) reste
+affiché 30 s, puis le panneau Réseau revient seul.
 
 Le test passe par l'outil officiel **Speedtest by Ookla** (CLI), téléchargé depuis
 `install.speedtest.net` au premier test dans `%LOCALAPPDATA%\ArkaHyte\tools\speedtest.exe` (sa
