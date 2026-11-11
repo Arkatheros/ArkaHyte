@@ -13,6 +13,8 @@ public sealed class TrayIcon : IDisposable
 	private readonly ToolStripMenuItem _updateItem;
 	private readonly ToolStripMenuItem _themeItem;
 	private readonly Icon _icon;
+	// "No update" is only shown for a moment after a check, so it never stays on screen once outdated
+	private readonly System.Windows.Forms.Timer _noUpdateReset = new() { Interval = 4000 };
 	private UpdateStage _updateStage = UpdateStage.Unavailable;
 	private bool _keepMenuOpen;
 
@@ -35,6 +37,11 @@ public sealed class TrayIcon : IDisposable
 		_demoItem.CheckedChanged += (_, _) => DemoToggled?.Invoke(_demoItem.Checked);
 
 		_updateItem = new ToolStripMenuItem("Rechercher des mises à jour") { Visible = false };
+		_noUpdateReset.Tick += (_, _) =>
+		{
+			_noUpdateReset.Stop();
+			_updateItem.Text = "Rechercher des mises à jour";
+		};
 		_updateItem.Click += (_, _) => UpdateRequested?.Invoke();
 
 		_themeItem = new ToolStripMenuItem("Thème");
@@ -60,7 +67,8 @@ public sealed class TrayIcon : IDisposable
 		SithMenuRenderer.Apply(menu);
 
 		// A check stays in view: the menu remains open and its entry turns into the result
-		// ("Recherche…" then "À jour" or "Installer la version X"); installing still closes it
+		// ("Recherche…" then "Aucune mise à jour disponible" for a moment, or "Installer la version X");
+		// installing still closes it
 		menu.ItemClicked += (_, args) => _keepMenuOpen = args.ClickedItem == _updateItem && _updateStage != UpdateStage.Available;
 		menu.Closing += (_, args) =>
 		{
@@ -86,17 +94,22 @@ public sealed class TrayIcon : IDisposable
 	/// <summary>Reflects the update flow in the menu entry (call on the UI thread).</summary>
 	public void SetUpdateState(UpdateState state)
 	{
+		_noUpdateReset.Stop();
 		_updateStage = state.Stage;
 		_updateItem.Visible = state.Stage != UpdateStage.Unavailable;
 		(_updateItem.Text, _updateItem.Enabled) = state.Stage switch
 		{
 			UpdateStage.Checking => ("Recherche de mises à jour…", false),
-			UpdateStage.UpToDate => ("À jour · rechercher à nouveau", true),
+			UpdateStage.UpToDate => ("Aucune mise à jour disponible", true),
 			UpdateStage.Available => ($"Installer la version {state.Version}", true),
 			UpdateStage.Downloading => ($"Téléchargement de la {state.Version}… {state.Progress} %", false),
 			UpdateStage.Failed => (state.Version is null ? "Mise à jour impossible · réessayer" : $"Échec de la {state.Version} · réessayer", true),
 			_ => ("Rechercher des mises à jour", true)
 		};
+		if (state.Stage == UpdateStage.UpToDate)
+		{
+			_noUpdateReset.Start();
+		}
 	}
 
 	/// <summary>Ticks the active theme and recolours the menu with it (call on the UI thread).</summary>
@@ -145,5 +158,6 @@ public sealed class TrayIcon : IDisposable
 		_notifyIcon.ContextMenuStrip?.Dispose();
 		_notifyIcon.Dispose();
 		_icon.Dispose();
+		_noUpdateReset.Dispose();
 	}
 }
