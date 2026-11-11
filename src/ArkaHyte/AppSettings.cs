@@ -39,6 +39,32 @@ public static class Themes
 	public static string Normalize(string? theme) => All.Any(t => t.Id == theme) ? theme! : Sith;
 }
 
+/// <summary>Gauge range of a metric and its alert levels: warm tints the value, hot raises the alert.</summary>
+public sealed record Threshold(double Min, double Max, double Warm, double Hot);
+
+/// <summary>Per-metric thresholds; a metric left out uses <see cref="Defaults"/>.</summary>
+public sealed record ThresholdSettings(
+	Threshold? CpuTemp = null,
+	Threshold? CpuPower = null,
+	Threshold? GpuTemp = null,
+	Threshold? GpuPower = null,
+	Threshold? DiskTemp = null)
+{
+	public static readonly ThresholdSettings Defaults = new(
+		new Threshold(30, 95, 75, 85),
+		new Threshold(0, 160, 120, 150),
+		new Threshold(30, 90, 70, 80),
+		new Threshold(0, 450, 350, 420),
+		new Threshold(0, 80, 50, 60));
+
+	public ThresholdSettings WithDefaults() => new(
+		CpuTemp ?? Defaults.CpuTemp,
+		CpuPower ?? Defaults.CpuPower,
+		GpuTemp ?? Defaults.GpuTemp,
+		GpuPower ?? Defaults.GpuPower,
+		DiskTemp ?? Defaults.DiskTemp);
+}
+
 public sealed record DriveSettings(string Name, SensorSelector? Temp = null);
 
 public sealed record NetworkSettings(string Adapter = "", string PingHost = "1.1.1.1", string FallbackPingHost = "8.8.8.8");
@@ -59,8 +85,12 @@ public sealed record AppSettings(
 	IReadOnlyList<ShortcutSettings> Shortcuts,
 	string CpuClickTarget = "taskmgr.exe",
 	bool SetupCompleted = false,
-	string Theme = Themes.Sith)
+	string Theme = Themes.Sith,
+	ThresholdSettings? Thresholds = null)
 {
+	/// <summary>Thresholds with the defaults filled in for the metrics the file leaves out.</summary>
+	public ThresholdSettings EffectiveThresholds => (Thresholds ?? ThresholdSettings.Defaults).WithDefaults();
+
 	private static readonly JsonSerializerOptions Options = new()
 	{
 		PropertyNameCaseInsensitive = true,

@@ -253,7 +253,39 @@
 	}
 
 	// Value + blade gauge, with warm / hot states from thresholds
-	function setMetric(prefix, value, min, max, warm, hot) {
+	// Gauge range and alert levels per metric: these defaults until the host sends the settings
+	// (appsettings.json "Thresholds", edited from the on-screen settings)
+	const limits = {
+		cpuTemp: { min: 30, max: 95, warm: 75, hot: 85 },
+		cpuPower: { min: 0, max: 160, warm: 120, hot: 150 },
+		gpuTemp: { min: 30, max: 90, warm: 70, hot: 80 },
+		gpuPower: { min: 0, max: 450, warm: 350, hot: 420 },
+		diskTemp: { min: 0, max: 80, warm: 50, hot: 60 }
+	};
+	// Gauge tiles: element prefix, threshold key, unit shown at the end of the scale
+	const METRIC_TILES = [
+		{ prefix: 'cpuTemp', key: 'cpuTemp', unit: '°C' },
+		{ prefix: 'cpuPow', key: 'cpuPower', unit: 'W' },
+		{ prefix: 'gpuTemp', key: 'gpuTemp', unit: '°C' },
+		{ prefix: 'gpuPow', key: 'gpuPower', unit: 'W' }
+	];
+
+	function applyLimits(thresholds) {
+		for (const key of Object.keys(limits)) {
+			const value = thresholds && thresholds[key];
+			if (value && isNum(value.min) && isNum(value.max) && isNum(value.warm) && isNum(value.hot)) {
+				limits[key] = { min: value.min, max: value.max, warm: value.warm, hot: value.hot };
+			}
+		}
+		for (const tile of METRIC_TILES) {
+			const scale = $(`${tile.prefix}Tile`).querySelectorAll('.gauge-scale span');
+			scale[0].textContent = nf0(limits[tile.key].min);
+			scale[scale.length - 1].textContent = `${nf0(limits[tile.key].max)} ${tile.unit}`;
+		}
+	}
+
+	function setMetric(prefix, value, key) {
+		const { min, max, warm, hot } = limits[key];
 		const tile = $(`${prefix}Tile`);
 		if (!isNum(value)) {
 			text(prefix, '--');
@@ -270,13 +302,15 @@
 	function renderCpu(cpu) {
 		text('cpuLoad', orDash(cpu.load, Math.round));
 		$('cpuLoad').parentElement.classList.toggle('wide', isNum(cpu.load) && Math.round(cpu.load) >= 100);
-		setMetric('cpuTemp', cpu.temp, 30, 95, 75, 85);
-		setMetric('cpuPow', cpu.power, 0, 160, 120, 150);
+		setMetric('cpuTemp', cpu.temp, 'cpuTemp');
+		setMetric('cpuPow', cpu.power, 'cpuPower');
 	}
 
 	function renderGpu(gpu) {
 		text('gpuLoad', orDash(gpu.load, Math.round));
-		const litSegs = isNum(gpu.load) ? Math.round(gpu.load / 5) : 0;
+		// 5 % per segment, but any load shown above 0 % lights at least the first one
+		const shownLoad = isNum(gpu.load) ? Math.round(gpu.load) : 0;
+		const litSegs = shownLoad > 0 ? Math.max(1, Math.round(gpu.load / 5)) : 0;
 		[...segs.children].forEach((bar, i) => {
 			bar.classList.toggle('on', i < litSegs);
 			bar.classList.toggle('peak', i === litSegs - 1);
@@ -290,8 +324,8 @@
 			text('vramUsed', '--');
 			$('vramFill').style.width = '0%';
 		}
-		setMetric('gpuTemp', gpu.temp, 30, 90, 70, 80);
-		setMetric('gpuPow', gpu.power, 0, 450, 350, 420);
+		setMetric('gpuTemp', gpu.temp, 'gpuTemp');
+		setMetric('gpuPow', gpu.power, 'gpuPower');
 		// RTSS reports 0 (or nothing) outside games: the readout only shows while one runs
 		const playing = isNum(gpu.fps) && gpu.fps >= 1;
 		if ($('gpuFps').hidden === playing) {
@@ -331,7 +365,11 @@
 		if (layout !== diskLayout) {
 			diskLayout = layout;
 			const container = $('disks');
-			diskSlots = disks.map(() => $('diskTemplate').content.firstElementChild.cloneNode(true));
+			diskSlots = disks.map((_, i) => {
+				const slot = $('diskTemplate').content.firstElementChild.cloneNode(true);
+				attachLongPress(slot, () => openDiskSheet(i));
+				return slot;
+			});
 			diskGroups = runs.map(run => {
 				const group = $('diskGroupTemplate').content.firstElementChild.cloneNode(true);
 				group.style.gridColumn = `${run.start + 1} / span ${run.count}`;
@@ -370,7 +408,7 @@
 			group.hidden = !isNum(temp);
 			if (isNum(temp)) {
 				group.querySelector('.disk-temp-value').textContent = `${nf0(temp)} °C`;
-				group.classList.toggle('hot', temp >= 60);
+				group.classList.toggle('hot', temp >= limits.diskTemp.hot);
 			}
 		});
 	}
@@ -1342,6 +1380,7 @@
 		if (config.gpuModel) text('gpuModel', config.gpuModel);
 		if (Array.isArray(config.shortcuts)) buildDock(config.shortcuts);
 		if (config.theme) applyTheme(config.theme);
+		if (config.thresholds) applyLimits(config.thresholds);
 	}
 
 	function onHostMessage(message) {
@@ -1359,6 +1398,8 @@
 			showToast(message.text);
 		} else if (message.type === 'update') {
 			renderUpdate(message);
+		} else if (message.type === 'hwinfo') {
+			onHwInfoList(message);
 		} else if (message.type === 'speedtest') {
 			renderSpeedTest(message);
 		} else if (message.type === 'apps') {
@@ -1416,7 +1457,7 @@
 
 	function ringColor() {
 		const cpuTemp = current && current.cpu ? current.cpu.temp : null;
-		return isNum(cpuTemp) && cpuTemp >= 85 ? palette.ember : palette.blade;
+		return isNum(cpuTemp) && cpuTemp >= limits.cpuTemp.hot ? palette.ember : palette.blade;
 	}
 
 	function renderSpikes(color, grow) {
@@ -1830,6 +1871,339 @@
 	// No context menu or text selection on a touch panel
 	document.addEventListener('contextmenu', (event) => event.preventDefault());
 
+	// ---------- On-screen settings: long press on a metric ----------
+	// Sheets: which HWiNFO values can feed the widget (pickers) and, for gauges, its thresholds.
+	// Picker filters mirror the setup wizard: same unit, GPU values from a GPU sensor, disks from a disk sensor.
+	const DISK_SENSOR = /s\.m\.a\.r\.t|drive|disk|disque|nvme|ssd/i;
+	const DRIVE_PREFIX = 'drive:';
+	const SHEETS = {
+		cpuTemp: { title: 'Température CPU', pickers: [{ key: 'cpuTemp', title: 'Valeur HWiNFO', unit: '°C' }], threshold: { key: 'cpuTemp', unit: '°C', step: 1, maxStep: 5 } },
+		cpuPower: { title: 'Consommation CPU', pickers: [{ key: 'cpuPower', title: 'Valeur HWiNFO', unit: 'W' }], threshold: { key: 'cpuPower', unit: 'W', step: 5, maxStep: 10 } },
+		gpuTemp: { title: 'Température GPU', pickers: [{ key: 'gpuTemp', title: 'Valeur HWiNFO', unit: '°C', gpu: true }], threshold: { key: 'gpuTemp', unit: '°C', step: 1, maxStep: 5 } },
+		gpuPower: { title: 'Consommation GPU', pickers: [{ key: 'gpuPower', title: 'Valeur HWiNFO', unit: 'W', gpu: true }], threshold: { key: 'gpuPower', unit: 'W', step: 10, maxStep: 25 } },
+		gpuLoad: { title: 'Charge GPU', pickers: [{ key: 'gpuLoad', title: 'Charge (HWiNFO)', unit: '%', gpu: true }, { key: 'gpuFps', title: 'FPS en jeu (HWiNFO)', unit: 'FPS' }] },
+		gpuVram: { title: 'Mémoire vidéo', pickers: [{ key: 'gpuVram', title: 'Utilisation (HWiNFO, %)', unit: '%', gpu: true }] }
+	};
+	// Threshold rows; the disk row has no gauge, only its alert level
+	const THRESHOLD_ROWS = [
+		{ field: 'warm', label: 'Chaud à partir de', gauge: true },
+		{ field: 'hot', label: 'Alerte à partir de' },
+		{ field: 'max', label: 'Fin de l’échelle', gauge: true }
+	];
+	const SHEET_REFRESH_MS = 2000;
+	const sheet = { def: null, choices: {}, original: {}, limits: null, open: null, timer: 0 };
+	let hwinfoList = { entries: [], matches: {} };
+
+	const entryKey = (entry) => `${entry.sensor}|${entry.label}`;
+	const unitOf = (entry) => {
+		const match = /[\d.,-]+\s*(.*)$/.exec(entry.text || '');
+		return match ? match[1].trim() : '';
+	};
+
+	// Long press opens a sheet; a short tap keeps whatever the element already does
+	function attachLongPress(element, open) {
+		let timer = 0;
+		let origin = null;
+		const cancel = () => {
+			clearTimeout(timer);
+			timer = 0;
+		};
+		element.addEventListener('pointerdown', (event) => {
+			origin = { x: event.clientX, y: event.clientY };
+			timer = setTimeout(() => {
+				timer = 0;
+				open();
+			}, LONG_PRESS_MS);
+		});
+		element.addEventListener('pointermove', (event) => {
+			if (timer && origin && Math.hypot(event.clientX - origin.x, event.clientY - origin.y) > PRESS_MOVE_TOLERANCE) {
+				cancel();
+			}
+		});
+		['pointerup', 'pointerleave', 'pointercancel'].forEach((name) => element.addEventListener(name, cancel));
+	}
+
+	function pickerFits(picker, entry) {
+		return unitOf(entry) === picker.unit
+			&& (!picker.gpu || /gpu/i.test(entry.sensor))
+			&& (!picker.drives || DISK_SENSOR.test(entry.sensor));
+	}
+
+	// Entry the settings read now for a picker; a disk: the first of its drives that has one
+	function configuredKey(picker) {
+		const keys = picker.drives ? picker.drives.map((name) => DRIVE_PREFIX + name) : [picker.key];
+		for (const key of keys) {
+			const entry = hwinfoList.entries[hwinfoList.matches[key]];
+			if (entry) {
+				return entryKey(entry);
+			}
+		}
+		return '';
+	}
+
+	function openSheet(def) {
+		sheet.def = def;
+		sheet.open = null;
+		sheet.choices = {};
+		sheet.original = {};
+		sheet.limits = def.threshold ? { ...limits[def.threshold.key] } : null;
+		text('sheetTitle', def.title);
+		$('sheet').hidden = false;
+		requestHwInfoList(true);
+		clearInterval(sheet.timer);
+		// Live values while the sheet is open; HWiNFO itself refreshes every 2 s by default
+		sheet.timer = setInterval(() => requestHwInfoList(false), SHEET_REFRESH_MS);
+		renderSheet();
+	}
+
+	function openDiskSheet(index) {
+		const disks = (current && current.disks) || [];
+		const disk = disks[index];
+		if (!disk) {
+			return;
+		}
+		// Every drive on the same physical disk shares the setting
+		const drives = disks.filter((d) => isNum(disk.disk) ? d.disk === disk.disk : d.name === disk.name).map((d) => d.name);
+		openSheet({
+			title: `Disque ${drives.join(' · ')}`,
+			pickers: [{ key: 'disk', title: 'Température (HWiNFO)', unit: '°C', drives }],
+			threshold: { key: 'diskTemp', unit: '°C', step: 1, maxStep: 5, alertOnly: true }
+		});
+	}
+
+	function closeSheet() {
+		clearInterval(sheet.timer);
+		sheet.timer = 0;
+		sheet.def = null;
+		$('sheet').hidden = true;
+	}
+
+	function requestHwInfoList(first) {
+		if (host) {
+			host.postMessage({ type: 'hwinfoList' });
+		} else if (first) {
+			onHwInfoList(SAMPLE_HWINFO);
+		}
+	}
+
+	function onHwInfoList(list) {
+		const firstList = hwinfoList.entries.length === 0;
+		hwinfoList = { entries: list.entries || [], matches: list.matches || {} };
+		if (!sheet.def) {
+			return;
+		}
+		for (const picker of sheet.def.pickers) {
+			if (!(picker.key in sheet.original) || firstList) {
+				sheet.original[picker.key] = configuredKey(picker);
+				if (!(picker.key in sheet.choices)) {
+					sheet.choices[picker.key] = sheet.original[picker.key];
+				}
+			}
+		}
+		renderSheet();
+	}
+
+	function sheetChanged() {
+		if (!sheet.def) {
+			return false;
+		}
+		const pickerChanged = sheet.def.pickers.some((p) => sheet.choices[p.key] !== sheet.original[p.key]);
+		const original = sheet.def.threshold ? limits[sheet.def.threshold.key] : null;
+		const limitsChanged = original && ['min', 'max', 'warm', 'hot'].some((f) => sheet.limits[f] !== original[f]);
+		return pickerChanged || Boolean(limitsChanged);
+	}
+
+	function sheetRow(className, title, detail, value, selected) {
+		const row = document.createElement('button');
+		row.type = 'button';
+		row.className = className + (selected ? ' selected' : '');
+		const texts = document.createElement('span');
+		texts.className = 'sheet-texts';
+		const name = document.createElement('span');
+		name.className = 'sheet-name';
+		name.textContent = title;
+		texts.append(name);
+		if (detail) {
+			const small = document.createElement('span');
+			small.className = 'sheet-detail';
+			small.textContent = detail;
+			texts.append(small);
+		}
+		const number = document.createElement('span');
+		number.className = 'sheet-value data';
+		number.textContent = value || '';
+		row.append(texts, number);
+		return row;
+	}
+
+	function renderSheet() {
+		const body = $('sheetBody');
+		const panel = body.parentElement;
+		const scroll = body.scrollTop;
+		// The open list floats over the sheet like a dropdown: rebuilt with its scroll position kept
+		const previous = panel.querySelector('.sheet-dropdown');
+		const listScroll = previous ? previous.scrollTop : 0;
+		previous?.remove();
+		let dropdown = null;
+		let anchor = null;
+		body.replaceChildren();
+		const byKey = new Map(hwinfoList.entries.map((e) => [entryKey(e), e]));
+		for (const picker of sheet.def.pickers) {
+			const section = document.createElement('span');
+			section.className = 'label editor-section';
+			section.textContent = picker.title;
+			const choice = byKey.get(sheet.choices[picker.key]);
+			const head = sheetRow('sheet-current', choice ? choice.label : 'Aucune valeur', choice ? choice.sensor : 'Touche pour choisir', choice ? choice.text : '--', false);
+			head.addEventListener('click', () => {
+				sheet.open = sheet.open === picker.key ? null : picker.key;
+				renderSheet();
+			});
+			body.append(section, head);
+			if (sheet.open === picker.key) {
+				head.classList.add('open');
+				const list = document.createElement('div');
+				list.className = 'sheet-dropdown';
+				const fitting = hwinfoList.entries.filter((e) => pickerFits(picker, e) || entryKey(e) === sheet.choices[picker.key]);
+				const none = sheetRow('sheet-option', 'Aucune', fitting.length ? null : `Aucune valeur en ${picker.unit} dans HWiNFO Gadget`, '', sheet.choices[picker.key] === '');
+				none.addEventListener('click', () => pick(picker.key, ''));
+				list.append(none);
+				for (const entry of fitting) {
+					const row = sheetRow('sheet-option', entry.label, entry.sensor, entry.text, entryKey(entry) === sheet.choices[picker.key]);
+					row.addEventListener('click', () => pick(picker.key, entryKey(entry)));
+					list.append(row);
+				}
+				dropdown = list;
+				anchor = head;
+			}
+		}
+		if (sheet.def.threshold) {
+			const t = sheet.def.threshold;
+			const section = document.createElement('span');
+			section.className = 'label editor-section';
+			section.textContent = 'Seuils';
+			body.append(section);
+			for (const row of THRESHOLD_ROWS) {
+				if (t.alertOnly && row.gauge) {
+					continue;
+				}
+				const line = document.createElement('div');
+				line.className = 'sheet-stepper';
+				const name = document.createElement('span');
+				name.className = 'sheet-name';
+				name.textContent = row.label;
+				const minus = document.createElement('button');
+				minus.type = 'button';
+				minus.textContent = '−';
+				const value = document.createElement('span');
+				value.className = 'sheet-step-value data';
+				value.textContent = `${nf0(sheet.limits[row.field])} ${t.unit}`;
+				const plus = document.createElement('button');
+				plus.type = 'button';
+				plus.textContent = '+';
+				const step = row.field === 'max' ? t.maxStep : t.step;
+				minus.addEventListener('click', () => adjust(row.field, -step));
+				plus.addEventListener('click', () => adjust(row.field, step));
+				line.append(name, minus, value, plus);
+				body.append(line);
+			}
+		}
+		$('sheetSave').disabled = !sheetChanged();
+		body.scrollTop = scroll;
+		if (dropdown) {
+			// Right under the row that opened it, in the panel's frame (offsets ignore the page scale)
+			dropdown.style.top = `${body.offsetTop + anchor.offsetTop - body.scrollTop + anchor.offsetHeight}px`;
+			panel.append(dropdown);
+			dropdown.scrollTop = listScroll;
+		}
+	}
+
+	function pick(key, choice) {
+		sheet.choices[key] = choice;
+		sheet.open = null;
+		renderSheet();
+	}
+
+	// Levels stay ordered: min < warm <= hot <= max
+	function adjust(field, delta) {
+		const l = sheet.limits;
+		l[field] += delta;
+		if (field === 'max') {
+			l.max = Math.max(l.max, l.hot, l.min + delta);
+		} else if (field === 'hot') {
+			l.hot = clamp(l.hot, l.warm, l.max);
+		} else if (field === 'warm') {
+			l.warm = clamp(l.warm, l.min, l.hot);
+		}
+		// Alert-only rows (disks) move warm with hot so the pair stays ordered
+		if (sheet.def.threshold.alertOnly) {
+			l.warm = Math.min(l.warm, l.hot);
+		}
+		renderSheet();
+	}
+
+	function saveSheet() {
+		const byKey = new Map(hwinfoList.entries.map((e) => [entryKey(e), e]));
+		const message = { type: 'saveMetric', sensors: {}, drives: {}, thresholds: {} };
+		for (const picker of sheet.def.pickers) {
+			if (sheet.choices[picker.key] === sheet.original[picker.key]) {
+				continue;
+			}
+			const entry = byKey.get(sheet.choices[picker.key]);
+			// PresentMon's sensor carries the foreground process name: saved without it
+			const selector = entry ? { sensor: entry.sensor.replace(/\[[^\]]+\.exe\]$/i, '[*]'), label: entry.label } : null;
+			if (picker.drives) {
+				picker.drives.forEach((name) => {
+					message.drives[name] = selector;
+				});
+			} else {
+				message.sensors[picker.key] = selector;
+			}
+		}
+		if (sheet.def.threshold) {
+			message.thresholds[sheet.def.threshold.key] = sheet.limits;
+		}
+		send(message);
+		if (!host && sheet.def.threshold) {
+			// Design mode: apply locally so the result can be seen
+			applyLimits({ [sheet.def.threshold.key]: sheet.limits });
+		}
+		closeSheet();
+	}
+
+	// A touch anywhere else in the sheet folds the open list, like a dropdown
+	$('sheet').addEventListener('click', (event) => {
+		if (sheet.open && !event.target.closest('.sheet-dropdown, .sheet-current')) {
+			sheet.open = null;
+			renderSheet();
+		}
+	});
+	$('sheetClose').addEventListener('click', closeSheet);
+	$('sheetCancel').addEventListener('click', closeSheet);
+	$('sheetSave').addEventListener('click', saveSheet);
+	attachLongPress($('cpuTempTile'), () => openSheet(SHEETS.cpuTemp));
+	attachLongPress($('cpuPowTile'), () => openSheet(SHEETS.cpuPower));
+	attachLongPress($('gpuTempTile'), () => openSheet(SHEETS.gpuTemp));
+	attachLongPress($('gpuPowTile'), () => openSheet(SHEETS.gpuPower));
+	attachLongPress($('gpu'), () => openSheet(SHEETS.gpuLoad));
+	attachLongPress(document.querySelector('.vram'), () => openSheet(SHEETS.gpuVram));
+
+	// Design mode: Gadget entries like the author's machine
+	const SAMPLE_HWINFO = {
+		entries: [
+			{ sensor: 'CPU [#0]: AMD Ryzen 7 9800X3D: Enhanced', label: 'CPU (Tctl/Tdie)', text: '52.2 °C' },
+			{ sensor: 'CPU [#0]: AMD Ryzen 7 9800X3D: Enhanced', label: 'CPU Die (average)', text: '49.8 °C' },
+			{ sensor: 'CPU [#0]: AMD Ryzen 7 9800X3D: Enhanced', label: 'Consommation d\'énergie totale du CPU', text: '33.0 W' },
+			{ sensor: 'dGPU [#0]: NVIDIA GeForce RTX 4090: Zotac RTX 4090', label: 'Température GPU', text: '41.0 °C' },
+			{ sensor: 'dGPU [#0]: NVIDIA GeForce RTX 4090: Zotac RTX 4090', label: 'GPU Hot Spot Temperature', text: '50.3 °C' },
+			{ sensor: 'dGPU [#0]: NVIDIA GeForce RTX 4090: Zotac RTX 4090', label: 'GPU Consommation d\'énergie', text: '28.4 W' },
+			{ sensor: 'dGPU [#0]: NVIDIA GeForce RTX 4090: Zotac RTX 4090', label: 'Charge du cœur du GPU', text: '3.0 %' },
+			{ sensor: 'dGPU [#0]: NVIDIA GeForce RTX 4090: Zotac RTX 4090', label: 'Utilisation de la mémoire GPU', text: '11.2 %' },
+			{ sensor: 'S.M.A.R.T.: Samsung SSD 9100 PRO 2TB (S7YF) [C:, D:]', label: 'Température du disque', text: '53 °C' },
+			{ sensor: 'S.M.A.R.T.: Samsung SSD 990 PRO 4TB (S7DP) [E:]', label: 'Température du disque', text: '40 °C' }
+		],
+		matches: { cpuTemp: 0, cpuPower: 2, gpuTemp: 3, gpuPower: 5, gpuLoad: 6, gpuVram: 7, gpuFps: -1, 'drive:C:': 8, 'drive:D:': 8, 'drive:E:': 9 }
+	};
+
 	// ---------- Simulator: design mode (no host) or "?demo=" scenarios (idle, stress) ----------
 	const SCENARIOS = {
 		idle: { cpu: 14, cpuSpread: 9, gpu: 5, vram: 6, ram: 19.3, offline: false },
@@ -1929,6 +2303,22 @@
 	}
 	if (!host || demo) {
 		startSimulator(demo || 'idle');
+	}
+	// "?sheet=cpuTemp" (or disk0, disk1...) opens an on-screen settings sheet at load, for captures
+	const sheetPreview = new URLSearchParams(location.search).get('sheet');
+	if (sheetPreview) {
+		setTimeout(() => {
+			if (sheetPreview.startsWith('disk')) {
+				openDiskSheet(Number(sheetPreview.slice(4)) || 0);
+			} else if (SHEETS[sheetPreview]) {
+				openSheet(SHEETS[sheetPreview]);
+			}
+			// "&list" also unfolds the first value list
+			if (sheet.def && new URLSearchParams(location.search).has('list')) {
+				sheet.open = sheet.def.pickers[0].key;
+				renderSheet();
+			}
+		}, 1500);
 	}
 	// "?speedtest=preview|done" (ArkaHyte.exe --preview-speedtest [done]) shows the test view with sample values
 	const speedTestPreview = new URLSearchParams(location.search).get('speedtest');

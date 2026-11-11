@@ -15,5 +15,5 @@ du non fait.
 ---
 
 # Liste des tâches
-- [ ] Réglages à l'écran : choisir les capteurs HWiNFO et les seuils d'alerte depuis le boîtier, sans éditer `appsettings.json`
+- [ ] modifier l'affichage pour la charge CPU, faire en sorte que le rond noir se remplisse en fonction de la charge et du aussi diminuer la taille du texte en  % 
 - [ ] Météo locale dans la zone de l'horloge

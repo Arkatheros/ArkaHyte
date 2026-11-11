@@ -61,11 +61,15 @@ thread de fond et publie un `Snapshot` (`Sensors/Snapshot.cs`, records sérialis
 par `PostFromAnyThread` (BeginInvoke).
 
 **Flux web → C#.** `host.postMessage({ type, ... })` traité dans le `switch` de `DisplayForm` :
-`ready`, `launch`, `media`, `listApps`, `saveShortcut`, `speedtest` (start/cancel).
+`ready`, `launch`, `media`, `listApps`, `saveShortcut`, `speedtest` (start/cancel), `hwinfoList` /
+`saveMetric` (réglages à l'écran : appui long sur une mesure → panneau `#sheet`, `SHEETS` dans `console.js`).
+Choix de capteurs et seuils écrits par `SensorSettings` (partagé avec l'assistant), appliqués à chaud
+(`SensorHub.UpdateSettings`, `config.thresholds` → `limits` côté page ; plus aucun seuil en dur).
 Ajouter une fonctionnalité interactive = un type de message de chaque côté.
 
 **Sources** (`Sensors/`) : HWiNFO Gadget via registre `HKCU\Software\HWiNFO64\VSB` (capteurs
-retrouvés par nom/libellé avec jokers, configurés dans `appsettings.json` → `HwInfo`, `Drives[].Temp`),
+retrouvés par nom/libellé avec jokers, configurés dans `appsettings.json` → `HwInfo`, `Drives[].Temp` ;
+relu seulement après une écriture de HWiNFO, signalée par `RegNotifyChangeKeyValue`, donc à son rythme),
 Disques : `DiskData.Disk` = numéro de disque physique (IOCTL, `HardwareDetector.ReadDiskNumber`, mis en
 cache par `SensorHub`) ; l'UI regroupe les lecteurs consécutifs d'un même disque sous une température.
 FPS : capteur PresentMon de HWiNFO, nommé d'après le processus au premier plan (`PresentMon [x.exe]`,

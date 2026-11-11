@@ -30,7 +30,9 @@ passe en mode design avec des données simulées.
 | Lecture en cours (Spotify, YouTube, Twitch…) | API média Windows (`GlobalSystemMediaTransportControls`) |
 
 Les capteurs HWiNFO sont retrouvés **par nom** (voir `HwInfo` dans `appsettings.json`), l'ordre
-dans Gadget n'a donc pas d'importance. Jokers `*` acceptés.
+dans Gadget n'a donc pas d'importance. Jokers `*` acceptés. Les autres sondes sont lues chaque seconde ;
+les valeurs HWiNFO ne sont relues qu'après chaque mise à jour par HWiNFO (2 s par défaut, réglable dans
+HWiNFO : *Polling Period*), jamais deux fois les mêmes.
 
 ### Assistant de configuration
 
@@ -45,6 +47,23 @@ Au premier lancement, une fenêtre s'ouvre sur l'écran principal (ensuite : men
 
 « Passer l'assistant » ne change rien d'autre que `SetupCompleted` ; fermer la fenêtre le repropose
 au prochain démarrage.
+
+### Réglages à l'écran
+
+**Appui long** (~0,65 s) sur une mesure du boîtier : un panneau permet de choisir la valeur HWiNFO qui
+l'alimente (liste filtrée : bonne unité, capteurs GPU ou disque, valeur en direct) et, pour les jauges,
+les seuils au doigt (boutons − / +) :
+
+| Appui long sur | Valeurs HWiNFO | Seuils |
+|---|---|---|
+| Température / Consommation CPU ou GPU | la valeur de la tuile | chaud, alerte, fin de l'échelle |
+| Charge GPU | charge, FPS en jeu | — |
+| Mémoire vidéo | utilisation (%) | — |
+| Une carte de disque | température de son disque physique | alerte |
+
+Enregistré dans `appsettings.json` (`HwInfo`, `Drives[].Temp`, `Thresholds`) et appliqué tout de suite.
+Valeurs par défaut des seuils : CPU 75 / 85 / 95 °C et 120 / 150 / 160 W, GPU 70 / 80 / 90 °C et
+350 / 420 / 450 W, disques 60 °C.
 
 ### Températures des disques
 

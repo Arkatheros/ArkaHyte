@@ -9,7 +9,8 @@ public sealed class SensorHub : IDisposable
 	private static readonly TimeSpan Interval = TimeSpan.FromSeconds(1);
 	private const int CollectEverySamples = 30;
 
-	private readonly AppSettings _settings;
+	// Replaced by UpdateSettings when the on-screen settings change a sensor; read once per sample
+	private volatile AppSettings _settings;
 	private readonly HwInfoReader _hwInfo = new();
 	private readonly SystemMetrics _system = new();
 	private readonly WifiReader _wifi = new();
@@ -48,6 +49,9 @@ public sealed class SensorHub : IDisposable
 	}
 
 	public void Start() => _loop = Task.Run(() => RunAsync(_stop.Token));
+
+	/// <summary>New sensor choices, taken from the next sample on.</summary>
+	public void UpdateSettings(AppSettings settings) => _settings = settings;
 
 	private async Task RunAsync(CancellationToken token)
 	{
@@ -92,7 +96,8 @@ public sealed class SensorHub : IDisposable
 	public async Task<Snapshot> SampleAsync()
 	{
 		_hwInfo.Refresh();
-		var hw = _settings.HwInfo;
+		var settings = _settings;
+		var hw = settings.HwInfo;
 
 		var cpu = new CpuData(
 			Safe(_system.ReadCpuLoad),
@@ -104,11 +109,11 @@ public sealed class SensorHub : IDisposable
 			_hwInfo.Get(hw.GpuTemp),
 			_hwInfo.Get(hw.GpuPower),
 			_hwInfo.Get(hw.GpuVramPercent),
-			_settings.Hardware.VramTotalGb,
+			settings.Hardware.VramTotalGb,
 			// PresentMon measures whatever has the focus: only a fullscreen window counts as a game
 			ForegroundGame.IsRunning() ? _hwInfo.Get(hw.GpuFps) : null);
 
-		var disks = _settings.Drives
+		var disks = settings.Drives
 			.Select(d => SystemMetrics.ReadDrive(d.Name, _hwInfo.Get(d.Temp), DiskNumber(d.Name)))
 			.OfType<DiskData>()
 			.ToList();
@@ -164,6 +169,7 @@ public sealed class SensorHub : IDisposable
 			// Cancellation surfaces here; nothing left to clean up
 		}
 		_wifi.Dispose();
+		_hwInfo.Dispose();
 		_network.Dispose();
 		_stop.Dispose();
 	}

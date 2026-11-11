@@ -113,7 +113,12 @@ internal static class Program
 
 		// Memory trend in display.log: hourly, or every 10 s with --memory-log while investigating
 		var memoryLogPeriod = args.Contains("--memory-log") ? TimeSpan.FromSeconds(10) : TimeSpan.FromHours(1);
-		using var memoryLog = new System.Threading.Timer(_ => Log.Memory(), null, memoryLogPeriod, memoryLogPeriod);
+		using var memoryLog = new System.Threading.Timer(_ =>
+		{
+			Log.Memory();
+			// Reads follow HWiNFO's writes, not the 1 s sampling: fewer reads than seconds elapsed
+			Log.Info($"HWiNFO values read {hub.HwInfo.Reads} times since start");
+		}, null, memoryLogPeriod, memoryLogPeriod);
 
 		// Keeps the mouse cursor off the case display after touches (skipped for one-shot captures)
 		using var touchGuard = new TouchGuard(settings.Display, verbose: args.Contains("--touch-log"));

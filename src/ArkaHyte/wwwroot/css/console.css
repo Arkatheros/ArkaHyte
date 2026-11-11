@@ -1495,6 +1495,124 @@ body {
 	transform: scale(0.97);
 }
 
+/* ---------- On-screen settings sheet (same frame as the shortcut editor) ---------- */
+/* As tall as its content, up to the editor's height (a long HWiNFO list scrolls inside) */
+.sheet .editor-panel {
+	height: auto;
+	max-height: 1900px;
+}
+.sheet-body {
+	position: relative;
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	touch-action: pan-y;
+	scrollbar-width: none;
+}
+.sheet-current,
+.sheet-option {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	width: 100%;
+	min-height: 84px;
+	padding: 12px 18px;
+	box-sizing: border-box;
+	border: 1px solid var(--line);
+	background: rgba(var(--blade-rgb), 0.06);
+	color: var(--bone);
+	text-align: left;
+}
+.sheet-current::after {
+	content: '';
+	flex: none;
+	width: 12px;
+	height: 12px;
+	border-right: 2px solid var(--ash);
+	border-bottom: 2px solid var(--ash);
+	transform: rotate(45deg) translateY(-4px);
+}
+/* Open value list: floats over the sheet below its row, scrolls when long */
+.sheet-dropdown {
+	position: absolute;
+	left: 28px;
+	right: 28px;
+	z-index: 2;
+	max-height: 700px;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	touch-action: pan-y;
+	scrollbar-width: none;
+	background: rgb(var(--panel-hi-rgb));
+	border: 1px solid var(--blade);
+	box-shadow: 0 18px 40px rgba(0, 0, 0, 0.7), 0 0 24px rgba(var(--blade-rgb), 0.25);
+}
+.sheet-current.open {
+	border-color: var(--blade);
+}
+.sheet-option {
+	min-height: 76px;
+	border: none;
+	border-top: 1px solid rgba(255, 255, 255, 0.04);
+	background: transparent;
+}
+.sheet-option.selected {
+	background: rgba(var(--blade-rgb), 0.16);
+	box-shadow: inset 3px 0 0 var(--blade);
+}
+.sheet-texts {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+.sheet-name {
+	font: 600 22px var(--font-label);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.sheet-detail {
+	font-size: 15px;
+	color: var(--ash);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.sheet-value {
+	flex: none;
+	font-size: 22px;
+	color: var(--core);
+}
+.sheet-stepper {
+	display: grid;
+	grid-template-columns: 1fr 72px 150px 72px;
+	align-items: center;
+	gap: 12px;
+	min-height: 92px;
+	border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+.sheet-stepper button {
+	height: 72px;
+	border: 1px solid var(--line);
+	border-radius: 50%;
+	background: rgba(var(--blade-rgb), 0.08);
+	color: var(--bone);
+	font: 300 40px/1 var(--font-display);
+}
+.sheet-stepper button:active,
+.sheet-current:active,
+.sheet-option:active {
+	transform: scale(0.97);
+}
+.sheet-step-value {
+	text-align: center;
+	font-size: 26px;
+	color: var(--core);
+}
+
 .toast {
 	top: 2293px;
 	left: 141px;

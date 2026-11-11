@@ -21,18 +21,6 @@ public sealed class SetupForm : Form
 	private static readonly string[] HwInfoProcessNames = ["HWiNFO64", "HWiNFO32", "HWiNFO"];
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-	/// <summary>Widgets fed by HWiNFO: key shared with setup.js, property name in appsettings.json.</summary>
-	private static readonly (string Key, string Property, Func<HwInfoSettings, SensorSelector?> Read)[] Metrics =
-	[
-		("cpuTemp", nameof(HwInfoSettings.CpuTemp), s => s.CpuTemp),
-		("cpuPower", nameof(HwInfoSettings.CpuPower), s => s.CpuPower),
-		("gpuTemp", nameof(HwInfoSettings.GpuTemp), s => s.GpuTemp),
-		("gpuPower", nameof(HwInfoSettings.GpuPower), s => s.GpuPower),
-		("gpuLoad", nameof(HwInfoSettings.GpuLoad), s => s.GpuLoad),
-		("gpuVram", nameof(HwInfoSettings.GpuVramPercent), s => s.GpuVramPercent),
-		("gpuFps", nameof(HwInfoSettings.GpuFps), s => s.GpuFps)
-	];
-
 	private readonly AppSettings _settings;
 	private readonly int _startStep;
 	private readonly string? _previewPath;
@@ -191,14 +179,9 @@ public sealed class SetupForm : Form
 			type = "hwinfo",
 			running = IsHwInfoRunning(),
 			entries = _hwInfo.Entries.Select(e => new { sensor = e.Sensor, label = e.Label, text = e.Text }),
-			matches = Metrics
-				.Select(m => (m.Key, Index: _hwInfo.IndexOf(m.Read(_settings.HwInfo))))
-				.Concat(_settings.Drives.Select(d => (DriveKeyPrefix + d.Name, Index: _hwInfo.IndexOf(d.Temp))))
-				.ToDictionary(m => m.Item1, m => m.Index)
+			matches = SensorSettings.Matches(_hwInfo, _settings)
 		});
 	}
-
-	private const string DriveKeyPrefix = "drive:";
 
 	/// <summary>Configured drives that exist, with the disk model used to suggest their S.M.A.R.T. sensor.</summary>
 	private object[] ReadDrives()
@@ -329,46 +312,9 @@ public sealed class SetupForm : Form
 			{
 				root["Hardware"] = JsonSerializer.SerializeToNode(hardware);
 			}
-			if (message.TryGetProperty("sensors", out var sensors) && sensors.ValueKind == JsonValueKind.Object)
-			{
-				if (root["HwInfo"] is not JsonObject hwInfo)
-				{
-					hwInfo = new JsonObject();
-					root["HwInfo"] = hwInfo;
-				}
-				foreach (var (key, property, _) in Metrics)
-				{
-					if (!sensors.TryGetProperty(key, out var choice))
-					{
-						continue;
-					}
-					hwInfo[property] = ToSelector(choice);
-				}
-			}
-			if (message.TryGetProperty("drives", out var drives) && drives.ValueKind == JsonValueKind.Object
-				&& root["Drives"] is JsonArray driveNodes)
-			{
-				foreach (var choice in drives.EnumerateObject())
-				{
-					var node = driveNodes.OfType<JsonObject>().FirstOrDefault(d =>
-						string.Equals(d["Name"]?.GetValue<string>(), choice.Name, StringComparison.OrdinalIgnoreCase));
-					if (node is not null)
-					{
-						node["Temp"] = ToSelector(choice.Value);
-					}
-				}
-			}
+			SensorSettings.ApplyChoices(root, message);
 		}, restart: true);
 	}
-
-	private static JsonObject? ToSelector(JsonElement choice) =>
-		choice.ValueKind == JsonValueKind.Object
-			? new JsonObject
-			{
-				["Sensor"] = choice.GetProperty("sensor").GetString(),
-				["Label"] = choice.GetProperty("label").GetString()
-			}
-			: null;
 
 	private void Complete(Action<JsonObject> change, bool restart)
 	{
@@ -426,6 +372,7 @@ public sealed class SetupForm : Form
 		if (disposing)
 		{
 			_poll.Dispose();
+			_hwInfo.Dispose();
 			_webView.Dispose();
 		}
 		base.Dispose(disposing);

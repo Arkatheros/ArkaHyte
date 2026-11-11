@@ -351,6 +351,22 @@
 				</div>
 			</div>
 		</div>
+		<!-- On-screen settings of a metric (long press): HWiNFO value(s) and thresholds, built by console.js -->
+		<div class="editor sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" hidden>
+			<div class="editor-panel">
+				<div class="editor-head">
+					<span class="label" id="sheetTitle">Réglages</span>
+					<button type="button" class="editor-close" id="sheetClose" aria-label="Fermer">
+						<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
+					</button>
+				</div>
+				<div class="sheet-body" id="sheetBody"></div>
+				<div class="editor-actions">
+					<button type="button" class="editor-btn" id="sheetCancel">Annuler</button>
+					<button type="button" class="editor-btn primary" id="sheetSave" disabled>Enregistrer</button>
+				</div>
+			</div>
+		</div>
 		<!-- Stays until the update is installed (a toast would be gone before anyone looks) -->
 		<button type="button" class="update-banner" id="updateBanner" hidden>
 			<svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 20h14"/></svg>

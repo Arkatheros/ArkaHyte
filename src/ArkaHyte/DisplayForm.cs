@@ -24,7 +24,8 @@ public sealed class DisplayForm : Form
 
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-	private readonly AppSettings _settings;
+	// Replaced when the on-screen settings save new sensor choices or thresholds
+	private AppSettings _settings;
 	private readonly SensorHub _hub;
 	private readonly ShortcutStore _shortcuts;
 	private readonly ShortcutLauncher _launcher;
@@ -431,6 +432,12 @@ public sealed class DisplayForm : Form
 			case "listApps":
 				_ = SendAppCatalogAsync();
 				break;
+			case "hwinfoList":
+				PostHwInfoList();
+				break;
+			case "saveMetric":
+				SaveMetric(root);
+				break;
 			case "saveShortcut":
 				SaveShortcut(root);
 				break;
@@ -528,6 +535,7 @@ public sealed class DisplayForm : Form
 			gpuMaker = hardware.GpuMaker,
 			gpuModel = hardware.GpuModel,
 			theme = _theme,
+			thresholds = _settings.EffectiveThresholds,
 			shortcuts = _dockButtons
 		});
 	}
@@ -550,6 +558,44 @@ public sealed class DisplayForm : Form
 	}
 
 	/// <summary>Applies a choice made in the on-screen editor: { index, appId, label, icon: "app" | built-in name }.</summary>
+	/// <summary>On-screen settings: the Gadget entries with live values, and what each widget reads now.</summary>
+	private void PostHwInfoList()
+	{
+		var reader = _hub.HwInfo;
+		Post(new
+		{
+			type = "hwinfo",
+			entries = reader.Entries.Select(e => new { sensor = e.Sensor, label = e.Label, text = e.Text }),
+			matches = SensorSettings.Matches(reader, _settings)
+		});
+	}
+
+	/// <summary>
+	/// On-screen settings saved: { sensors, drives, thresholds } (see <see cref="SensorSettings"/>), written to the
+	/// user settings and applied right away, without restarting.
+	/// </summary>
+	private void SaveMetric(JsonElement message)
+	{
+		try
+		{
+			AppSettings.SaveUser(root =>
+			{
+				SensorSettings.ApplyChoices(root, message);
+				SensorSettings.ApplyThresholds(root, message);
+			});
+		}
+		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException or KeyNotFoundException)
+		{
+			Log.Error("Saving the on-screen settings failed", exception);
+			Post(new { type = "toast", text = "Enregistrement impossible" });
+			return;
+		}
+		_settings = AppSettings.Load();
+		_hub.UpdateSettings(_settings);
+		SendConfig();
+		Post(new { type = "toast", text = "Réglages enregistrés" });
+	}
+
 	private void SaveShortcut(JsonElement root)
 	{
 		var appId = ReadString(root, "appId");
