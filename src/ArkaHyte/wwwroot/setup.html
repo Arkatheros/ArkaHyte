@@ -22,7 +22,8 @@
 			<button type="button" data-step="1"><span class="step-dot"></span>HWiNFO</button>
 			<button type="button" data-step="2"><span class="step-dot"></span>Capteurs</button>
 			<button type="button" data-step="3"><span class="step-dot"></span>Matériel</button>
-			<button type="button" data-step="4"><span class="step-dot"></span>Terminer</button>
+			<button type="button" data-step="4"><span class="step-dot"></span>Météo</button>
+			<button type="button" data-step="5"><span class="step-dot"></span>Terminer</button>
 		</nav>
 
 		<main class="pages">
@@ -101,8 +102,22 @@
 				</div>
 			</section>
 
-			<!-- Summary -->
+			<!-- Weather -->
 			<section class="page" data-page="4">
+				<h1>Météo</h1>
+				<p class="lead">La météo du jour peut s'afficher sous l'heure (données <strong>Open-Meteo</strong>,
+					gratuites, sans compte). Cherchez votre ville puis choisissez-la dans la liste.</p>
+				<label class="switch"><input type="checkbox" id="weatherEnabled"><span>Afficher la météo sous l'horloge</span></label>
+				<div class="row">
+					<input id="placeQuery" class="grow" maxlength="60" placeholder="Ville (ex. Lyon)">
+					<button type="button" class="ghost" id="placeSearch">Rechercher</button>
+				</div>
+				<div class="places" id="places"></div>
+				<p class="status" id="placeStatus"></p>
+			</section>
+
+			<!-- Summary -->
+			<section class="page" data-page="5">
 				<h1>Terminer</h1>
 				<p class="lead">Les réglages sont enregistrés dans votre dossier de données, puis l'affichage
 					du boîtier redémarre pour les appliquer. L'assistant reste accessible depuis le menu de l'icône.</p>

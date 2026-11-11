@@ -36,6 +36,7 @@ public sealed class DisplayForm : Form
 	private readonly TrayIcon? _tray;
 	private readonly System.Windows.Forms.Timer _placementRetry = new() { Interval = 5000 };
 	private readonly SpeedTest _speedTest = new();
+	private readonly WeatherService _weather = new();
 	private CancellationTokenSource? _speedTestRun;
 	private string? _demo;
 	private bool _webReady;
@@ -85,6 +86,12 @@ public sealed class DisplayForm : Form
 			_updater.StateChanged += state => PostToUiThread(() => OnUpdateState(state));
 			_updater.ExitRequested += () => PostToUiThread(Close);
 			Microsoft.Win32.SystemEvents.SessionSwitch += OnSessionSwitch;
+		}
+
+		_weather.Updated += data => PostToUiThread(() => PostWeather(data));
+		if (options.ScreenshotPath is null)
+		{
+			_weather.Configure(settings.Weather);
 		}
 
 		_placementRetry.Tick += (_, _) => PlaceOnCaseDisplay(showIfFound: true);
@@ -272,6 +279,9 @@ public sealed class DisplayForm : Form
 		Log.Info(active ? "Display visible again, rendering resumed" : "Display off or session locked, rendering paused");
 	}
 
+	// Null hides the weather line (turned off, or no reading yet)
+	private void PostWeather(WeatherData? data) => Post(new { type = "weather", weather = data });
+
 	private void PostToUiThread(Action action)
 	{
 		if (!IsDisposed && IsHandleCreated)
@@ -446,6 +456,7 @@ public sealed class DisplayForm : Form
 				break;
 			case "speedtest" when action == "cancel":
 				_speedTestRun?.Cancel();
+			_weather.Dispose();
 				break;
 			case "update" when action == "install":
 				// Tapping the banner: same as the tray entry (installs the version found)
@@ -506,6 +517,7 @@ public sealed class DisplayForm : Form
 		_webReady = true;
 		SendConfig();
 		PostUpdateState(_updater.State);
+		PostWeather(_weather.Latest);
 		if (_hub.LatestCover is { } cover)
 		{
 			Post(new { type = "cover", key = cover.Key, dataUrl = cover.DataUrl });
@@ -536,6 +548,13 @@ public sealed class DisplayForm : Form
 			gpuModel = hardware.GpuModel,
 			theme = _theme,
 			thresholds = _settings.EffectiveThresholds,
+			// The place is picked in the setup wizard; the case screen only turns the weather on or off
+			weather = new
+			{
+				enabled = _settings.Weather?.Enabled ?? false,
+				place = _settings.Weather?.Place ?? string.Empty,
+				located = _settings.Weather is { Latitude: not null, Longitude: not null }
+			},
 			shortcuts = _dockButtons
 		});
 	}
@@ -582,6 +601,7 @@ public sealed class DisplayForm : Form
 			{
 				SensorSettings.ApplyChoices(root, message);
 				SensorSettings.ApplyThresholds(root, message);
+				SensorSettings.ApplyWeather(root, message);
 			});
 		}
 		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException or KeyNotFoundException)
@@ -590,8 +610,13 @@ public sealed class DisplayForm : Form
 			Post(new { type = "toast", text = "Enregistrement impossible" });
 			return;
 		}
+		var weatherBefore = _settings.Weather;
 		_settings = AppSettings.Load();
 		_hub.UpdateSettings(_settings);
+		if (_settings.Weather != weatherBefore)
+		{
+			_weather.Configure(_settings.Weather);
+		}
 		SendConfig();
 		Post(new { type = "toast", text = "Réglages enregistrés" });
 	}

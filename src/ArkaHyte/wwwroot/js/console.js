@@ -1381,6 +1381,7 @@
 		if (Array.isArray(config.shortcuts)) buildDock(config.shortcuts);
 		if (config.theme) applyTheme(config.theme);
 		if (config.thresholds) applyLimits(config.thresholds);
+		if (config.weather) weatherConfig = config.weather;
 	}
 
 	function onHostMessage(message) {
@@ -1400,6 +1401,8 @@
 			renderUpdate(message);
 		} else if (message.type === 'hwinfo') {
 			onHwInfoList(message);
+		} else if (message.type === 'weather') {
+			renderWeather(message.weather);
 		} else if (message.type === 'speedtest') {
 			renderSpeedTest(message);
 		} else if (message.type === 'apps') {
@@ -1408,6 +1411,48 @@
 				renderAppList();
 			}
 		}
+	}
+
+	// ---------- Weather (option, Open-Meteo) ----------
+	// WMO weather codes grouped into a few skies: icon (24 px stroke glyph) and French caption
+	const WEATHER_ICONS = {
+		sun: '<circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
+		moon: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
+		partly: '<path d="M8 4.5v1.5M3.5 9H5M4.8 5.8l1 1M11.3 5.8l-1 1"/><path d="M5.6 11.6A3.5 3.5 0 0 1 11 7.6"/><path d="M8 19h9.5a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 8.2 12.4 3.3 3.3 0 0 0 8 19z"/>',
+		cloud: '<path d="M7 18.5h10.5a4 4 0 0 0 .4-8A5.5 5.5 0 0 0 7.3 11 3.8 3.8 0 0 0 7 18.5z"/>',
+		fog: '<path d="M4 9h16M3 13h18M5 17h14"/>',
+		drizzle: '<path d="M7 14h10.5a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 7.2 7.5 3.3 3.3 0 0 0 7 14z"/><path d="M9 17v1M13 17v1M11 20v1M15 20v1"/>',
+		rain: '<path d="M7 13.5h10.5a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 7.2 7 3.3 3.3 0 0 0 7 13.5z"/><path d="m9 16-1 3M13 16l-1 3M17 16l-1 3"/>',
+		snow: '<path d="M7 13.5h10.5a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 7.2 7 3.3 3.3 0 0 0 7 13.5z"/><path d="M9 17.5h.01M13 17.5h.01M11 20.5h.01M15 20.5h.01"/>',
+		storm: '<path d="M7 13.5h10.5a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 7.2 7 3.3 3.3 0 0 0 7 13.5z"/><path d="m12.5 15-2 3.5h3l-2 3.5"/>'
+	};
+	function weatherSky(code, isDay) {
+		if (code === 0) return isDay ? ['sun', 'Ensoleillé'] : ['moon', 'Ciel dégagé'];
+		if (code <= 2) return [isDay ? 'partly' : 'moon', 'Éclaircies'];
+		if (code === 3) return ['cloud', 'Nuageux'];
+		if (code === 45 || code === 48) return ['fog', 'Brouillard'];
+		if (code >= 51 && code <= 57) return ['drizzle', 'Bruine'];
+		if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return ['rain', code >= 80 ? 'Averses' : 'Pluie'];
+		if ((code >= 71 && code <= 77) || code === 85 || code === 86) return ['snow', 'Neige'];
+		if (code >= 95) return ['storm', 'Orage'];
+		return ['cloud', ''];
+	}
+
+	// Weather settings as the host reports them (the place is chosen in the setup wizard)
+	let weatherConfig = { enabled: false, place: '', located: false };
+
+	function renderWeather(weather) {
+		const row = $('weather');
+		row.hidden = !weather;
+		if (!weather) {
+			return;
+		}
+		const [icon, caption] = weatherSky(weather.code, weather.isDay);
+		$('wxIcon').innerHTML = WEATHER_ICONS[icon];
+		text('wxTemp', `${nf0(weather.temperature)}°`);
+		text('wxText', caption);
+		text('wxRange', isNum(weather.min) && isNum(weather.max) ? `${nf0(weather.min)}° / ${nf0(weather.max)}°` : '');
+		row.title = weather.place || '';
 	}
 
 	// ---------- Clock ----------
@@ -1442,6 +1487,8 @@
 	const RING_R0 = 118;
 	const RING_SPIKE_MAX = 44;
 	const RING_LENS = 100;
+	// Speedometer inside the lens: same 240° dial as the speed test, opening at the bottom
+	const LENS_DIAL = { start: Math.PI * 5 / 6, sweep: Math.PI * 4 / 3 };
 	const RING_STEP = (Math.PI * 2) / RING;
 
 	// The glowing spikes only change once per second: they live on their own canvas, redrawn at
@@ -1481,6 +1528,73 @@
 		}
 	}
 
+	// Speedometer in the lens, like the speed test dial: a graduated arc lit up to the load and a
+	// needle; the value sits in the opening at the bottom (DOM, .cpu-core)
+	function drawLensDial(ctx, cx, cy, sweep, color) {
+		const dialR = RING_LENS * 0.74;
+		const dialEnd = LENS_DIAL.start + LENS_DIAL.sweep * sweep;
+		ctx.lineCap = 'round';
+		ctx.lineWidth = 7;
+		ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+		ctx.beginPath();
+		ctx.arc(cx, cy, dialR, LENS_DIAL.start, LENS_DIAL.start + LENS_DIAL.sweep);
+		ctx.stroke();
+		ctx.font = "11px 'Share Tech Mono', monospace";
+		ctx.textAlign = 'center';
+		ctx.textBaseline = 'middle';
+		for (let i = 0; i <= 10; i++) {
+			const a = LENS_DIAL.start + (LENS_DIAL.sweep * i) / 10;
+			const lit = i / 10 <= sweep + 0.001 && sweep > 0;
+			const major = i % 5 === 0;
+			ctx.strokeStyle = lit ? `rgba(${color}, 0.9)` : 'rgba(255, 255, 255, 0.25)';
+			ctx.lineWidth = major ? 2 : 1.2;
+			ctx.beginPath();
+			ctx.moveTo(cx + Math.cos(a) * (dialR - 7), cy + Math.sin(a) * (dialR - 7));
+			ctx.lineTo(cx + Math.cos(a) * (dialR - (major ? 14 : 11)), cy + Math.sin(a) * (dialR - (major ? 14 : 11)));
+			ctx.stroke();
+			if (major) {
+				ctx.fillStyle = lit ? `rgba(${palette.bone}, 0.95)` : `rgba(${palette.ash}, 0.9)`;
+				ctx.fillText(String(i * 10), cx + Math.cos(a) * (dialR - 25), cy + Math.sin(a) * (dialR - 25));
+			}
+		}
+		if (sweep > 0.002) {
+			ctx.lineWidth = 7;
+			ctx.shadowColor = `rgb(${color})`;
+			ctx.shadowBlur = 12;
+			ctx.strokeStyle = `rgb(${color})`;
+			ctx.beginPath();
+			ctx.arc(cx, cy, dialR, LENS_DIAL.start, dialEnd);
+			ctx.stroke();
+			ctx.shadowBlur = 3;
+			ctx.lineWidth = 2;
+			ctx.strokeStyle = `rgb(${palette.core})`;
+			ctx.beginPath();
+			ctx.arc(cx, cy, dialR, LENS_DIAL.start, dialEnd);
+			ctx.stroke();
+			ctx.shadowBlur = 0;
+		}
+		ctx.lineCap = 'butt';
+		drawNeedle(ctx, cx, cy, dialEnd, dialR - 16, color);
+	}
+
+	// Lit rim around the lens: the blade colour all round, a frame rather than a load indicator
+	// (the gauge inside the lens shows the load)
+	function drawRim(ctx, cx, cy, r, color) {
+		ctx.save();
+		ctx.lineWidth = 3;
+		ctx.shadowColor = `rgb(${color})`;
+		ctx.shadowBlur = 16;
+		ctx.strokeStyle = `rgba(${color}, 0.85)`;
+		ctx.beginPath();
+		ctx.arc(cx, cy, r, 0, Math.PI * 2);
+		ctx.stroke();
+		ctx.shadowBlur = 0;
+		ctx.lineWidth = 1;
+		ctx.strokeStyle = `rgba(${palette.core}, 0.6)`;
+		ctx.stroke();
+		ctx.restore();
+	}
+
 	function drawRing(now, progress) {
 		const ctx = ringCtx;
 		const cx = RING_CX;
@@ -1503,6 +1617,7 @@
 
 		// Blade sweep quantised well below a pixel at the ring's radius
 		const sweep = (shown.cpu / 100) * grow;
+		// A new sample shifts the history bars in the lens: the tick is part of the key
 		const key = `${Math.round(sweep * 4000)}|${color}`;
 		if (key === ringKey) {
 			return;
@@ -1520,34 +1635,16 @@
 		ctx.arc(cx, cy, RING_LENS, 0, Math.PI * 2);
 		ctx.fill();
 
+		drawLensDial(ctx, cx, cy, sweep, color);
+
+
 		ctx.strokeStyle = `rgba(${color}, 0.2)`;
 		ctx.lineWidth = 1;
 		ctx.beginPath();
 		ctx.arc(cx, cy, r0 + 4, 0, Math.PI * 2);
 		ctx.stroke();
+		drawRim(ctx, cx, cy, r0 - 12, color);
 
-		// Current load as a curved blade
-		const start = -Math.PI / 2;
-		const end = start + sweep * Math.PI * 2;
-		const arcR = r0 - 12;
-		ctx.shadowBlur = 0;
-		ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
-		ctx.lineWidth = 8;
-		ctx.beginPath();
-		ctx.arc(cx, cy, arcR, 0, Math.PI * 2);
-		ctx.stroke();
-		ctx.shadowColor = `rgb(${color})`;
-		ctx.shadowBlur = 26;
-		ctx.strokeStyle = `rgb(${color})`;
-		ctx.beginPath();
-		ctx.arc(cx, cy, arcR, start, end);
-		ctx.stroke();
-		ctx.shadowBlur = 6;
-		ctx.strokeStyle = `rgb(${palette.core})`;
-		ctx.lineWidth = 3;
-		ctx.beginPath();
-		ctx.arc(cx, cy, arcR, start, end);
-		ctx.stroke();
 		ctx.shadowBlur = 0;
 	}
 
@@ -1882,7 +1979,8 @@
 		gpuTemp: { title: 'Température GPU', pickers: [{ key: 'gpuTemp', title: 'Valeur HWiNFO', unit: '°C', gpu: true }], threshold: { key: 'gpuTemp', unit: '°C', step: 1, maxStep: 5 } },
 		gpuPower: { title: 'Consommation GPU', pickers: [{ key: 'gpuPower', title: 'Valeur HWiNFO', unit: 'W', gpu: true }], threshold: { key: 'gpuPower', unit: 'W', step: 10, maxStep: 25 } },
 		gpuLoad: { title: 'Charge GPU', pickers: [{ key: 'gpuLoad', title: 'Charge (HWiNFO)', unit: '%', gpu: true }, { key: 'gpuFps', title: 'FPS en jeu (HWiNFO)', unit: 'FPS' }] },
-		gpuVram: { title: 'Mémoire vidéo', pickers: [{ key: 'gpuVram', title: 'Utilisation (HWiNFO, %)', unit: '%', gpu: true }] }
+		gpuVram: { title: 'Mémoire vidéo', pickers: [{ key: 'gpuVram', title: 'Utilisation (HWiNFO, %)', unit: '%', gpu: true }] },
+		clock: { title: 'Météo', pickers: [], weather: true }
 	};
 	// Threshold rows; the disk row has no gauge, only its alert level
 	const THRESHOLD_ROWS = [
@@ -1891,7 +1989,7 @@
 		{ field: 'max', label: 'Fin de l’échelle', gauge: true }
 	];
 	const SHEET_REFRESH_MS = 2000;
-	const sheet = { def: null, choices: {}, original: {}, limits: null, open: null, timer: 0 };
+	const sheet = { def: null, choices: {}, original: {}, limits: null, weather: null, open: null, timer: 0 };
 	let hwinfoList = { entries: [], matches: {} };
 
 	const entryKey = (entry) => `${entry.sensor}|${entry.label}`;
@@ -1904,17 +2002,27 @@
 	function attachLongPress(element, open) {
 		let timer = 0;
 		let origin = null;
+		let opened = false;
 		const cancel = () => {
 			clearTimeout(timer);
 			timer = 0;
 		};
 		element.addEventListener('pointerdown', (event) => {
 			origin = { x: event.clientX, y: event.clientY };
+			opened = false;
 			timer = setTimeout(() => {
 				timer = 0;
+				opened = true;
 				open();
 			}, LONG_PRESS_MS);
 		});
+		// Capture phase: runs before the element's own click handler, which a long press must not trigger
+		element.addEventListener('click', (event) => {
+			if (opened) {
+				opened = false;
+				event.stopImmediatePropagation();
+			}
+		}, true);
 		element.addEventListener('pointermove', (event) => {
 			if (timer && origin && Math.hypot(event.clientX - origin.x, event.clientY - origin.y) > PRESS_MOVE_TOLERANCE) {
 				cancel();
@@ -1947,6 +2055,7 @@
 		sheet.choices = {};
 		sheet.original = {};
 		sheet.limits = def.threshold ? { ...limits[def.threshold.key] } : null;
+		sheet.weather = def.weather ? weatherConfig.enabled : null;
 		text('sheetTitle', def.title);
 		$('sheet').hidden = false;
 		requestHwInfoList(true);
@@ -2010,7 +2119,8 @@
 		const pickerChanged = sheet.def.pickers.some((p) => sheet.choices[p.key] !== sheet.original[p.key]);
 		const original = sheet.def.threshold ? limits[sheet.def.threshold.key] : null;
 		const limitsChanged = original && ['min', 'max', 'warm', 'hot'].some((f) => sheet.limits[f] !== original[f]);
-		return pickerChanged || Boolean(limitsChanged);
+		const weatherChanged = sheet.def.weather && sheet.weather !== weatherConfig.enabled;
+		return pickerChanged || Boolean(limitsChanged) || Boolean(weatherChanged);
 	}
 
 	function sheetRow(className, title, detail, value, selected) {
@@ -2075,6 +2185,21 @@
 				dropdown = list;
 				anchor = head;
 			}
+		}
+		if (sheet.def.weather) {
+			// No keyboard on the case screen: the place is picked in the setup wizard on the main screen
+			const located = weatherConfig.located;
+			const detail = located ? `${weatherConfig.place} · lieu modifiable dans l\u2019assistant de configuration`
+				: 'Choisir d\u2019abord une ville : menu de l\u2019icône › Assistant de configuration';
+			const row = sheetRow('sheet-option sheet-toggle', 'Afficher la météo', detail, sheet.weather ? 'Oui' : 'Non', sheet.weather);
+			row.setAttribute('role', 'switch');
+			row.setAttribute('aria-checked', String(sheet.weather));
+			row.disabled = !located;
+			row.addEventListener('click', () => {
+				sheet.weather = !sheet.weather;
+				renderSheet();
+			});
+			body.append(row);
 		}
 		if (sheet.def.threshold) {
 			const t = sheet.def.threshold;
@@ -2162,6 +2287,9 @@
 		if (sheet.def.threshold) {
 			message.thresholds[sheet.def.threshold.key] = sheet.limits;
 		}
+		if (sheet.def.weather) {
+			message.weather = { enabled: sheet.weather };
+		}
 		send(message);
 		if (!host && sheet.def.threshold) {
 			// Design mode: apply locally so the result can be seen
@@ -2186,6 +2314,7 @@
 	attachLongPress($('gpuPowTile'), () => openSheet(SHEETS.gpuPower));
 	attachLongPress($('gpu'), () => openSheet(SHEETS.gpuLoad));
 	attachLongPress(document.querySelector('.vram'), () => openSheet(SHEETS.gpuVram));
+	attachLongPress(document.querySelector('.clock'), () => openSheet(SHEETS.clock));
 
 	// Design mode: Gadget entries like the author's machine
 	const SAMPLE_HWINFO = {
@@ -2235,6 +2364,9 @@
 				{ label: 'Tâches', icon: { kind: 'builtin', value: 'pulse' } }
 			]
 		});
+		// Weather line with a sample reading (design mode / demo)
+		weatherConfig = { enabled: true, place: 'Lyon', located: true };
+		renderWeather({ place: 'Lyon', temperature: 14.6, code: 2, isDay: true, min: 8, max: 16 });
 		// The update banner is part of the preview too
 		renderUpdate({ stage: 'available', version: '2.0.0' });
 		setInterval(() => {

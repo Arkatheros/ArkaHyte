@@ -448,6 +448,57 @@ option {
 	color: var(--ash);
 }
 
+/* ---------- Weather step ---------- */
+.switch {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin-bottom: 6px;
+	font-weight: 600;
+	cursor: pointer;
+}
+.switch input {
+	width: 20px;
+	height: 20px;
+	accent-color: var(--blade);
+}
+.grow {
+	flex: 1;
+	max-width: 420px;
+}
+.places {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	max-width: 640px;
+	margin-top: 14px;
+}
+.place {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	gap: 14px;
+	padding: 10px 14px;
+	border: 1px solid var(--line);
+	background: var(--panel);
+	color: var(--bone);
+	font: 600 16px var(--font-label);
+	text-align: left;
+	cursor: pointer;
+}
+.place:hover {
+	border-color: var(--blade);
+}
+.place.selected {
+	border-color: var(--blade);
+	background: rgba(255, 31, 51, 0.14);
+	box-shadow: inset 3px 0 0 var(--blade);
+}
+.place small {
+	font-weight: 500;
+	color: var(--ash);
+}
+
 /* ---------- Footer ---------- */
 .foot {
 	grid-area: foot;

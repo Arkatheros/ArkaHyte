@@ -65,6 +65,9 @@ public sealed record ThresholdSettings(
 		DiskTemp ?? Defaults.DiskTemp);
 }
 
+/// <summary>Weather under the clock (Open-Meteo): the place picked in the setup wizard.</summary>
+public sealed record WeatherSettings(bool Enabled = false, string Place = "", double? Latitude = null, double? Longitude = null);
+
 public sealed record DriveSettings(string Name, SensorSelector? Temp = null);
 
 public sealed record NetworkSettings(string Adapter = "", string PingHost = "1.1.1.1", string FallbackPingHost = "8.8.8.8");
@@ -86,7 +89,8 @@ public sealed record AppSettings(
 	string CpuClickTarget = "taskmgr.exe",
 	bool SetupCompleted = false,
 	string Theme = Themes.Sith,
-	ThresholdSettings? Thresholds = null)
+	ThresholdSettings? Thresholds = null,
+	WeatherSettings? Weather = null)
 {
 	/// <summary>Thresholds with the defaults filled in for the metrics the file leaves out.</summary>
 	public ThresholdSettings EffectiveThresholds => (Thresholds ?? ThresholdSettings.Defaults).WithDefaults();

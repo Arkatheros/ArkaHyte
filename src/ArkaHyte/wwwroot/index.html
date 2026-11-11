@@ -36,6 +36,13 @@
 		<section class="widget clock" aria-label="Horloge">
 			<div class="date" id="date">&nbsp;</div>
 			<div class="time"><span id="hh">--</span><span class="colon">:</span><span class="mm" id="mm">--</span></div>
+			<!-- Weather (option, Open-Meteo): shown once the host sends a reading -->
+			<div class="weather" id="weather" hidden>
+				<svg class="wx-icon" id="wxIcon" viewBox="0 0 24 24" aria-hidden="true"></svg>
+				<span class="wx-temp" id="wxTemp"></span>
+				<span class="wx-text" id="wxText"></span>
+				<span class="wx-range data" id="wxRange"></span>
+			</div>
 		</section>
 
 		<!-- ===== Processor ===== -->

@@ -5,7 +5,7 @@
 	'use strict';
 
 	const host = window.chrome && window.chrome.webview ? window.chrome.webview : null;
-	const LAST_STEP = 4;
+	const LAST_STEP = 5;
 
 	/* Widgets fed by HWiNFO. Suggestions: entries of the right unit whose sensor matches, label
 	   patterns tried in order (English and French HWiNFO names). */
@@ -77,6 +77,72 @@
 	$('startHwInfo').addEventListener('click', () => send({ type: 'startHwInfo' }));
 	$('downloadHwInfo').addEventListener('click', () => send({ type: 'openHwInfoSite' }));
 	$('useDetected').addEventListener('click', () => fillHardware(model.state.detected));
+
+	// ---------- Weather ----------
+	// The place picked here: { place, latitude, longitude }, null until one is chosen or loaded
+	let weatherPlace = null;
+
+	function searchPlaces() {
+		const query = $('placeQuery').value.trim();
+		if (query.length < 2) {
+			return;
+		}
+		$('placeStatus').className = 'status';
+		$('placeStatus').textContent = 'Recherche…';
+		send({ type: 'searchPlace', query });
+		if (!host) {
+			onPlaces({ places: [
+				{ name: 'Lyon', detail: 'Auvergne-Rhône-Alpes, France', latitude: 45.75, longitude: 4.85 },
+				{ name: 'Lyons', detail: 'Colorado, États-Unis', latitude: 40.22, longitude: -105.27 }
+			] });
+		}
+	}
+
+	function onPlaces(message) {
+		const list = $('places');
+		list.textContent = '';
+		const places = message.places || [];
+		const status = $('placeStatus');
+		if (message.failed) {
+			status.className = 'status bad';
+			status.textContent = 'Recherche impossible : connexion internet ?';
+		} else if (!places.length) {
+			status.className = 'status warn';
+			status.textContent = 'Aucune ville trouvée.';
+		} else {
+			status.textContent = '';
+		}
+		for (const place of places) {
+			const button = document.createElement('button');
+			button.type = 'button';
+			button.className = 'place';
+			button.innerHTML = '<span></span><small></small>';
+			button.firstChild.textContent = place.name;
+			button.lastChild.textContent = place.detail;
+			button.addEventListener('click', () => {
+				weatherPlace = { place: place.name, latitude: place.latitude, longitude: place.longitude };
+				$('weatherEnabled').checked = true;
+				[...list.children].forEach((b) => b.classList.toggle('selected', b === button));
+				renderPlaceStatus();
+			});
+			list.append(button);
+		}
+	}
+
+	function renderPlaceStatus() {
+		const status = $('placeStatus');
+		if (weatherPlace) {
+			status.className = 'status';
+			status.textContent = 'Ville choisie : ' + weatherPlace.place + '.';
+		}
+	}
+
+	$('placeSearch').addEventListener('click', searchPlaces);
+	$('placeQuery').addEventListener('keydown', (event) => {
+		if (event.key === 'Enter') {
+			searchPlaces();
+		}
+	});
 
 	// ---------- Case display ----------
 
@@ -419,6 +485,10 @@
 			add('warn', 'Capteurs : réglage actuel conservé');
 		}
 		const hardware = readHardware();
+		const weatherOn = $('weatherEnabled').checked;
+		add(!weatherOn || weatherPlace ? 'ok' : 'warn', weatherOn
+			? (weatherPlace ? 'Météo : <b>' + escapeHtml(weatherPlace.place) + '</b>' : 'Météo : <b>aucune ville choisie</b>, rien ne s\'affichera')
+			: 'Météo : <b>non affichée</b>');
 		add('ok', 'Matériel : <b>' + escapeHtml([hardware.cpuMaker, hardware.cpuModel].join(' ').trim() || '--')
 			+ '</b> · <b>' + escapeHtml([hardware.gpuMaker, hardware.gpuModel].join(' ').trim() || '--') + '</b>');
 	}
@@ -431,6 +501,10 @@
 
 	function save() {
 		const message = { type: 'save', hardware: readHardware() };
+		message.weather = { enabled: $('weatherEnabled').checked };
+		if (weatherPlace) {
+			Object.assign(message.weather, weatherPlace);
+		}
 		if (model.caseScreen) {
 			message.display = { width: model.caseScreen.width, height: model.caseScreen.height };
 		}
@@ -477,6 +551,15 @@
 	// ---------- Host messages ----------
 
 	function onState(state) {
+		const weather = state.weather;
+		if (weather) {
+			$('weatherEnabled').checked = Boolean(weather.enabled);
+			if (weather.latitude != null && weather.longitude != null) {
+				weatherPlace = { place: weather.place, latitude: weather.latitude, longitude: weather.longitude };
+				$('placeQuery').value = weather.place || '';
+				renderPlaceStatus();
+			}
+		}
 		model.state = state;
 		model.caseScreen = guessCaseScreen(state.screens, state.caseSize);
 		if (model.step === 0) {
@@ -510,6 +593,9 @@
 				break;
 			case 'hwinfo':
 				onHwInfo(message);
+				break;
+			case 'places':
+				onPlaces(message);
 				break;
 			case 'saveFailed':
 				$('saveError').hidden = false;

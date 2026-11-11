@@ -250,10 +250,47 @@ body {
 .time {
 	font-family: var(--font-display);
 	font-weight: 100;
-	font-size: 214px;
+	font-size: 196px;
 	line-height: 0.95;
 	margin-top: 2px;
 	font-variant-numeric: tabular-nums;
+}
+/* Weather line under the time: icon, temperature, sky, today's range */
+.weather {
+	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	gap: 12px;
+	margin-top: 4px;
+	height: 30px;
+	font-size: 21px;
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	color: var(--ash);
+}
+.wx-icon {
+	width: 28px;
+	height: 28px;
+	fill: none;
+	stroke: var(--blade);
+	stroke-width: 1.6;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+.wx-temp {
+	font-family: var(--font-data);
+	font-size: 24px;
+	color: var(--bone);
+}
+.wx-text {
+	text-transform: uppercase;
+	color: var(--bone);
+}
+.wx-range {
+	font-size: 17px;
+	color: var(--bone);
+	opacity: 0.8;
 }
 .time .mm {
 	color: var(--blade);
@@ -323,17 +360,23 @@ body {
 #cpuSpikes {
 	will-change: transform;
 }
+/* The value sits in the opening at the bottom of the speedometer */
 .cpu-core {
 	position: absolute;
 	left: 60px;
 	top: 60px;
 	width: 240px;
 	height: 240px;
+	box-sizing: border-box;
+	padding-bottom: 30px;
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	justify-content: center;
+	justify-content: flex-end;
 	pointer-events: none;
+}
+.cpu-core .label {
+	display: none;
 }
 .cpu-core .label {
 	font-size: 16px;
@@ -341,13 +384,13 @@ body {
 .cpu-core .big {
 	font-family: var(--font-display);
 	font-weight: 200;
-	font-size: 100px;
+	font-size: 46px;
 	line-height: 0.9;
 	font-variant-numeric: tabular-nums;
 }
 /* Three digits (100%) would touch the edges of the dark lens: step the size down */
 .cpu-core .big.wide {
-	font-size: 76px;
+	font-size: 42px;
 }
 .big small {
 	font-size: 0.36em;
@@ -1606,6 +1649,26 @@ body {
 .sheet-current:active,
 .sheet-option:active {
 	transform: scale(0.97);
+}
+.sheet-toggle {
+	border: 1px solid var(--line);
+	margin-top: 22px;
+}
+.sheet-toggle .sheet-value {
+	min-width: 70px;
+	padding: 6px 0;
+	text-align: center;
+	border: 1px solid var(--line);
+	border-radius: 999px;
+	color: var(--ash);
+}
+.sheet-toggle.selected .sheet-value {
+	border-color: var(--blade);
+	background: var(--blade);
+	color: var(--core);
+}
+.sheet-toggle:disabled {
+	opacity: 0.45;
 }
 .sheet-step-value {
 	text-align: center;

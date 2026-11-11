@@ -102,6 +102,35 @@ public static class SensorSettings
 		}
 	}
 
+	/// <summary>
+	/// Writes the weather settings: weather { enabled?, place?, latitude?, longitude? } (the place only
+	/// together with both coordinates).
+	/// </summary>
+	public static void ApplyWeather(JsonObject root, JsonElement message)
+	{
+		if (!message.TryGetProperty("weather", out var weather) || weather.ValueKind != JsonValueKind.Object)
+		{
+			return;
+		}
+		if (root["Weather"] is not JsonObject node)
+		{
+			node = new JsonObject();
+			root["Weather"] = node;
+		}
+		if (weather.TryGetProperty("enabled", out var enabled) && enabled.ValueKind is JsonValueKind.True or JsonValueKind.False)
+		{
+			node["Enabled"] = enabled.GetBoolean();
+		}
+		if (weather.TryGetProperty("place", out var place) && place.ValueKind == JsonValueKind.String
+			&& weather.TryGetProperty("latitude", out var latitude) && latitude.TryGetDouble(out var lat)
+			&& weather.TryGetProperty("longitude", out var longitude) && longitude.TryGetDouble(out var lon))
+		{
+			node["Place"] = place.GetString();
+			node["Latitude"] = lat;
+			node["Longitude"] = lon;
+		}
+	}
+
 	private static JsonObject? ToSelector(JsonElement choice) =>
 		choice.ValueKind == JsonValueKind.Object
 			? new JsonObject

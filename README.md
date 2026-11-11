@@ -48,6 +48,14 @@ Au premier lancement, une fenêtre s'ouvre sur l'écran principal (ensuite : men
 « Passer l'assistant » ne change rien d'autre que `SetupCompleted` ; fermer la fenêtre le repropose
 au prochain démarrage.
 
+### Météo
+
+Ligne sous l'heure : icône, température, ciel et minimum / maximum du jour, rafraîchis toutes les 15 min.
+La ville se choisit dans l'assistant de configuration (étape **Météo**, recherche par nom) ; l'appui
+long sur l'horloge l'affiche ou la masque. Réglage `Weather` de `appsettings.json` (`Enabled`, `Place`,
+`Latitude`, `Longitude`). Données météo et recherche de villes : [Open-Meteo](https://open-meteo.com)
+(gratuit, sans compte ni clé, données sous licence CC BY 4.0).
+
 ### Réglages à l'écran
 
 **Appui long** (~0,65 s) sur une mesure du boîtier : un panneau permet de choisir la valeur HWiNFO qui
@@ -60,6 +68,7 @@ les seuils au doigt (boutons − / +) :
 | Charge GPU | charge, FPS en jeu | — |
 | Mémoire vidéo | utilisation (%) | — |
 | Une carte de disque | température de son disque physique | alerte |
+| L'horloge | — | afficher ou masquer la météo |
 
 Enregistré dans `appsettings.json` (`HwInfo`, `Drives[].Temp`, `Thresholds`) et appliqué tout de suite.
 Valeurs par défaut des seuils : CPU 75 / 85 / 95 °C et 120 / 150 / 160 W, GPU 70 / 80 / 90 °C et

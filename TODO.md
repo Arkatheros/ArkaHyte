@@ -15,5 +15,3 @@ du non fait.
 ---
 
 # Liste des tâches
-- [ ] modifier l'affichage pour la charge CPU, faire en sorte que le rond noir se remplisse en fonction de la charge et du aussi diminuer la taille du texte en  % 
-- [ ] Météo locale dans la zone de l'horloge

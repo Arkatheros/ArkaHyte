@@ -76,6 +76,8 @@ FPS : capteur PresentMon de HWiNFO, nommé d'après le processus au premier plan
 suffixe neutralisé par `HwInfoReader`) et ne comptant que si la fenêtre au premier plan couvre son
 écran (`ForegroundGame`). `wlanapi` natif lu à offsets fixes (`WifiReader`), `NetworkInterface` + `Ping` (statut
 online/no-internet/offline), SMTC pour la lecture en cours (`MediaMonitor`), API Windows pour CPU/RAM/disques.
+Météo : `WeatherService` (Open-Meteo, HTTP toutes les 15 min, ville géocodée dans l'assistant) → message
+`weather` ; activée / désactivée par appui long sur l'horloge (`saveMetric` `{ weather }`).
 `SpeedTest` pilote le CLI Ookla (`--format=jsonl --progress=yes`), téléchargé au premier usage dans
 `%LOCALAPPDATA%\ArkaHyte\tools` (licence : ne pas l'inclure au dépôt). Cloudflare abandonné (blocage IP).
 

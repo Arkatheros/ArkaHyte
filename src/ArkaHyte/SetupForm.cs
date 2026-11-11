@@ -130,6 +130,9 @@ public sealed class SetupForm : Form
 			case "save":
 				Save(root);
 				break;
+			case "searchPlace":
+				_ = SearchPlaceAsync(root.TryGetProperty("query", out var query) ? query.GetString() : null);
+				break;
 			case "skip":
 				Complete(_ => { }, restart: false);
 				break;
@@ -161,7 +164,8 @@ public sealed class SetupForm : Form
 			hardware = _settings.Hardware,
 			detected,
 			drives = ReadDrives(),
-			hwInfoPath = FindHwInfo()
+			hwInfoPath = FindHwInfo(),
+			weather = _settings.Weather
 		});
 		SendHwInfo();
 	}
@@ -291,6 +295,26 @@ public sealed class SetupForm : Form
 		}
 	}
 
+	/// <summary>Weather step: places matching what the user typed (Open-Meteo geocoding).</summary>
+	private async Task SearchPlaceAsync(string? query)
+	{
+		if (string.IsNullOrWhiteSpace(query) || query.Trim().Length < 2)
+		{
+			Post(new { type = "places", places = Array.Empty<WeatherPlace>() });
+			return;
+		}
+		try
+		{
+			var places = await WeatherService.SearchAsync(query.Trim());
+			Post(new { type = "places", places });
+		}
+		catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or JsonException)
+		{
+			Log.Error("Place search failed", exception);
+			Post(new { type = "places", places = Array.Empty<WeatherPlace>(), failed = true });
+		}
+	}
+
 	// ---------- Saving ----------
 
 	/// <summary>
@@ -313,6 +337,7 @@ public sealed class SetupForm : Form
 				root["Hardware"] = JsonSerializer.SerializeToNode(hardware);
 			}
 			SensorSettings.ApplyChoices(root, message);
+			SensorSettings.ApplyWeather(root, message);
 		}, restart: true);
 	}
 
