@@ -100,7 +100,7 @@ droits admin) :
 Les deux font la même installation :
 
 - installe dans `%LOCALAPPDATA%\ArkaHyte.App` (le runtime .NET 10 Desktop est installé s'il manque)
-- lance Arka Hyte à l'ouverture de session (clé `Run` de l'utilisateur) et crée le raccourci du menu Démarrer
+- lance Arka Hyte à l'ouverture de session (tâche planifiée « Arka Hyte » de l'utilisateur, dès le logon ; clé `Run` en secours) et crée le raccourci du menu Démarrer
 - copie `appsettings.json` dans `%LOCALAPPDATA%\ArkaHyte\` : c'est cette copie qui fait foi, les
   mises à jour ne l'écrasent pas.
 

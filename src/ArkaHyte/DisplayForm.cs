@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using ArkaHyte.Native;
@@ -40,6 +41,7 @@ public sealed class DisplayForm : Form
 	private CancellationTokenSource? _speedTestRun;
 	private string? _demo;
 	private bool _webReady;
+	private bool _firstReadyLogged;
 	private IntPtr _displayStateNotification;
 	private bool _displayOn = true;
 	private bool _sessionLocked;
@@ -514,6 +516,13 @@ public sealed class DisplayForm : Form
 
 	private void OnWebReady()
 	{
+		if (!_firstReadyLogged)
+		{
+			// Startup cost on our side, to compare with the delay before Windows starts the process
+			_firstReadyLogged = true;
+			using var process = Process.GetCurrentProcess();
+			Log.Info($"Web UI ready {(DateTime.Now - process.StartTime).TotalSeconds:0.0} s after process start");
+		}
 		_webReady = true;
 		SendConfig();
 		PostUpdateState(_updater.State);

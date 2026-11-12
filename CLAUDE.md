@@ -107,7 +107,7 @@ pour garder les jokers. Après `save`, `DisplayForm.RestartRequested` → `Progr
 **Installation et mises à jour (Velopack).** `VelopackApp.Build()…Run()` en tête de `Main` (hooks
 d'install / mise à jour / désinstallation → `Installation.cs`, 30 s max puis exit). Installé dans
 `%LOCALAPPDATA%\ArkaHyte.App` : packId distinct du dossier de données, que la désinstallation supprimerait.
-Démarrage par la clé HKCU `Run`. HYTE Nexus n'est pas géré par l'appli ni l'installeur : c'est à
+Démarrage : tâche planifiée « Arka Hyte » à l'ouverture de session (sans admin, priorité 4, sans limite de durée), la clé HKCU `Run` passait ~35 s après le logon (file d'Explorer) et ne sert plus que de secours. HYTE Nexus n'est pas géré par l'appli ni l'installeur : c'est à
 l'utilisateur de le désactiver ou le désinstaller (choix du propriétaire). `AppUpdater` lit les releases de github.com/Arkatheros/ArkaHyte (dépôt public requis) et
 n'installe que sur clic du menu. `AppSettings.Load()` préfère `%LOCALAPPDATA%\ArkaHyte\appsettings.json`
 (copié à l'installation). Version = `<Version>` du csproj, passée par `New-Release.ps1`. Garder le paquet
