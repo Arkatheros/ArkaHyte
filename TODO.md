@@ -15,12 +15,33 @@ du non fait.
 ---
 
 # Liste des tâches
-- [ ] Pilotage RGB (Corsair iCUE + carte mère MSI MPG X870E), par étapes, testé sur le PC du propriétaire :
-  - Corsair : iCUE SDK (iCUE ouvert, pas d'admin), via la bibliothèque RGB.NET ; prise de main puis restitution à iCUE
-  - Carte mère MSI : de préférence via le serveur OpenRGB (lancé en admin au démarrage, Arka Hyte s'y connecte en local
-    sans droits) ; à défaut SDK Mystic Light (exige l'admin, support X870E incertain). Vérifier d'abord la détection de
-    la carte dans OpenRGB ; OpenRGB limité à la carte mère pour ne pas disputer les LED Corsair à iCUE
-  - Pilotage dans un processus enfant (comme le catalogue d'applis) pour garder l'hôte léger
-  - Usages : couleur qui suit le thème (rouge Sith, bleu Jedi), alertes lumineuses (CPU/GPU chaud, pas d'internet),
-    réglage à l'écran (activer, couleur)
-  - Écarté : Windows Dynamic Lighting (seule l'appli au premier plan pilote les LED ; Arka Hyte ne l'est jamais)
+- [ ] gestion de l'affichage des fps et du mode game meme avec un jeu qui est en fenetre ex : League of legends
+- [ ] Mode jeu automatique : quand `ForegroundGame` détecte un jeu plein écran, vue dédiée sur l'écran du boîtier
+  - FPS en grand, temps de frame et 1 % low (PresentMon via HWiNFO, à vérifier dans `--dump`), température / charge
+    GPU, VRAM, température CPU ; widgets secondaires (disques, Wi-Fi, dock…) masqués
+  - Retour à la vue normale à la sortie du jeu (avec un délai pour ne pas basculer à chaque Alt+Tab)
+  - Capteurs choisis comme les autres (assistant + appui long), seuils existants réutilisés
+- [ ] Historique des températures : toucher une jauge (CPU / GPU, température ou puissance) ouvre une courbe des
+  10 à 30 dernières minutes
+  - Tampon circulaire côté C# ou JS (1 point / s), canvas redessiné une fois par seconde au plus, rien dans la
+    boucle 24 i/s quand le panneau est fermé
+  - Distinguer du réglage par appui long (toucher court = courbe, appui long = panneau `#sheet`)
+- [ ] Refroidissement : température du liquide de l'AIO TITAN 360, vitesse de la pompe et des ventilateurs RX,
+  lus par HWiNFO (capteurs du hub iCUE LINK, sans le SDK iCUE)
+  - Vérifier d'abord que HWiNFO les expose (`--dump`), puis nouvelles entrées `HwInfo` + étape de l'assistant
+  - Jauge « liquide » dans le style des autres, seuils réglables par appui long
+- [ ] Audio au toucher : volume général et par application, bouton micro coupé / actif avec voyant bien visible,
+  bascule de la sortie par défaut (casque ↔ enceintes)
+  - API Core Audio (`IMMDeviceEnumerator`, `IAudioEndpointVolume`, sessions audio) dans l'hôte : pas de shell
+    chargé ; changement de sortie par défaut via l'interface non documentée `IPolicyConfig` (à valider)
+  - Notification des changements (volume, mute, périphériques) plutôt que sondage
+  - Mesurer la mémoire de l'hôte avant / après (`--memory-log`)
+- [ ] Actions dans le dock : en plus des applis, raccourcis verrouiller le PC, mettre en veille, capture d'écran,
+  lancer un script PowerShell, ouvrir une URL
+  - Nouveaux types dans `ShortcutStore` / éditeur, icônes Lucide ; confirmation au toucher pour la veille
+- [ ] Lecture en cours enrichie : barre de progression touchable pour avancer / reculer, volume de l'appli qui joue
+  - SMTC : `GetTimelineProperties` + `TryChangePlaybackPositionAsync` ; volume via la session audio de l'appli
+    (dépend du point Audio)
+- [ ] Coût électrique du PC : compteur kWh et € (jour, session de jeu) à partir des puissances CPU + GPU (+ forfait
+  pour le reste, réglable), prix du kWh dans les réglages
+  - Cumul côté C# (persisté dans `%LOCALAPPDATA%\ArkaHyte` pour survivre au redémarrage), remise à zéro quotidienne
