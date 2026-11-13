@@ -17,6 +17,9 @@
 			<symbol id="i-note" viewBox="0 0 24 24"><path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></symbol>
 			<symbol id="i-play" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="m10 9 5 3-5 3z"/></symbol>
 			<symbol id="i-live" viewBox="0 0 24 24"><path d="M5 4h15v10l-4 4h-4l-3 3v-3H5z"/><path d="M11 8v4M15 8v4"/></symbol>
+			<symbol id="i-load" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></symbol>
+			<symbol id="i-gamepad" viewBox="0 0 24 24"><path d="M6 8h12a4 4 0 0 1 3.9 4.9l-1 4A2.6 2.6 0 0 1 16.4 18L14 15h-4l-2.4 3a2.6 2.6 0 0 1-4.5-1.1l-1-4A4 4 0 0 1 6 8z"/><path d="M7.5 11v3M6 12.5h3"/></symbol>
+			<symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
 		</defs>
 	</svg>
 
@@ -42,6 +45,39 @@
 				<span class="wx-temp" id="wxTemp"></span>
 				<span class="wx-text" id="wxText"></span>
 				<span class="wx-range data" id="wxRange"></span>
+			</div>
+		</section>
+
+		<!-- ===== Game view (frame.game): header, FPS reactor, framerate details and history ===== -->
+		<div class="widget game-only game-head">
+			<span class="chip"><svg><use href="#i-gamepad"/></svg>Mode jeu</span>
+			<span class="game-title" id="gameTitle">--</span>
+			<span class="data game-since" id="gameSince">&nbsp;</span>
+		</div>
+		<div class="widget game-only game-rule"></div>
+		<!-- Arc: FPS against the refresh rate of the game's monitor; built by console.js -->
+		<section class="widget game-only game-fps" id="gameFps" aria-label="Images par seconde">
+			<svg id="fpsDial" width="600" height="600" viewBox="0 0 600 600" aria-hidden="true"></svg>
+			<div class="game-fps-core">
+				<span class="label">Images / s</span>
+				<span class="game-fps-value" id="fpsValue">--</span>
+				<span class="game-fps-unit">FPS</span>
+				<span class="data game-fps-scale" id="fpsScale">&nbsp;</span>
+			</div>
+		</section>
+		<div class="widget game-only game-trio">
+			<div><span class="label" id="fpsLowLabel">1 % low</span><div class="game-trio-value"><span id="fpsLow">--</span><small>FPS</small></div></div>
+			<div><span class="label">Temps de frame</span><div class="game-trio-value"><span id="frameTime">--</span><small>ms</small></div></div>
+			<div><span class="label">Moyenne</span><div class="game-trio-value"><span id="fpsAvg">--</span><small>FPS</small></div></div>
+		</div>
+		<section class="widget game-only game-graph" aria-label="FPS des 60 dernières secondes">
+			<div class="game-graph-head">
+				<span class="label">60 dernières secondes</span>
+				<span class="game-legend"><span><i></i>FPS</span><span><i class="low"></i><span id="graphLowLabel">1 % low</span></span></span>
+			</div>
+			<div class="graph-window">
+				<svg id="fpsGraph" width="586" height="140" viewBox="0 0 586 140" aria-hidden="true"></svg>
+				<div class="graph-low" id="graphLow"></div>
 			</div>
 		</section>
 
@@ -373,6 +409,11 @@
 					<button type="button" class="editor-btn primary" id="sheetSave" disabled>Enregistrer</button>
 				</div>
 			</div>
+		</div>
+		<!-- Shown while a game runs: switches between the game view and the normal one -->
+		<div class="widget view-switch" id="viewSwitch" role="radiogroup" aria-label="Vue" hidden>
+			<button type="button" role="radio" data-view="normal"><svg><use href="#i-grid"/></svg>Vue normale</button>
+			<button type="button" role="radio" data-view="game"><svg><use href="#i-gamepad"/></svg>Mode jeu</button>
 		</div>
 		<!-- Stays until the update is installed (a toast would be gone before anyone looks) -->
 		<button type="button" class="update-banner" id="updateBanner" hidden>

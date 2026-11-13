@@ -59,7 +59,7 @@ public sealed class TrayIcon : IDisposable
 		menu.Items.Add(_demoItem);
 		menu.Items.Add(_themeItem);
 		menu.Items.Add("Recharger l'affichage", null, (_, _) => ReloadRequested?.Invoke());
-		menu.Items.Add("Assistant de configuration", null, (_, _) => SetupRequested?.Invoke());
+		menu.Items.Add("Paramètres", null, (_, _) => SetupRequested?.Invoke());
 		menu.Items.Add("Ouvrir le dossier des journaux", null, (_, _) => OpenLogs());
 		menu.Items.Add(new ToolStripSeparator());
 		menu.Items.Add(_updateItem);

@@ -15,12 +15,6 @@ du non fait.
 ---
 
 # Liste des tâches
-- [ ] gestion de l'affichage des fps et du mode game meme avec un jeu qui est en fenetre ex : League of legends
-- [ ] Mode jeu automatique : quand `ForegroundGame` détecte un jeu plein écran, vue dédiée sur l'écran du boîtier
-  - FPS en grand, temps de frame et 1 % low (PresentMon via HWiNFO, à vérifier dans `--dump`), température / charge
-    GPU, VRAM, température CPU ; widgets secondaires (disques, Wi-Fi, dock…) masqués
-  - Retour à la vue normale à la sortie du jeu (avec un délai pour ne pas basculer à chaque Alt+Tab)
-  - Capteurs choisis comme les autres (assistant + appui long), seuils existants réutilisés
 - [ ] Historique des températures : toucher une jauge (CPU / GPU, température ou puissance) ouvre une courbe des
   10 à 30 dernières minutes
   - Tampon circulaire côté C# ou JS (1 point / s), canvas redessiné une fois par seconde au plus, rien dans la

@@ -104,14 +104,18 @@ public sealed class SensorHub : IDisposable
 			_hwInfo.Get(hw.CpuTemp),
 			_hwInfo.Get(hw.CpuPower));
 
+		// PresentMon measures whatever has the focus: only a fullscreen window or a known game counts
+		var game = ForegroundGame.Read();
+		double? Framerate(SensorSelector? selector) => game.FramerateCounts ? _hwInfo.Get(selector) : null;
 		var gpu = new GpuData(
 			_hwInfo.Get(hw.GpuLoad),
 			_hwInfo.Get(hw.GpuTemp),
 			_hwInfo.Get(hw.GpuPower),
 			_hwInfo.Get(hw.GpuVramPercent),
 			settings.Hardware.VramTotalGb,
-			// PresentMon measures whatever has the focus: only a fullscreen window counts as a game
-			ForegroundGame.IsRunning() ? _hwInfo.Get(hw.GpuFps) : null);
+			Framerate(hw.GpuFps),
+			Framerate(hw.GpuFpsLow),
+			Framerate(hw.GpuFrameTime));
 
 		var disks = settings.Drives
 			.Select(d => SystemMetrics.ReadDrive(d.Name, _hwInfo.Get(d.Temp), DiskNumber(d.Name)))
@@ -131,7 +135,7 @@ public sealed class SensorHub : IDisposable
 			Log.Error("Media session read failed", exception);
 		}
 
-		return new Snapshot(cpu, gpu, SystemMetrics.ReadMemory(), disks, network, media);
+		return new Snapshot(cpu, gpu, SystemMetrics.ReadMemory(), disks, network, media, game.Game);
 	}
 
 	private int? DiskNumber(string driveName)

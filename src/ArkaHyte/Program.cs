@@ -18,7 +18,7 @@ internal static class Program
 	///   ArkaHyte.exe --identify-screens   show each screen's number for 3 s (as the setup wizard does) and exit
 	///   ArkaHyte.exe --setup-preview out.png [--setup-step 2]  render the setup wizard alone, capture it and exit
 	///   ArkaHyte.exe --screenshot out.png render, save a capture of the page and exit
-	///   ArkaHyte.exe --demo stress        show a simulated scenario (idle, stress) instead of live data
+	///   ArkaHyte.exe --demo stress        show a simulated scenario (idle, stress, game) instead of live data
 	///   ArkaHyte.exe --open-editor 0      open the shortcut editor of dock button 0 at start
 	///   ArkaHyte.exe --preview-speedtest [done]  speed test dial (or final summary) with sample values
 	///   ArkaHyte.exe --speedtest out.txt  run a real speed test and write every update

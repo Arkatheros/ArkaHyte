@@ -24,7 +24,9 @@ passe en mode design avec des données simulées.
 |---|---|
 | Charge CPU, RAM, disques, uptime | API Windows |
 | Températures, puissances, charge GPU, VRAM | HWiNFO → Gadget (registre `HKCU\Software\HWiNFO64\VSB`) |
-| FPS en jeu (affichés seulement pendant un jeu) | Capteur PresentMon de HWiNFO 64 bits, valeur « Displayed » (ou RTSS si RivaTuner tourne) → Gadget (`HwInfo.GpuFps`) ; seulement quand la fenêtre au premier plan est en plein écran |
+| FPS en jeu (affichés seulement pendant un jeu) | Capteur PresentMon de HWiNFO 64 bits, valeur « Displayed » (ou RTSS si RivaTuner tourne) → Gadget (`HwInfo.GpuFps`) ; seulement quand la fenêtre au premier plan est en plein écran ou appartient à un jeu reconnu par Windows (Game Bar), ce qui couvre les jeux en fenêtre |
+| 1 % low et temps de frame (vue jeu, facultatifs) | Capteur PresentMon de HWiNFO (`HwInfo.GpuFpsLow`, `HwInfo.GpuFrameTime`) ; sans eux : minimum des 60 dernières secondes et 1000 / FPS |
+| Jeu en cours (vue jeu) | Liste des jeux reconnus par Windows (`HKCU\System\GameConfigStore`), suivi jusqu'à la fin du processus ; fréquence de l'écran du jeu |
 | Wi-Fi (SSID, signal, RSSI, canal, bande, norme, sécurité, débit du lien) | API native `wlanapi` |
 | Débits réseau, ping | .NET `NetworkInterface` / `Ping` |
 | Lecture en cours (Spotify, YouTube, Twitch…) | API média Windows (`GlobalSystemMediaTransportControls`) |
@@ -37,7 +39,7 @@ HWiNFO : *Polling Period*), jamais deux fois les mêmes.
 ### Assistant de configuration
 
 Au premier lancement, une fenêtre s'ouvre sur l'écran principal (ensuite : menu de l'icône ›
-**Assistant de configuration**) :
+**Paramètres**) :
 
 1. **Écran du boîtier** : choix sur la carte des écrans (bouton pour afficher leurs numéros).
 2. **HWiNFO** : vérifie qu'il tourne et transmet des valeurs à Gadget, guide sa configuration.
@@ -67,6 +69,7 @@ les seuils au doigt (boutons − / +) :
 | Température / Consommation CPU ou GPU | la valeur de la tuile | chaud, alerte, fin de l'échelle |
 | Charge GPU | charge, FPS en jeu | — |
 | Mémoire vidéo | utilisation (%) | — |
+| Cadran des FPS (vue jeu) | FPS, 1 % low, temps de frame | — |
 | Une carte de disque | température de son disque physique | alerte |
 | L'horloge | — | afficher ou masquer la météo |
 
@@ -78,7 +81,7 @@ Valeurs par défaut des seuils : CPU 75 / 85 / 95 °C et 120 / 150 / 160 W, GPU 
 
 1. Dans HWiNFO › onglet *HWiNFO Gadget*, cocher **Drive Temperature** (*Température du disque*) dans le
    capteur S.M.A.R.T. de chaque disque.
-2. Assistant de configuration (menu de l'icône) › Capteurs › *Températures des disques* : une ligne par
+2. Menu de l'icône › Paramètres › Capteurs › *Températures des disques* : une ligne par
    disque physique (ses lecteurs, son modèle), la valeur correspondante proposée d'office.
 
 Le choix est écrit dans `Drives[].Temp` de `appsettings.json`, par exemple
@@ -245,6 +248,7 @@ Clic droit sur l'emblème gris dans la zone de notification : **mode démo** (CP
 | `ArkaHyte.exe --dump out.json` | Lit tous les capteurs une fois et écrit le résultat |
 | `ArkaHyte.exe --screenshot out.png` | Affiche l'interface, enregistre une capture et quitte |
 | `ArkaHyte.exe --demo stress` | Démarre en mode démo (CPU/GPU 100 %, sans internet) |
+| `ArkaHyte.exe --demo game` | Démarre sur la vue jeu avec un jeu simulé (à combiner avec `--screenshot`) |
 | `ArkaHyte.exe --open-editor 0` | Ouvre l'éditeur du 1er raccourci au démarrage |
 | `ArkaHyte.exe --setup` | Ouvre l'assistant de configuration au démarrage |
 | `ArkaHyte.exe --setup-preview out.png [--setup-step 2]` | Rend l'assistant seul (sans rien enregistrer), capture et quitte ; fonctionne à côté d'une instance lancée |

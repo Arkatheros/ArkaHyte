@@ -18,7 +18,10 @@
 		{ key: 'gpuVram', name: 'Mémoire GPU', unit: '%', sensor: /gpu/i, strict: true, labels: [/memory usage|utilisation de la mémoire/i, /memory|mémoire/i] },
 		// HWiNFO's own PresentMon sensor first (no extra tool), RTSS otherwise; only filled in games,
 		// so not counted as missing
-		{ key: 'gpuFps', name: 'FPS en jeu', unit: 'FPS', sensor: /./, labels: [/displayed.*avg|framerate \(displayed\)/i, /displayed/i, /presented/i, /^framerate$/i, /^(framerate|fps)/i, /framerate|fps|images/i], optional: true }
+		{ key: 'gpuFps', name: 'FPS en jeu', unit: 'FPS', sensor: /./, labels: [/displayed.*avg|framerate \(displayed\)/i, /displayed/i, /presented/i, /^framerate$/i, /^(framerate|fps)/i, /framerate|fps|images/i], optional: true },
+		// Game view extras: computed from the framerate when left out
+		{ key: 'gpuFpsLow', name: 'FPS 1 % low', unit: 'FPS', sensor: /./, labels: [/displayed.*1\s?%|1\s?%.*displayed/i, /1\s?%\s*low/i, /1\s?%/i], optional: true },
+		{ key: 'gpuFrameTime', name: 'Temps de frame', unit: 'ms', sensor: /presentmon|rtss/i, labels: [/frame ?time.*displayed.*avg/i, /frame ?time.*displayed/i, /frame ?time|frametime|temps (de |d')?(trame|image|frame)/i], optional: true }
 	];
 
 	const $ = id => document.getElementById(id);

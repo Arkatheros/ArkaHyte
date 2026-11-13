@@ -40,7 +40,7 @@ Pas de tests automatisés ni de linter. Vérification par les options one-shot d
 
 - `--screenshot out.png` : rend l'interface, capture, quitte. Moyen principal de valider un changement visuel.
 - `--dump out.json` : un échantillon de tous les capteurs + entrées HWiNFO disponibles.
-- `--demo stress|idle`, `--preview-speedtest [done]`, `--open-editor 0` : états à combiner avec `--screenshot`.
+- `--demo stress|idle|game`, `--preview-speedtest [done]`, `--open-editor 0` : états à combiner avec `--screenshot`.
 - `--setup-preview out.png [--setup-step 0-4]` : capture de l'assistant, autonome (pas de mutex) et sans écriture.
 - `--speedtest out.txt` : vrai test de débit (sature la connexion, ne pas lancer sans raison).
 - `--devtools` : F12.
@@ -74,7 +74,16 @@ Disques : `DiskData.Disk` = numéro de disque physique (IOCTL, `HardwareDetector
 cache par `SensorHub`) ; l'UI regroupe les lecteurs consécutifs d'un même disque sous une température.
 FPS : capteur PresentMon de HWiNFO, nommé d'après le processus au premier plan (`PresentMon [x.exe]`,
 suffixe neutralisé par `HwInfoReader`) et ne comptant que si la fenêtre au premier plan couvre son
-écran (`ForegroundGame`). `wlanapi` natif lu à offsets fixes (`WifiReader`), `NetworkInterface` + `Ping` (statut
+écran ou appartient à un jeu reconnu par Windows (liste de la Game Bar, `HKCU\System\GameConfigStore\Children`
+→ `MatchedExeFullPath`, relue au plus une fois par minute ; `ForegroundGame`), ce qui couvre les jeux en fenêtre.
+**Vue jeu.** Un jeu reconnu par Windows passé au premier plan est suivi jusqu'à la fin de son processus
+(`ForegroundGame` → `Snapshot.Game` : nom, fréquence de l'écran). `console.js` (`renderGame`) passe alors
+`.frame` en `game` (+ `has-game` tant qu'un jeu tourne) : mêmes widgets GPU / CPU / réseau déplacés, dock gardé (lecture en cours masquée)
+par CSS, éléments `.game-only` (en-tête, cadran FPS en SVG, trio, courbe 60 s), retour 10 s après le jeu.
+Bouton `#viewSwitch` (vue normale ↔ jeu, choix gardé jusqu'à la fin du jeu). Valeurs lissées comme ailleurs,
+courbe défilée par `transform` (`scrollGraph`), anneau CPU (compteur de charge) à gauche de température / consommation. 1 % low / temps de frame : `HwInfo.GpuFpsLow`,
+`GpuFrameTime` facultatifs, sinon calculés côté page.
+`wlanapi` natif lu à offsets fixes (`WifiReader`), `NetworkInterface` + `Ping` (statut
 online/no-internet/offline), SMTC pour la lecture en cours (`MediaMonitor`), API Windows pour CPU/RAM/disques.
 Météo : `WeatherService` (Open-Meteo, HTTP toutes les 15 min, ville géocodée dans l'assistant) → message
 `weather` ; activée / désactivée par appui long sur l'horloge (`saveMetric` `{ weather }`).
@@ -131,6 +140,11 @@ l'icône suit le thème (`SithMenuRenderer.SetTheme`).
 
 L'écran tourne en permanence : cible ~16 % d'un cœur.
 - Boucle d'animation unique à 24 fps via `setTimeout` dans `console.js` ; tout nouvel effet s'y branche.
+- Valeurs affichées lissées entre deux échantillons : `glide(clé, cible, draw)` (`console.js`) les fait glisser
+  à vitesse constante sur la durée du changement précédent, `stepGlides` dans la boucle ; toute nouvelle valeur
+  passe par là. Jauges sur la valeur brute ; chiffres sur leur propre glide avec `NUMBER` (moyenne des
+  3 derniers échantillons, réécrits 4 fois par seconde au plus). Écritures DOM par `setText` / `setStyle`,
+  seulement si le contenu change.
 - Aucune `transition` CSS ni animation CSS infinie, pas de `backdrop-filter`.
 - Effets pilotés par variables CSS mises à jour en JS ; `will-change` sur les éléments animés.
 - Une variable animée se pose sur les éléments qui la lisent (`setVar(elements, …)`), jamais sur `.frame` :

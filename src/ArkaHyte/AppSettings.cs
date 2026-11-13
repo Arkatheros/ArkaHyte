@@ -25,7 +25,10 @@ public sealed record HwInfoSettings(
 	SensorSelector? GpuLoad = null,
 	SensorSelector? GpuVramPercent = null,
 	// Game framerate: HWiNFO's PresentMon sensor (or RTSS), only present while a game runs
-	SensorSelector? GpuFps = null);
+	SensorSelector? GpuFps = null,
+	// Optional PresentMon values of the game view; computed from the framerate when not chosen
+	SensorSelector? GpuFpsLow = null,
+	SensorSelector? GpuFrameTime = null);
 
 /// <summary>Display themes: colours, hilt, background and particles (console.css, console.js).</summary>
 public static class Themes

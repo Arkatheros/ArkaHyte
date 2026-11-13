@@ -1740,3 +1740,361 @@ body {
 		animation: none;
 	}
 }
+
+/* ---------- Game view (frame.game, while a recognised game runs) ----------
+   Same widgets as the normal view where they exist (GPU, CPU metrics, network, dock), moved and
+   compacted; the game-only elements are hidden otherwise. Positions are those of the validated mockup. */
+.frame:not(.game) .game-only,
+.frame.game .vault,
+.frame.game .media,
+.frame.game .weather,
+.frame.game .gpu-load .fps,
+.frame.game #netTestBtn,
+.frame.has-game .update-banner {
+	display: none;
+}
+
+/* Header: compact clock on the left, game on the right */
+.frame.game .clock {
+	top: 40px;
+	left: 40px;
+	width: 320px;
+	text-align: left;
+}
+.frame.game .date {
+	font-size: 17px;
+	letter-spacing: 0.14em;
+	padding-left: 0;
+	white-space: nowrap;
+}
+.frame.game .time {
+	font-size: 104px;
+	margin-top: 4px;
+}
+.game-head {
+	top: 50px;
+	left: 362px;
+	width: 280px;
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 10px;
+	text-align: right;
+}
+.game-head .chip {
+	font-size: 15px;
+	padding: 5px 12px;
+}
+.game-head .chip svg {
+	width: 18px;
+	height: 18px;
+}
+.game-title {
+	font-weight: 700;
+	font-size: 26px;
+	line-height: 1.1;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+.game-since {
+	font-size: 15px;
+	color: var(--ash);
+}
+.game-rule {
+	top: 196px;
+	left: 40px;
+	width: 602px;
+	height: 2px;
+	background: linear-gradient(90deg, transparent, var(--blade) 30%, var(--blade) 70%, transparent);
+	box-shadow: 0 0 10px rgba(var(--blade-rgb), 0.7);
+}
+
+/* FPS reactor: 270° dial drawn on a 600 px grid, shown at 460 px; the blade is a dash of the full arc */
+.game-fps {
+	top: 226px;
+	left: 111px;
+	width: 460px;
+	height: 460px;
+}
+.game-fps svg {
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 460px;
+	height: 460px;
+}
+.dial-lens {
+	fill: rgba(var(--panel-rgb), 0.78);
+	stroke: rgba(var(--line-rgb), 0.35);
+	stroke-width: 1.5;
+}
+.dial-track,
+.dial-blade,
+.dial-core {
+	fill: none;
+	stroke-linecap: round;
+}
+.dial-track {
+	stroke: var(--track);
+	stroke-width: 14;
+}
+.dial-blade {
+	stroke: var(--blade);
+	stroke-width: 14;
+	filter: drop-shadow(0 0 6px var(--blade)) drop-shadow(0 0 18px var(--blade));
+}
+.dial-core {
+	stroke: var(--core);
+	stroke-width: 4;
+}
+.dial-tick {
+	stroke: var(--ash);
+	stroke-width: 1.5;
+	opacity: 0.5;
+}
+.dial-tick.major {
+	stroke-width: 3;
+}
+.dial-tick.on {
+	stroke: var(--blade);
+	opacity: 1;
+}
+.dial-num {
+	fill: var(--ash);
+	font-family: var(--font-data);
+	font-size: 17px;
+	text-anchor: middle;
+}
+.dial-low {
+	stroke: var(--warm);
+	stroke-width: 4;
+	stroke-linecap: round;
+}
+.game-fps-core {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	pointer-events: none;
+}
+.game-fps-core .label {
+	font-size: 17px;
+}
+.game-fps-value {
+	font-family: var(--font-display);
+	font-weight: 100;
+	font-size: 176px;
+	line-height: 0.85;
+	font-variant-numeric: tabular-nums;
+	color: var(--core);
+	text-shadow: 0 0 2px rgba(var(--blade-rgb), 0.9), 0 0 30px rgba(var(--blade-rgb), 0.55);
+}
+.game-fps-unit {
+	font-weight: 700;
+	font-size: 21px;
+	letter-spacing: 0.5em;
+	padding-left: 0.5em;
+	color: var(--blade);
+	margin-top: 4px;
+}
+.game-fps-scale {
+	margin-top: 10px;
+	font-size: 14px;
+	color: var(--ash);
+}
+
+/* 1 % low, frame time, average */
+.game-trio {
+	top: 650px;
+	left: 40px;
+	width: 602px;
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	text-align: center;
+}
+.game-trio > div + div {
+	border-left: 1px solid var(--line);
+}
+.game-trio .label {
+	font-size: 16px;
+}
+.game-trio-value {
+	font-family: var(--font-display);
+	font-weight: 300;
+	font-size: 60px;
+	line-height: 1;
+	margin-top: 4px;
+	font-variant-numeric: tabular-nums;
+}
+.game-trio-value small {
+	font-size: 22px;
+	color: var(--ash);
+	margin-left: 4px;
+}
+
+/* Last 60 s of FPS */
+.game-graph {
+	top: 784px;
+	left: 24px;
+	width: 634px;
+	height: 230px;
+	padding: 18px 24px;
+	box-sizing: border-box;
+	background: var(--obsidian);
+	box-shadow: inset 0 1px 0 var(--line), inset 0 -1px 0 var(--line);
+	clip-path: polygon(24px 0, 100% 0, 100% calc(100% - 24px), calc(100% - 24px) 100%, 0 100%, 0 24px);
+}
+.game-graph-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+.game-legend {
+	display: flex;
+	gap: 16px;
+	font-size: 14px;
+	color: var(--ash);
+}
+.game-legend i {
+	display: inline-block;
+	width: 18px;
+	height: 3px;
+	vertical-align: middle;
+	margin-right: 6px;
+	background: var(--blade);
+	box-shadow: 0 0 6px var(--blade);
+}
+.game-legend i.low {
+	height: 0;
+	background: none;
+	border-top: 2px dashed var(--warm);
+	box-shadow: none;
+}
+/* The curve scrolls under this window; the 1 % low line moves over it, both by transform */
+.graph-window {
+	position: relative;
+	height: 140px;
+	margin-top: 10px;
+	overflow: hidden;
+}
+.graph-window svg {
+	display: block;
+	will-change: transform;
+}
+.graph-grid {
+	stroke: var(--track);
+	stroke-width: 1;
+}
+.graph-area {
+	fill: rgba(var(--blade-rgb), 0.18);
+}
+.graph-line {
+	fill: none;
+	stroke: var(--blade);
+	stroke-width: 2.5;
+	stroke-linejoin: round;
+	filter: drop-shadow(0 0 5px var(--blade));
+}
+.graph-low {
+	position: absolute;
+	top: -1px;
+	left: 0;
+	right: 0;
+	height: 2px;
+	background: repeating-linear-gradient(90deg, var(--warm) 0 6px, transparent 6px 12px);
+	visibility: hidden;
+	will-change: transform;
+}
+
+/* GPU and CPU blocks moved under the graph: the CPU ring (load speedometer) on the left, temperature
+   and power stacked on its right */
+.frame.game .gpu-head { top: 1064px; }
+.frame.game .gpu-load { top: 1124px; }
+.frame.game .vram { top: 1262px; }
+.frame.game .gpu-metrics { top: 1390px; }
+.frame.game .cpu-head { top: 1584px; }
+.frame.game .cpu {
+	top: 1640px;
+	left: 16px;
+}
+.frame.game .cpu-metrics {
+	top: 1676px;
+	left: 404px;
+	width: 238px;
+	grid-template-columns: 1fr;
+	gap: 40px 0;
+}
+
+/* Network; the dock keeps its place at the bottom */
+.frame.game .holonet { top: 2012px; }
+
+/* View switch: above the dock, at the same place in both views. Clipped corners get their own stroke
+   (a gradient line along the cut), the border and the inset outline stop at the clip. */
+.view-switch {
+	top: 2300px;
+	left: 91px;
+	width: 500px;
+	height: 76px;
+	z-index: 10;
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	padding: 6px;
+	box-sizing: border-box;
+	border: 1px solid var(--line);
+	background:
+		linear-gradient(135deg, transparent 12.7px, var(--line) 12.7px, var(--line) 13.9px, transparent 13.9px),
+		linear-gradient(315deg, transparent 12.7px, var(--line) 12.7px, var(--line) 13.9px, transparent 13.9px),
+		rgba(var(--panel-rgb), 0.85);
+	background-origin: border-box;
+	clip-path: polygon(18px 0, 100% 0, 100% calc(100% - 18px), calc(100% - 18px) 100%, 0 100%, 0 18px);
+}
+.view-switch button {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 12px;
+	padding: 0;
+	border: none;
+	background: none;
+	font: inherit;
+	font-weight: 700;
+	font-size: 19px;
+	letter-spacing: 0.18em;
+	text-transform: uppercase;
+	color: var(--ash);
+	cursor: pointer;
+}
+.view-switch svg {
+	width: 26px;
+	height: 26px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.7;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+.view-switch button[aria-checked="true"] {
+	color: var(--core);
+	background:
+		linear-gradient(135deg, transparent 8.4px, var(--blade) 8.4px, var(--blade) 9.6px, transparent 9.6px),
+		linear-gradient(315deg, transparent 8.4px, var(--blade) 8.4px, var(--blade) 9.6px, transparent 9.6px),
+		rgba(var(--blade-rgb), 0.22);
+	box-shadow: inset 0 0 0 1px var(--blade), 0 0 18px rgba(var(--blade-rgb), 0.55);
+	clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+}
+.view-switch button[aria-checked="true"] svg {
+	stroke: var(--blade);
+	filter: drop-shadow(0 0 5px var(--blade));
+}
+
+/* Jedi: same readability aids as the other figures on the bright sky */
+:root[data-theme="jedi"] .game-fps-value,
+:root[data-theme="jedi"] .game-trio-value {
+	-webkit-text-stroke: 1px currentColor;
+}

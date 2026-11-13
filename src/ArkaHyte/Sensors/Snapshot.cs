@@ -5,7 +5,21 @@ namespace ArkaHyte.Sensors;
 public sealed record CpuData(double? Load, double? Temp, double? Power);
 
 /// <param name="Fps">Framerate of the running game; null or 0 when none (the widget then hides).</param>
-public sealed record GpuData(double? Load, double? Temp, double? Power, double? VramPercent, double VramTotalGb, double? Fps);
+/// <param name="FpsLow">"1 % low" framerate when HWiNFO reports it (the page computes a fallback).</param>
+/// <param name="FrameTimeMs">Frame time when HWiNFO reports it (the page derives it from the FPS otherwise).</param>
+public sealed record GpuData(
+	double? Load,
+	double? Temp,
+	double? Power,
+	double? VramPercent,
+	double VramTotalGb,
+	double? Fps,
+	double? FpsLow,
+	double? FrameTimeMs);
+
+/// <summary>Game being played (recognised by Windows), shown in the game view.</summary>
+/// <param name="RefreshHz">Refresh rate of the monitor the game was seen on: top of the FPS scale.</param>
+public sealed record GameData(string Name, int? RefreshHz);
 
 public sealed record RamData(double UsedGb, double TotalGb);
 
@@ -52,7 +66,8 @@ public sealed record Snapshot(
 	RamData Ram,
 	IReadOnlyList<DiskData> Disks,
 	NetworkData Network,
-	MediaData? Media)
+	MediaData? Media,
+	GameData? Game)
 {
 	public string Type => "snapshot";
 }

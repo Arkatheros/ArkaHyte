@@ -20,7 +20,9 @@ public static class SensorSettings
 		("gpuPower", nameof(HwInfoSettings.GpuPower), s => s.GpuPower),
 		("gpuLoad", nameof(HwInfoSettings.GpuLoad), s => s.GpuLoad),
 		("gpuVram", nameof(HwInfoSettings.GpuVramPercent), s => s.GpuVramPercent),
-		("gpuFps", nameof(HwInfoSettings.GpuFps), s => s.GpuFps)
+		("gpuFps", nameof(HwInfoSettings.GpuFps), s => s.GpuFps),
+		("gpuFpsLow", nameof(HwInfoSettings.GpuFpsLow), s => s.GpuFpsLow),
+		("gpuFrameTime", nameof(HwInfoSettings.GpuFrameTime), s => s.GpuFrameTime)
 	];
 
 	/// <summary>Metrics with a gauge and alert levels: key shared with the pages, property in "Thresholds".</summary>

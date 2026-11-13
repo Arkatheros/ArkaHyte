@@ -233,10 +233,116 @@
 		return { value: sizeFormats[digits].format(value), unit: SIZE_UNITS[unit] };
 	}
 
-	const text = (id, value) => {
-		$(id).textContent = value;
-	};
+	// Text and inline styles are only written when they change: the glides below redraw at every frame
+	function setText(element, value) {
+		const content = String(value);
+		if (element.textContent !== content) {
+			element.textContent = content;
+		}
+	}
+	const text = (id, value) => setText($(id), value);
 	const orDash = (value, format) => (isNum(value) ? format(value) : '--');
+	const styleCache = new WeakMap();
+	function setStyle(element, property, value) {
+		let styles = styleCache.get(element);
+		if (!styles) {
+			styles = {};
+			styleCache.set(element, styles);
+		}
+		if (styles[property] !== value) {
+			styles[property] = value;
+			element.style[property] = value;
+		}
+	}
+
+	// ---------- Glides: readouts move smoothly from one sample to the next ----------
+	// Samples arrive once per second, HWiNFO values at its own pace: a shown value travels from where
+	// it stands to the new sample at a steady speed, over the time the previous change took, so it
+	// never jumps and keeps moving until the next one. Stepped by the 24 fps loop (stepGlides); idle
+	// glides cost nothing.
+	// Gauges glide on the raw samples; numbers read calmer: their own glide follows the mean of the
+	// last samples (NUMBER.average) and only rewrites the text a few times per second (NUMBER.every).
+	const GLIDE_MIN_MS = 400;
+	const GLIDE_MAX_MS = 2500;
+	const NUMBER = { average: 3, every: 250 };
+	const glides = new Map();
+	const activeGlides = new Set();
+
+	// Moves the value named key towards target, drawing each step with draw(value). Options: average
+	// (glide towards the mean of that many samples), every (ms between two draws), jump (a wider gap
+	// is drawn at once: a seek, another track). No data (null) is drawn at once.
+	function glide(key, target, draw, options = {}) {
+		const now = performance.now();
+		let entry = glides.get(key);
+		if (!entry) {
+			entry = { from: null, to: undefined, value: null, start: now, duration: 0, changed: now, draw, samples: [], every: 0, drawn: 0 };
+			glides.set(key, entry);
+		}
+		entry.draw = draw;
+		entry.every = options.every || 0;
+		let next = isNum(target) ? target : null;
+		if (options.average > 1) {
+			if (next === null) {
+				entry.samples.length = 0;
+			} else {
+				entry.samples.push(next);
+				if (entry.samples.length > options.average) {
+					entry.samples.shift();
+				}
+				next = entry.samples.reduce((sum, value) => sum + value, 0) / entry.samples.length;
+			}
+		}
+		if (next === entry.to) {
+			return;
+		}
+		const previous = entry.changed;
+		entry.changed = now;
+		entry.to = next;
+		const jump = isNum(options.jump) ? options.jump : Infinity;
+		if (next === null || entry.value === null || !motion || Math.abs(next - entry.value) > jump) {
+			activeGlides.delete(entry);
+			entry.value = next;
+			entry.drawn = now;
+			draw(next);
+			return;
+		}
+		entry.from = entry.value;
+		entry.start = now;
+		entry.duration = clamp(now - previous, GLIDE_MIN_MS, GLIDE_MAX_MS);
+		activeGlides.add(entry);
+	}
+
+	// Draws a glide again where it stands (its widget was rebuilt or rescaled)
+	function redrawGlide(key) {
+		const entry = glides.get(key);
+		if (entry) {
+			entry.draw(entry.value);
+		}
+	}
+
+	// The next value starts from scratch (drawn at once): its widget is gone
+	function forgetGlide(key) {
+		const entry = glides.get(key);
+		if (entry) {
+			activeGlides.delete(entry);
+			glides.delete(key);
+		}
+	}
+
+	function stepGlides(now) {
+		for (const entry of activeGlides) {
+			const t = clamp((now - entry.start) / entry.duration, 0, 1);
+			entry.value = entry.from + (entry.to - entry.from) * t;
+			// The end of a glide is always drawn, so the last value shown is the exact one
+			if (t >= 1 || now - entry.drawn >= entry.every) {
+				entry.drawn = now;
+				entry.draw(entry.value);
+			}
+			if (t >= 1) {
+				activeGlides.delete(entry);
+			}
+		}
+	}
 
 	// ---------- Static widget skeletons ----------
 	const leds = $('leds');
@@ -281,49 +387,63 @@
 			const scale = $(`${tile.prefix}Tile`).querySelectorAll('.gauge-scale span');
 			scale[0].textContent = nf0(limits[tile.key].min);
 			scale[scale.length - 1].textContent = `${nf0(limits[tile.key].max)} ${tile.unit}`;
+			redrawGlide(tile.prefix);
+			redrawGlide(`${tile.prefix}Gauge`);
 		}
 	}
 
 	function setMetric(prefix, value, key) {
-		const { min, max, warm, hot } = limits[key];
+		glide(`${prefix}Gauge`, value, (shownValue) => drawMetricGauge(prefix, shownValue, key));
+		glide(prefix, value, (shownValue) => drawMetricValue(prefix, shownValue, key), NUMBER);
+	}
+
+	function drawMetricGauge(prefix, value, key) {
+		const { min, max } = limits[key];
+		setStyle($(`${prefix}Fill`), 'width', isNum(value) ? `${clamp(((value - min) / (max - min)) * 100, 2, 100).toFixed(2)}%` : '0%');
+	}
+
+	// Alert colours follow the number they colour
+	function drawMetricValue(prefix, value, key) {
+		const { warm, hot } = limits[key];
 		const tile = $(`${prefix}Tile`);
-		if (!isNum(value)) {
-			text(prefix, '--');
-			$(`${prefix}Fill`).style.width = '0%';
-			tile.classList.remove('hot', 'warm');
-			return;
-		}
-		text(prefix, nf0(value));
-		$(`${prefix}Fill`).style.width = `${clamp(((value - min) / (max - min)) * 100, 2, 100)}%`;
-		tile.classList.toggle('hot', value >= hot);
-		tile.classList.toggle('warm', value >= warm && value < hot);
+		text(prefix, orDash(value, nf0));
+		tile.classList.toggle('hot', isNum(value) && value >= hot);
+		tile.classList.toggle('warm', isNum(value) && value >= warm && value < hot);
 	}
 
 	function renderCpu(cpu) {
-		text('cpuLoad', orDash(cpu.load, Math.round));
-		$('cpuLoad').parentElement.classList.toggle('wide', isNum(cpu.load) && Math.round(cpu.load) >= 100);
+		// Speedometer in the ring (drawn by the loop)
+		glide('cpuRing', cpu.load, (load) => {
+			shown.cpu = isNum(load) ? load : 0;
+		});
+		glide('cpuLoad', cpu.load, (load) => {
+			text('cpuLoad', orDash(load, Math.round));
+			$('cpuLoad').parentElement.classList.toggle('wide', isNum(load) && Math.round(load) >= 100);
+		}, NUMBER);
 		setMetric('cpuTemp', cpu.temp, 'cpuTemp');
 		setMetric('cpuPow', cpu.power, 'cpuPower');
 	}
 
+	let litSegs = -1;
 	function renderGpu(gpu) {
-		text('gpuLoad', orDash(gpu.load, Math.round));
-		// 5 % per segment, but any load shown above 0 % lights at least the first one
-		const shownLoad = isNum(gpu.load) ? Math.round(gpu.load) : 0;
-		const litSegs = shownLoad > 0 ? Math.max(1, Math.round(gpu.load / 5)) : 0;
-		[...segs.children].forEach((bar, i) => {
-			bar.classList.toggle('on', i < litSegs);
-			bar.classList.toggle('peak', i === litSegs - 1);
+		glide('gpuLoad', gpu.load, (load) => text('gpuLoad', orDash(load, Math.round)), NUMBER);
+		glide('gpuSegs', gpu.load, (load) => {
+			// 5 % per segment, but any load shown above 0 % lights at least the first one
+			const lit = isNum(load) && Math.round(load) > 0 ? Math.max(1, Math.round(load / 5)) : 0;
+			if (lit !== litSegs) {
+				litSegs = lit;
+				[...segs.children].forEach((bar, i) => {
+					bar.classList.toggle('on', i < lit);
+					bar.classList.toggle('peak', i === lit - 1);
+				});
+			}
 		});
 		const total = isNum(gpu.vramTotalGb) ? gpu.vramTotalGb : 24;
 		text('vramTotal', nf0(total));
-		if (isNum(gpu.vramPercent)) {
-			text('vramUsed', nf1.format((gpu.vramPercent * total) / 100));
-			$('vramFill').style.width = `${clamp(gpu.vramPercent, 1.5, 100)}%`;
-		} else {
-			text('vramUsed', '--');
-			$('vramFill').style.width = '0%';
-		}
+		glide('vramUsed', gpu.vramPercent, (percent) => text('vramUsed', orDash(percent, (value) => nf1.format((value * total) / 100))), NUMBER);
+		glide('vramFill', gpu.vramPercent, (percent) => {
+			setStyle($('vramFill'), 'width', isNum(percent) ? `${clamp(percent, 1.5, 100).toFixed(2)}%` : '0%');
+		});
 		setMetric('gpuTemp', gpu.temp, 'gpuTemp');
 		setMetric('gpuPow', gpu.power, 'gpuPower');
 		// RTSS reports 0 (or nothing) outside games: the readout only shows while one runs
@@ -331,9 +451,7 @@
 		if ($('gpuFps').hidden === playing) {
 			$('gpuFps').hidden = !playing;
 		}
-		if (playing) {
-			text('gpuFpsValue', nf0(gpu.fps));
-		}
+		glide('gpuFps', playing ? gpu.fps : null, (fps) => text('gpuFpsValue', orDash(fps, nf0)), NUMBER);
 	}
 
 	function renderVramTicks(totalGb) {
@@ -364,6 +482,7 @@
 		const layout = disks.length + ':' + runs.map(r => r.count).join(',');
 		if (layout !== diskLayout) {
 			diskLayout = layout;
+			diskGroups.forEach((_, i) => forgetGlide(`diskTemp${i}`));
 			const container = $('disks');
 			diskSlots = disks.map((_, i) => {
 				const slot = $('diskTemplate').content.firstElementChild.cloneNode(true);
@@ -381,12 +500,22 @@
 		return runs;
 	}
 
+	let litLeds = -1;
 	function renderMemory(ram, disks) {
 		if (isNum(ram.usedGb) && isNum(ram.totalGb)) {
-			text('ramUsed', nf1.format(ram.usedGb));
-			text('ramTotal', nf0(ram.totalGb));
-			const lit = Math.round((ram.usedGb / ram.totalGb) * 32);
-			[...leds.children].forEach((led, i) => led.classList.toggle('on', i < lit));
+			const totalGb = ram.totalGb;
+			text('ramTotal', nf0(totalGb));
+			glide('ramUsed', ram.usedGb, (used) => text('ramUsed', orDash(used, (value) => nf1.format(value))), NUMBER);
+			glide('ramLeds', ram.usedGb, (used) => {
+				if (!isNum(used)) {
+					return;
+				}
+				const lit = Math.round((used / totalGb) * 32);
+				if (lit !== litLeds) {
+					litLeds = lit;
+					[...leds.children].forEach((led, i) => led.classList.toggle('on', i < lit));
+				}
+			});
 		}
 		const runs = ensureDiskLayout(disks);
 		const circumference = 2 * Math.PI * 47;
@@ -406,39 +535,38 @@
 			const temp = disks.slice(run.start, run.start + run.count).map(d => d.temp).find(isNum);
 			const group = diskGroups[i];
 			group.hidden = !isNum(temp);
-			if (isNum(temp)) {
-				group.querySelector('.disk-temp-value').textContent = `${nf0(temp)} °C`;
-				group.classList.toggle('hot', temp >= limits.diskTemp.hot);
-			}
+			glide(`diskTemp${i}`, temp, (value) => {
+				if (isNum(value)) {
+					setText(group.querySelector('.disk-temp-value'), `${nf0(value)} °C`);
+					group.classList.toggle('hot', value >= limits.diskTemp.hot);
+				}
+			}, NUMBER);
 		});
 	}
 
 	function renderNetwork(net) {
 		const wifi = net.wifi;
-		if (wifi) {
-			text('netChip', [wifi.generation, isNum(wifi.bandGhz) ? `${nf1.format(wifi.bandGhz).replace(',0', '')} GHz` : null].filter(Boolean).join(' · '));
-			text('sigPct', orDash(wifi.signal, nf0));
-			text('rssi', isNum(wifi.rssi) ? `${wifi.rssi} dBm` : ' ');
-			text('ssid', wifi.ssid || '--');
-			text('channel', orDash(wifi.channel, String));
-			text('link', isNum(wifi.linkMbps) ? `${nf1.format(wifi.linkMbps)} Mbit/s` : '--');
-			const arcs = isNum(wifi.signal) ? Math.ceil(wifi.signal / 25) : 0;
+		glide('netSignal', wifi ? wifi.signal : null, (signal) => text('sigPct', orDash(signal, nf0)), NUMBER);
+		glide('netArcs', wifi ? wifi.signal : null, (signal) => {
+			const arcs = isNum(signal) ? Math.ceil(signal / 25) : 0;
 			for (let i = 1; i <= 4; i++) {
 				$(`arc${i}`).classList.toggle('on', i <= arcs);
 			}
+		});
+		glide('netRssi', wifi ? wifi.rssi : null, (rssi) => text('rssi', isNum(rssi) ? `${Math.round(rssi)} dBm` : ' '), NUMBER);
+		if (wifi) {
+			text('netChip', [wifi.generation, isNum(wifi.bandGhz) ? `${nf1.format(wifi.bandGhz).replace(',0', '')} GHz` : null].filter(Boolean).join(' · '));
+			text('ssid', wifi.ssid || '--');
+			text('channel', orDash(wifi.channel, String));
+			text('link', isNum(wifi.linkMbps) ? `${nf1.format(wifi.linkMbps)} Mbit/s` : '--');
 		} else {
 			text('netChip', net.adapter || 'Filaire');
-			text('sigPct', '--');
-			text('rssi', ' ');
 			['ssid', 'channel'].forEach((id) => text(id, '--'));
 			text('link', isNum(net.linkMbps) ? `${nf0(net.linkMbps)} Mbit/s` : '--');
-			for (let i = 1; i <= 4; i++) {
-				$(`arc${i}`).classList.remove('on');
-			}
 		}
-		text('ping', isNum(net.pingMs) ? `${nf0(net.pingMs)} ms` : '--');
-		text('rateDown', formatRate(net.downBytesPerSec));
-		text('rateUp', formatRate(net.upBytesPerSec));
+		glide('ping', net.pingMs, (ping) => text('ping', isNum(ping) ? `${nf0(ping)} ms` : '--'), NUMBER);
+		glide('rateDown', net.downBytesPerSec, (rate) => text('rateDown', formatRate(rate)), NUMBER);
+		glide('rateUp', net.upBytesPerSec, (rate) => text('rateUp', formatRate(rate)), NUMBER);
 
 		// Connectivity alarm: the whole panel switches to an alert look, the chip says what and since when
 		const status = net.status || 'online';
@@ -1309,7 +1437,7 @@
 			chip.querySelector('span').textContent = '--';
 			$('mediaProgress').hidden = false;
 			$('mediaLive').hidden = true;
-			$('mediaFill').style.width = '0%';
+			glide('mediaProgress', null, drawMediaProgress);
 			text('mediaPos', '0:00');
 			text('mediaDur', '0:00');
 			setPlayIcon(false);
@@ -1325,12 +1453,17 @@
 		if (!media.live && isNum(media.durationSec) && media.durationSec > 0) {
 			text('mediaPos', formatTime(media.positionSec || 0));
 			text('mediaDur', formatTime(media.durationSec));
-			$('mediaFill').style.width = `${clamp(((media.positionSec || 0) / media.durationSec) * 100, 1, 100)}%`;
+			// A seek or another track (more than 5 % away) is drawn at once
+			glide('mediaProgress', (media.positionSec || 0) / media.durationSec, drawMediaProgress, { jump: 0.05 });
 		}
 		setPlayIcon(media.playing);
 		if (media.artKey !== coverKey && !media.artKey) {
 			showCover(null, media.source);
 		}
+	}
+
+	function drawMediaProgress(fraction) {
+		setStyle($('mediaFill'), 'width', isNum(fraction) ? `${clamp(fraction * 100, 1, 100).toFixed(2)}%` : '0%');
 	}
 
 	function setPlayIcon(playing) {
@@ -1350,6 +1483,251 @@
 			drawArtPlaceholder(label);
 		}
 	}
+
+	// ---------- Game view: while a recognised game runs (snapshot.game) ----------
+	// The view stays 10 s after the game is gone (its process exited); a view picked with the switch
+	// holds until then. Values glide between samples and the graph scrolls in the 24 fps loop.
+	const GAME_GRACE_MS = 10000;
+	const FPS_HISTORY = 60;
+	const DIAL = { cx: 300, cy: 300, radius: 250, start: 135, sweep: 270 };
+	const GRAPH = { width: 586, height: 140 };
+	// One second of the curve
+	const GRAPH_STEP = GRAPH.width / (FPS_HISTORY - 1);
+	const GAME_GLIDES = ['gameFps', 'gameDial', 'gameLow', 'gameLowMark', 'frameTime', 'fpsAvg'];
+	const DIAL_STEPS = [10, 20, 25, 30, 40, 50, 60, 75, 100, 120, 150, 200, 250, 300];
+	let gameSession = null;
+	let gameView = false;
+	const dial = { max: 0, ticks: [], blade: null, core: null, low: null };
+	const graph = { area: null, line: null, visible: false, bottom: 0, top: 0, shift: -1 };
+	const switchButtons = [...document.querySelectorAll('#viewSwitch button')];
+
+	function startGameSession() {
+		return { start: Date.now(), lastSeen: 0, view: 'game', name: '', refreshHz: null, fps: [], fpsSum: 0, fpsCount: 0 };
+	}
+
+	function svgElement(parent, name, attributes) {
+		const element = document.createElementNS(SVG_NS, name);
+		for (const [key, value] of Object.entries(attributes)) {
+			element.setAttribute(key, value);
+		}
+		parent.appendChild(element);
+		return element;
+	}
+
+	function dialPoint(degrees, radius) {
+		const angle = (degrees * Math.PI) / 180;
+		return [DIAL.cx + radius * Math.cos(angle), DIAL.cy + radius * Math.sin(angle)];
+	}
+
+	function dialArc(radius) {
+		const [x1, y1] = dialPoint(DIAL.start, radius);
+		const [x2, y2] = dialPoint(DIAL.start + DIAL.sweep, radius);
+		return `M${x1} ${y1} A${radius} ${radius} 0 1 1 ${x2} ${y2}`;
+	}
+
+	// Scale of the dial: up to the refresh rate of the game's monitor, numbered at round steps
+	function buildDial(max) {
+		const svg = $('fpsDial');
+		svg.textContent = '';
+		dial.max = max;
+		dial.ticks = [];
+		svgElement(svg, 'circle', { class: 'dial-lens', cx: DIAL.cx, cy: DIAL.cy, r: 222 });
+		svgElement(svg, 'path', { class: 'dial-track', d: dialArc(DIAL.radius) });
+		// pathLength 1000: the lit part is a dash of the whole arc
+		dial.blade = svgElement(svg, 'path', { class: 'dial-blade', d: dialArc(DIAL.radius), pathLength: 1000, 'stroke-dasharray': '0 1000' });
+		dial.core = svgElement(svg, 'path', { class: 'dial-core', d: dialArc(DIAL.radius), pathLength: 1000, 'stroke-dasharray': '0 1000' });
+		const major = DIAL_STEPS.find((step) => step >= (max / 4) * 0.9) || DIAL_STEPS[DIAL_STEPS.length - 1];
+		const minor = major / (major % 6 === 0 ? 6 : 5);
+		for (let value = 0; value <= max + 0.01; value += minor) {
+			const degrees = DIAL.start + (DIAL.sweep * value) / max;
+			const isMajor = Math.abs(value / major - Math.round(value / major)) < 0.001;
+			const [x1, y1] = dialPoint(degrees, 274);
+			const [x2, y2] = dialPoint(degrees, isMajor ? 292 : 284);
+			const tick = svgElement(svg, 'line', { class: isMajor ? 'dial-tick major' : 'dial-tick', x1, y1, x2, y2 });
+			dial.ticks.push({ element: tick, value, on: false });
+			if (isMajor) {
+				const [tx, ty] = dialPoint(degrees, 200);
+				svgElement(svg, 'text', { class: 'dial-num', x: tx, y: ty + 6 }).textContent = Math.round(value);
+			}
+		}
+		const [lx1, ly1] = dialPoint(DIAL.start, 236);
+		const [lx2, ly2] = dialPoint(DIAL.start, 266);
+		dial.low = svgElement(svg, 'line', { class: 'dial-low', x1: lx1, y1: ly1, x2: lx2, y2: ly2 });
+	}
+
+	function renderDial(fps) {
+		if (!dial.blade) {
+			return;
+		}
+		const lit = isNum(fps) ? clamp(fps / dial.max, 0, 1) : 0;
+		const dash = `${Math.round(lit * 1000)} 1000`;
+		dial.blade.setAttribute('stroke-dasharray', dash);
+		dial.core.setAttribute('stroke-dasharray', dash);
+		// A round cap would still draw a dot for an empty arc
+		dial.blade.style.visibility = lit > 0 ? '' : 'hidden';
+		dial.core.style.visibility = lit > 0 ? '' : 'hidden';
+		for (const tick of dial.ticks) {
+			const on = isNum(fps) && tick.value <= fps;
+			if (on !== tick.on) {
+				tick.on = on;
+				tick.element.classList.toggle('on', on);
+			}
+		}
+	}
+
+	// 1 % low: a mark on the dial and a dashed line across the graph
+	function renderLow(low) {
+		if (dial.low) {
+			dial.low.style.visibility = isNum(low) ? '' : 'hidden';
+			if (isNum(low)) {
+				dial.low.setAttribute('transform', `rotate(${(DIAL.sweep * clamp(low / dial.max, 0, 1)).toFixed(2)} ${DIAL.cx} ${DIAL.cy})`);
+			}
+		}
+		const line = $('graphLow');
+		const visible = graph.visible && isNum(low);
+		setStyle(line, 'visibility', visible ? 'visible' : 'hidden');
+		if (visible) {
+			setStyle(line, 'transform', `translateY(${clamp(graphY(low), 0, GRAPH.height).toFixed(1)}px)`);
+		}
+	}
+
+	const graphY = (value) => GRAPH.height - ((value - graph.bottom) / (graph.top - graph.bottom)) * GRAPH.height;
+
+	// The curve is one step wider than its window, the newest sample just past the right edge, and
+	// slides left by one step until the next sample (scrollGraph, a compositor transform): it scrolls
+	// steadily instead of jumping every second. Its scale only changes when the curve leaves it or
+	// would fit in a much tighter one.
+	function renderGraph(history, low) {
+		const svg = $('fpsGraph');
+		const width = GRAPH.width + GRAPH_STEP;
+		if (!graph.line) {
+			svg.setAttribute('width', width.toFixed(2));
+			svg.setAttribute('viewBox', `0 0 ${width.toFixed(2)} ${GRAPH.height}`);
+			for (const y of [0, GRAPH.height / 2, GRAPH.height]) {
+				svgElement(svg, 'line', { class: 'graph-grid', x1: 0, y1: y, x2: width, y2: y });
+			}
+			graph.area = svgElement(svg, 'path', { class: 'graph-area' });
+			graph.line = svgElement(svg, 'path', { class: 'graph-line' });
+		}
+		graph.visible = history.length >= 2;
+		if (!graph.visible) {
+			graph.area.removeAttribute('d');
+			graph.line.removeAttribute('d');
+			redrawGlide('gameLowMark');
+			return;
+		}
+		const values = isNum(low) ? [...history, low] : history;
+		const min = Math.min(...values);
+		const max = Math.max(...values);
+		const bottom = Math.max(0, Math.floor((min * 0.85) / 10) * 10);
+		const top = Math.max(bottom + 20, Math.ceil((max * 1.05) / 10) * 10);
+		if (graph.top <= graph.bottom || min < graph.bottom || max > graph.top || top - bottom < (graph.top - graph.bottom) * 0.6) {
+			graph.bottom = bottom;
+			graph.top = top;
+			redrawGlide('gameLowMark');
+		}
+		const x = (i) => (width - (history.length - 1 - i) * GRAPH_STEP).toFixed(1);
+		const line = history.map((value, i) => `${x(i)} ${graphY(value).toFixed(1)}`).join(' L');
+		graph.line.setAttribute('d', `M${line}`);
+		graph.area.setAttribute('d', `M${line} L${width.toFixed(1)} ${GRAPH.height} L${x(0)} ${GRAPH.height} Z`);
+		// Back to the start of the step together with the new curve, not one frame later
+		graph.shift = 0;
+		svg.style.transform = 'translateX(0px)';
+	}
+
+	function scrollGraph(progress) {
+		const shift = Math.round(progress * GRAPH_STEP * 10) / 10;
+		if (shift !== graph.shift) {
+			graph.shift = shift;
+			$('fpsGraph').style.transform = `translateX(${-shift}px)`;
+		}
+	}
+
+	// Lowest 1 % of the last minute, when HWiNFO does not report it: with one sample per second it is
+	// the minimum, labelled as such
+	function computedLow(history) {
+		if (history.length < 5) {
+			return null;
+		}
+		const sorted = [...history].sort((a, b) => a - b);
+		return sorted[Math.floor(sorted.length * 0.01)];
+	}
+
+	function applyView() {
+		const inGame = gameSession !== null;
+		const showGame = inGame && gameSession.view === 'game';
+		frame.classList.toggle('has-game', inGame);
+		$('viewSwitch').hidden = !inGame;
+		switchButtons.forEach((button) => {
+			button.setAttribute('aria-checked', String(inGame && button.dataset.view === (showGame ? 'game' : 'normal')));
+		});
+		if (showGame !== gameView) {
+			gameView = showGame;
+			frame.classList.toggle('game', showGame);
+		}
+	}
+
+	function renderGame(game, gpu) {
+		const now = Date.now();
+		if (game) {
+			if (!gameSession) {
+				gameSession = startGameSession();
+			}
+			gameSession.lastSeen = now;
+			gameSession.name = game.name || '';
+			gameSession.refreshHz = isNum(game.refreshHz) ? game.refreshHz : null;
+		} else if (gameSession && now - gameSession.lastSeen > GAME_GRACE_MS) {
+			gameSession = null;
+			GAME_GLIDES.forEach(forgetGlide);
+		}
+		applyView();
+		if (!gameSession) {
+			return;
+		}
+		const session = gameSession;
+		const fps = isNum(gpu.fps) && gpu.fps >= 1 ? gpu.fps : null;
+		if (fps !== null) {
+			session.fps.push(fps);
+			if (session.fps.length > FPS_HISTORY) {
+				session.fps.shift();
+			}
+			session.fpsSum += fps;
+			session.fpsCount++;
+		}
+		// Top of the dial: the refresh rate, or a round value above what the game reached
+		const max = session.refreshHz || Math.max(144, Math.ceil(Math.max(0, ...session.fps) / 60) * 60);
+		if (max !== dial.max) {
+			buildDial(max);
+			redrawGlide('gameDial');
+			redrawGlide('gameLowMark');
+		}
+		const reported = isNum(gpu.fpsLow) && gpu.fpsLow >= 1;
+		const low = reported ? gpu.fpsLow : computedLow(session.fps);
+		const frameTime = isNum(gpu.frameTimeMs) && gpu.frameTimeMs > 0 ? gpu.frameTimeMs : fps !== null ? 1000 / fps : null;
+
+		text('gameTitle', session.name || 'Jeu');
+		text('gameSince', `en jeu depuis ${formatTime((now - session.start) / 1000)}`);
+		text('fpsScale', session.refreshHz ? `écran ${session.refreshHz} Hz` : ' ');
+		text('fpsLowLabel', reported ? '1 % low' : 'Min 60 s');
+		text('graphLowLabel', reported ? '1 % low' : 'min');
+		renderGraph(fps !== null ? session.fps : [], low);
+		glide('gameDial', fps, renderDial);
+		glide('gameFps', fps, (value) => text('fpsValue', orDash(value, nf0)), NUMBER);
+		glide('gameLowMark', low, renderLow);
+		glide('gameLow', low, (value) => text('fpsLow', orDash(value, nf0)), NUMBER);
+		glide('frameTime', frameTime, (value) => text('frameTime', orDash(value, (ms) => nf1.format(ms))), NUMBER);
+		// Already an average: only its redraws are spaced out
+		glide('fpsAvg', session.fpsCount > 0 ? session.fpsSum / session.fpsCount : null, (value) => text('fpsAvg', orDash(value, nf0)), { every: NUMBER.every });
+	}
+
+	switchButtons.forEach((button) => {
+		button.addEventListener('click', () => {
+			if (gameSession) {
+				gameSession.view = button.dataset.view;
+				applyView();
+			}
+		});
+	});
 
 	// ---------- Snapshot intake ----------
 	function applySnapshot(s) {
@@ -1371,6 +1749,7 @@
 		renderMemory(s.ram || {}, s.disks || []);
 		renderNetwork(net);
 		renderMedia(s.media || null);
+		renderGame(s.game || null, gpu);
 	}
 
 	function applyConfig(config) {
@@ -1909,11 +2288,14 @@
 		lastFrame = now;
 		const ticks = Math.min(elapsed / (1000 / 60), 6);
 		const progress = motion ? clamp((now - lastTick) / 1000, 0, 1) : 0;
-		const target = current && current.cpu && isNum(current.cpu.load) ? current.cpu.load : 0;
-		shown.cpu += (target - shown.cpu) * Math.min(0.08 * ticks, 1);
+		stepGlides(now);
 		updateClock();
 		animateCss(now);
 		drawRing(now, progress);
+		// The FPS graph only shows in the game view
+		if (gameView) {
+			scrollGraph(motion ? progress : 1);
+		}
 		drawFx(now, ticks);
 		drawSpeedGauge(ticks);
 	}
@@ -1980,6 +2362,14 @@
 		gpuPower: { title: 'Consommation GPU', pickers: [{ key: 'gpuPower', title: 'Valeur HWiNFO', unit: 'W', gpu: true }], threshold: { key: 'gpuPower', unit: 'W', step: 10, maxStep: 25 } },
 		gpuLoad: { title: 'Charge GPU', pickers: [{ key: 'gpuLoad', title: 'Charge (HWiNFO)', unit: '%', gpu: true }, { key: 'gpuFps', title: 'FPS en jeu (HWiNFO)', unit: 'FPS' }] },
 		gpuVram: { title: 'Mémoire vidéo', pickers: [{ key: 'gpuVram', title: 'Utilisation (HWiNFO, %)', unit: '%', gpu: true }] },
+		fps: {
+			title: 'Images par seconde',
+			pickers: [
+				{ key: 'gpuFps', title: 'FPS en jeu (HWiNFO)', unit: 'FPS' },
+				{ key: 'gpuFpsLow', title: '1 % low (HWiNFO, sinon minimum calculé)', unit: 'FPS' },
+				{ key: 'gpuFrameTime', title: 'Temps de frame (HWiNFO, sinon déduit des FPS)', unit: 'ms' }
+			]
+		},
 		clock: { title: 'Météo', pickers: [], weather: true }
 	};
 	// Threshold rows; the disk row has no gauge, only its alert level
@@ -2189,8 +2579,8 @@
 		if (sheet.def.weather) {
 			// No keyboard on the case screen: the place is picked in the setup wizard on the main screen
 			const located = weatherConfig.located;
-			const detail = located ? `${weatherConfig.place} · lieu modifiable dans l\u2019assistant de configuration`
-				: 'Choisir d\u2019abord une ville : menu de l\u2019icône › Assistant de configuration';
+			const detail = located ? `${weatherConfig.place} · lieu modifiable dans les paramètres`
+				: 'Choisir d\u2019abord une ville : menu de l\u2019icône › Paramètres';
 			const row = sheetRow('sheet-option sheet-toggle', 'Afficher la météo', detail, sheet.weather ? 'Oui' : 'Non', sheet.weather);
 			row.setAttribute('role', 'switch');
 			row.setAttribute('aria-checked', String(sheet.weather));
@@ -2315,6 +2705,7 @@
 	attachLongPress($('gpu'), () => openSheet(SHEETS.gpuLoad));
 	attachLongPress(document.querySelector('.vram'), () => openSheet(SHEETS.gpuVram));
 	attachLongPress(document.querySelector('.clock'), () => openSheet(SHEETS.clock));
+	attachLongPress($('gameFps'), () => openSheet(SHEETS.fps));
 
 	// Design mode: Gadget entries like the author's machine
 	const SAMPLE_HWINFO = {
@@ -2330,14 +2721,16 @@
 			{ sensor: 'S.M.A.R.T.: Samsung SSD 9100 PRO 2TB (S7YF) [C:, D:]', label: 'Température du disque', text: '53 °C' },
 			{ sensor: 'S.M.A.R.T.: Samsung SSD 990 PRO 4TB (S7DP) [E:]', label: 'Température du disque', text: '40 °C' }
 		],
-		matches: { cpuTemp: 0, cpuPower: 2, gpuTemp: 3, gpuPower: 5, gpuLoad: 6, gpuVram: 7, gpuFps: -1, 'drive:C:': 8, 'drive:D:': 8, 'drive:E:': 9 }
+		matches: { cpuTemp: 0, cpuPower: 2, gpuTemp: 3, gpuPower: 5, gpuLoad: 6, gpuVram: 7, gpuFps: -1, gpuFpsLow: -1, gpuFrameTime: -1, 'drive:C:': 8, 'drive:D:': 8, 'drive:E:': 9 }
 	};
 
 	// ---------- Simulator: design mode (no host) or "?demo=" scenarios (idle, stress) ----------
 	const SCENARIOS = {
 		idle: { cpu: 14, cpuSpread: 9, gpu: 5, vram: 6, ram: 19.3, offline: false },
 		// Everything maxed out and the connection lost, to preview every alarm state at once
-		stress: { cpu: 100, cpuSpread: 0, gpu: 100, vram: 96, ram: 55, offline: true, fps: 144 }
+		stress: { cpu: 100, cpuSpread: 0, gpu: 100, vram: 96, ram: 55, offline: true, fps: 144 },
+		// A windowed game on a 240 Hz monitor, 42 min in: previews the game view
+		game: { cpu: 21, cpuSpread: 8, gpu: 46, vram: 13, ram: 24, offline: false, fps: 212, fpsLow: 164, game: { name: 'League of Legends', refreshHz: 240 } }
 	};
 
 	// Set while simulated data replaces the host's: design mode or a demo scenario
@@ -2369,6 +2762,17 @@
 		renderWeather({ place: 'Lyon', temperature: 14.6, code: 2, isDay: true, min: 8, max: 16 });
 		// The update banner is part of the preview too
 		renderUpdate({ stage: 'available', version: '2.0.0' });
+		if (scenario.game) {
+			// A session already under way: elapsed time and a full minute of history
+			gameSession = startGameSession();
+			gameSession.start -= (42 * 60 + 18) * 1000;
+			for (let i = 0; i < FPS_HISTORY - 1; i++) {
+				const fps = i === 38 ? 150 : scenario.fps - 6 + Math.sin(i * 1.7) * 9 + Math.cos(i * 0.53) * 7;
+				gameSession.fps.push(fps);
+				gameSession.fpsSum += fps;
+				gameSession.fpsCount++;
+			}
+		}
 		setInterval(() => {
 			sim.cpu = scenario.cpu >= 100 ? 100 : walk(sim.cpu, scenario.cpu, scenario.cpuSpread, 1, 100);
 			sim.gpu = scenario.gpu >= 100 ? 100 : walk(sim.gpu, scenario.gpu, 5, 0, 100);
@@ -2383,7 +2787,7 @@
 			onHostMessage({
 				type: 'snapshot',
 				cpu: { load: sim.cpu, temp: sim.cpuTemp, power: 30 + sim.cpu * 1.25 },
-				gpu: { load: sim.gpu, temp: sim.gpuTemp, power: 25 + sim.gpu * 4.15, vramPercent: sim.vram, vramTotalGb: 24, fps: scenario.fps ? scenario.fps - Math.random() * 12 : null },
+				gpu: { load: sim.gpu, temp: sim.gpuTemp, power: 25 + sim.gpu * 4.15, vramPercent: sim.vram, vramTotalGb: 24, fps: scenario.fps ? scenario.fps - Math.random() * 12 : null, fpsLow: scenario.fpsLow ? scenario.fpsLow + Math.random() * 4 : null, frameTimeMs: null },
 				ram: { usedGb: sim.ram, totalGb: 62 },
 				disks: [
 					{ name: 'C:', label: 'Windows', usedGb: 539.4, totalGb: 818.3, temp: 41, disk: 0 },
@@ -2398,7 +2802,8 @@
 					status: scenario.offline ? 'no-internet' : 'online',
 					offlineSec: scenario.offline ? offlineSec : null
 				},
-				media: { source: 'Spotify', kind: 'music', title: 'The Imperial March', artist: 'John Williams · London Symphony Orchestra', positionSec: position, durationSec: 182, playing: true, live: false, artKey: null }
+				media: { source: 'Spotify', kind: 'music', title: 'The Imperial March', artist: 'John Williams · London Symphony Orchestra', positionSec: position, durationSec: 182, playing: true, live: false, artKey: null },
+				game: scenario.game || null
 			});
 		}, 1000);
 	}
