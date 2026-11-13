@@ -143,6 +143,9 @@ public sealed class SetupForm : Form
 			case "close":
 				Close();
 				break;
+			case "listProcesses":
+				SendProcesses();
+				break;
 		}
 	}
 
@@ -176,6 +179,42 @@ public sealed class SetupForm : Form
 			gameView = _settings.EffectiveGameView
 		});
 		SendHwInfo();
+	}
+
+	/// <summary>Game view step: applications with a window, one of which can be added as a game.</summary>
+	private void SendProcesses()
+	{
+		var own = Environment.ProcessId;
+		var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "explorer.exe", "ApplicationFrameHost.exe", "TextInputHost.exe" };
+		var processes = new List<(string Exe, string Name)>();
+		foreach (var process in Process.GetProcesses())
+		{
+			using (process)
+			{
+				try
+				{
+					if (process.Id == own || process.MainWindowHandle == IntPtr.Zero || string.IsNullOrWhiteSpace(process.MainWindowTitle))
+					{
+						continue;
+					}
+					var path = ForegroundGame.ProcessPath((uint)process.Id);
+					var exe = path is null ? null : Path.GetFileName(path);
+					if (exe is not null && seen.Add(exe))
+					{
+						processes.Add((exe, process.MainWindowTitle.Trim()));
+					}
+				}
+				catch (Exception exception) when (exception is InvalidOperationException or System.ComponentModel.Win32Exception)
+				{
+					// Exited while listed
+				}
+			}
+		}
+		Post(new
+		{
+			type = "processes",
+			processes = processes.OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase).Select(p => new { exe = p.Exe, name = p.Name })
+		});
 	}
 
 	/// <summary>Repeated while the wizard is open: HWiNFO can be started or configured meanwhile.</summary>

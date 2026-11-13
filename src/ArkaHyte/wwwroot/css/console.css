@@ -178,6 +178,8 @@ body {
    animations would keep the compositor rendering at the panel refresh rate (73 Hz).
    Defaults only: the loop sets each one on the elements that read it, never on the frame. */
 .frame {
+	/* Horizontal strokes are swipes between the views; vertical ones still scroll the lists */
+	touch-action: pan-y;
 	--flicker: 1;
 	--breathe-2: 0.6;
 	--alarm: 0;
@@ -1538,6 +1540,97 @@ body {
 	transform: scale(0.97);
 }
 
+/* ---------- Temperature / power history (short tap on a tile; same frame as the editor) ---------- */
+.history .editor-panel {
+	top: 760px;
+	height: auto;
+	gap: 22px;
+}
+.history-range {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 12px;
+}
+.history-range button {
+	height: 60px;
+	border: 1px solid var(--line);
+	background: transparent;
+	color: var(--ash);
+	font: 700 19px var(--font-label);
+	letter-spacing: 0.2em;
+	text-transform: uppercase;
+}
+.history-range button[aria-checked="true"] {
+	color: var(--core);
+	border-color: var(--blade);
+	background: rgba(var(--blade-rgb), 0.22);
+	box-shadow: 0 0 18px rgba(var(--blade-rgb), 0.45);
+}
+.history-stats {
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	text-align: center;
+}
+.history-stats > div + div {
+	border-left: 1px solid var(--line);
+}
+.history-stats .label {
+	font-size: 15px;
+}
+.history-value {
+	display: block;
+	margin-top: 4px;
+	font-family: var(--font-display);
+	font-weight: 300;
+	font-size: 46px;
+	line-height: 1.1;
+	font-variant-numeric: tabular-nums;
+}
+.history-value small {
+	font-size: 18px;
+	color: var(--ash);
+	margin-left: 3px;
+}
+#historyChart {
+	display: block;
+}
+.history-legend {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 10px 26px;
+	font-size: 15px;
+	color: var(--ash);
+}
+.history-legend i {
+	display: inline-block;
+	width: 26px;
+	height: 0;
+	margin-right: 8px;
+	vertical-align: middle;
+	border-top: 3px solid var(--blade);
+}
+.history-legend i.line {
+	box-shadow: 0 0 6px var(--blade);
+}
+.history-legend i.warm {
+	border-top: 2px dashed var(--warm);
+}
+.history-legend i.hot {
+	border-top: 2px dashed var(--ember);
+}
+.history-legend b {
+	font-weight: 600;
+	color: var(--bone);
+}
+.history-note {
+	margin: 0;
+	min-height: 18px;
+	font-size: 15px;
+	text-align: center;
+	color: var(--ash);
+}
+
 /* ---------- On-screen settings sheet (same frame as the shortcut editor) ---------- */
 /* As tall as its content, up to the editor's height (a long HWiNFO list scrolls inside) */
 .sheet .editor-panel {
@@ -2065,63 +2158,36 @@ body {
 /* Network; the dock keeps its place at the bottom */
 .frame.game .holonet { top: 2012px; }
 
-/* View switch: above the dock, at the same place in both views. Clipped corners get their own stroke
-   (a gradient line along the cut), the border and the inset outline stop at the clip. */
-.view-switch {
-	top: 2300px;
-	left: 91px;
-	width: 500px;
-	height: 76px;
-	z-index: 10;
-	display: grid;
-	grid-template-columns: 1fr 1fr;
-	padding: 6px;
-	box-sizing: border-box;
-	border: 1px solid var(--line);
-	background:
-		linear-gradient(135deg, transparent 12.7px, var(--line) 12.7px, var(--line) 13.9px, transparent 13.9px),
-		linear-gradient(315deg, transparent 12.7px, var(--line) 12.7px, var(--line) 13.9px, transparent 13.9px),
-		rgba(var(--panel-rgb), 0.85);
-	background-origin: border-box;
-	clip-path: polygon(18px 0, 100% 0, 100% calc(100% - 18px), calc(100% - 18px) 100%, 0 100%, 0 18px);
-}
-.view-switch button {
+/* Page dots just above the dock (under the update banner): the shown view, the other one a swipe away */
+.page-dots {
+	top: 2360px;
+	left: 0;
+	width: 682px;
+	z-index: 3;
 	display: flex;
-	align-items: center;
 	justify-content: center;
-	gap: 12px;
+	gap: 6px;
+}
+.page-dots button {
+	width: 34px;
+	height: 22px;
 	padding: 0;
 	border: none;
 	background: none;
-	font: inherit;
-	font-weight: 700;
-	font-size: 19px;
-	letter-spacing: 0.18em;
-	text-transform: uppercase;
-	color: var(--ash);
-	cursor: pointer;
+	display: grid;
+	place-items: center;
 }
-.view-switch svg {
-	width: 26px;
-	height: 26px;
-	fill: none;
-	stroke: currentColor;
-	stroke-width: 1.7;
-	stroke-linecap: round;
-	stroke-linejoin: round;
+.page-dots button::before {
+	content: "";
+	width: 10px;
+	height: 10px;
+	border-radius: 5px;
+	background: rgba(var(--bone-rgb), 0.3);
 }
-.view-switch button[aria-checked="true"] {
-	color: var(--core);
-	background:
-		linear-gradient(135deg, transparent 8.4px, var(--blade) 8.4px, var(--blade) 9.6px, transparent 9.6px),
-		linear-gradient(315deg, transparent 8.4px, var(--blade) 8.4px, var(--blade) 9.6px, transparent 9.6px),
-		rgba(var(--blade-rgb), 0.22);
-	box-shadow: inset 0 0 0 1px var(--blade), 0 0 18px rgba(var(--blade-rgb), 0.55);
-	clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
-}
-.view-switch button[aria-checked="true"] svg {
-	stroke: var(--blade);
-	filter: drop-shadow(0 0 5px var(--blade));
+.page-dots button[aria-current="true"]::before {
+	width: 28px;
+	background: var(--blade);
+	box-shadow: 0 0 10px rgba(var(--blade-rgb), 0.8);
 }
 
 /* Jedi: same readability aids as the other figures on the bright sky */

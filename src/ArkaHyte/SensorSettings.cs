@@ -133,7 +133,10 @@ public static class SensorSettings
 		}
 	}
 
-	/// <summary>Writes the game view settings: gameView { autoNormal?, delaySec?, transition? }.</summary>
+	/// <summary>
+	/// Writes the game view settings: gameView { autoNormal?, delaySec?, transition?, detectEngines?,
+	/// extraGames?: [{ exe, name }] }.
+	/// </summary>
 	public static void ApplyGameView(JsonObject root, JsonElement message)
 	{
 		if (!message.TryGetProperty("gameView", out var gameView) || gameView.ValueKind != JsonValueKind.Object)
@@ -157,6 +160,28 @@ public static class SensorSettings
 			&& GameViewSettings.Transitions.Contains(transition.GetString()))
 		{
 			node["Transition"] = transition.GetString();
+		}
+		if (gameView.TryGetProperty("detectEngines", out var engines) && engines.ValueKind is JsonValueKind.True or JsonValueKind.False)
+		{
+			node["DetectEngines"] = engines.GetBoolean();
+		}
+		if (gameView.TryGetProperty("extraGames", out var extraGames) && extraGames.ValueKind == JsonValueKind.Array)
+		{
+			var games = new JsonArray();
+			var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			foreach (var game in extraGames.EnumerateArray())
+			{
+				// A bare executable name: the match must survive the game moving folders
+				var exe = game.ValueKind == JsonValueKind.Object && game.TryGetProperty("exe", out var exeElement) ? exeElement.GetString()?.Trim() : null;
+				if (string.IsNullOrEmpty(exe) || exe.Length > 260 || exe.IndexOfAny(['\\', '/', ':']) >= 0
+					|| !exe.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) || !seen.Add(exe) || games.Count >= GameViewSettings.MaxExtraGames)
+				{
+					continue;
+				}
+				var name = game.TryGetProperty("name", out var nameElement) && nameElement.ValueKind == JsonValueKind.String ? nameElement.GetString()!.Trim() : string.Empty;
+				games.Add(new JsonObject { ["Exe"] = exe, ["Name"] = name.Length > 80 ? name[..80] : name });
+			}
+			node["ExtraGames"] = games;
 		}
 	}
 

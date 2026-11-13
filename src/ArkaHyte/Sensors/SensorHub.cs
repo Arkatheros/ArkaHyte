@@ -40,6 +40,7 @@ public sealed class SensorHub : IDisposable
 	public SensorHub(AppSettings settings)
 	{
 		_settings = settings;
+		ForegroundGame.Configure(settings.EffectiveGameView);
 		_network = new NetworkMonitor(settings.Network);
 		_media.CoverChanged += (key, dataUrl) =>
 		{
@@ -51,7 +52,11 @@ public sealed class SensorHub : IDisposable
 	public void Start() => _loop = Task.Run(() => RunAsync(_stop.Token));
 
 	/// <summary>New sensor choices, taken from the next sample on.</summary>
-	public void UpdateSettings(AppSettings settings) => _settings = settings;
+	public void UpdateSettings(AppSettings settings)
+	{
+		_settings = settings;
+		ForegroundGame.Configure(settings.EffectiveGameView);
+	}
 
 	private async Task RunAsync(CancellationToken token)
 	{

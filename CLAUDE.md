@@ -62,7 +62,9 @@ par `PostFromAnyThread` (BeginInvoke).
 
 **Flux web → C#.** `host.postMessage({ type, ... })` traité dans le `switch` de `DisplayForm` :
 `ready`, `launch`, `media`, `listApps`, `saveShortcut`, `speedtest` (start/cancel), `hwinfoList` /
-`saveMetric` (réglages à l'écran : appui long sur une mesure → panneau `#sheet`, `SHEETS` dans `console.js`).
+`saveMetric` (réglages à l'écran : appui long sur une mesure → panneau `#sheet`, `SHEETS` dans `console.js` ;
+toucher court sur une tuile température / consommation → `#history`, 30 min en tampon circulaire côté page,
+`HISTORY_METRICS`, courbe redessinée à chaque échantillon seulement panneau ouvert).
 Choix de capteurs et seuils écrits par `SensorSettings` (partagé avec l'assistant), appliqués à chaud
 (`SensorHub.UpdateSettings`, `config.thresholds` → `limits` côté page ; plus aucun seuil en dur).
 Ajouter une fonctionnalité interactive = un type de message de chaque côté.
@@ -76,11 +78,17 @@ FPS : capteur PresentMon de HWiNFO, nommé d'après le processus au premier plan
 suffixe neutralisé par `HwInfoReader`) et ne comptant que si la fenêtre au premier plan couvre son
 écran ou appartient à un jeu reconnu par Windows (liste de la Game Bar, `HKCU\System\GameConfigStore\Children`
 → `MatchedExeFullPath`, relue au plus une fois par minute ; `ForegroundGame`), ce qui couvre les jeux en fenêtre.
-**Vue jeu.** Un jeu reconnu par Windows passé au premier plan est suivi jusqu'à la fin de son processus
+**Vue jeu.** Un jeu passé au premier plan est suivi jusqu'à la fin de son processus. Jeu = liste de la Game Bar,
+`GameView.ExtraGames` (nom d'exécutable, ajouté dans les Paramètres parmi les applis ouvertes : message
+`listProcesses` → `processes`) ou, avec `DetectEngines` (vrai par défaut, hors interface), classe de fenêtre `UnrealWindow` / `UnityWndClass`
+(lanceur Epic et éditeurs exclus) ; règles poussées par `ForegroundGame.Configure` (`SensorHub`).
+Le jeu suivi
 (`ForegroundGame` → `Snapshot.Game` : nom, fréquence de l'écran). `console.js` (`renderGame`) passe alors
 `.frame` en `game` (+ `has-game` tant qu'un jeu tourne) : mêmes widgets GPU / CPU / réseau déplacés, dock gardé (lecture en cours masquée)
 par CSS, éléments `.game-only` (en-tête, cadran FPS en SVG, trio, courbe 60 s), retour 10 s après le jeu.
-Bouton `#viewSwitch` (vue normale ↔ jeu, choix gardé jusqu'à la fin du jeu). Jeu en arrière-plan
+Deux pages : balayage horizontal sur `.frame` (`touch-action: pan-y`, clic de fin de geste avalé) ou points
+`#pageDots` → `viewChoice` (gardé jusqu'à la fin du jeu, ou jusqu'au prochain jeu sans partie en cours) ;
+vue jeu sans jeu possible (`renderNoGame`). Jeu en arrière-plan
 (`GameData.Foreground` faux) ou sans FPS : valeurs et courbe figées en gris (`.stale`) ; sans choix manuel,
 vue normale après `GameView.AutoNormalDelaySec` si `AutoNormal` (étape « Vue jeu » de l'assistant, `config.gameView`). Valeurs lissées comme ailleurs,
 courbe défilée par `transform` (`scrollGraph`), anneau CPU (compteur de charge) à gauche de température / consommation. 1 % low / temps de frame : `HwInfo.GpuFpsLow`,
@@ -150,6 +158,8 @@ L'écran tourne en permanence : cible ~16 % d'un cœur.
   passe par là. Jauges sur la valeur brute ; chiffres sur leur propre glide avec `NUMBER` (moyenne des
   3 derniers échantillons, réécrits 4 fois par seconde au plus). Écritures DOM par `setText` / `setStyle`,
   seulement si le contenu change.
+- Vue cachée = rien de dessiné : glides de la vue jeu avec `hidden: GAME_HIDDEN` (valeur tenue à jour, aucun
+  dessin), courbe marquée `graph.dirty`, tout repeint d'un coup au retour (`paintGameView`).
 - Aucune `transition` CSS ni animation CSS infinie, pas de `backdrop-filter`.
 - Seule exception à la boucle : effets ponctuels en Web Animations sur `transform` / `opacity` (compositeur),
   ex. changement de vue normale ↔ jeu (`switchView`, `GameView.Transition` : `morph` = FLIP des widgets

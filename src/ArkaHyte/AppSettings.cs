@@ -75,15 +75,27 @@ public sealed record WeatherSettings(bool Enabled = false, string Place = "", do
 /// Game view: back to the normal view once the game has been in the background (another window has the
 /// focus) for AutoNormalDelaySec, back to the game view when it returns to the foreground.
 /// Transition: animation between the two views, one of <see cref="Transitions"/>.
+/// Games are those Windows recognises (Game Bar list), plus ExtraGames (added by hand, matched by
+/// executable name) and, with DetectEngines, any Unreal Engine or Unity game window.
 /// </summary>
-public sealed record GameViewSettings(bool AutoNormal = true, int AutoNormalDelaySec = 20, string Transition = "morph")
+public sealed record GameViewSettings(
+	bool AutoNormal = true,
+	int AutoNormalDelaySec = 20,
+	string Transition = "morph",
+	bool DetectEngines = true,
+	IReadOnlyList<GameEntry>? ExtraGames = null)
 {
+	public const int MaxExtraGames = 50;
+
 	public const int MinDelaySec = 5;
 	public const int MaxDelaySec = 600;
 
 	/// <summary>morph: widgets glide to their new place; slide: the views slide sideways; fade; none.</summary>
 	public static readonly string[] Transitions = ["morph", "slide", "fade", "none"];
 }
+
+/// <summary>Game added by hand: executable file name ("TFTClient-Win64-Shipping.exe") and the name shown.</summary>
+public sealed record GameEntry(string Exe, string Name = "");
 
 public sealed record DriveSettings(string Name, SensorSelector? Temp = null);
 

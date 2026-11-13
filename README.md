@@ -61,10 +61,15 @@ d'écran du boîtier qui relance l'affichage.
 
 Pendant une partie (jeu reconnu par Windows), l'écran passe en vue jeu : cadran des FPS, 1 % low,
 temps de frame, moyenne, courbe des 60 dernières secondes, carte graphique, compteur de charge du
-processeur, réseau. Le bouton **Vue normale / Mode jeu** au-dessus du dock change de vue jusqu'à la fin
-de la partie. Jeu en arrière-plan (Alt+Tab, bureau) : dernières valeurs grisées, courbe figée, puis retour
+processeur, réseau. Les deux vues sont deux pages : un **balayage** vers la gauche affiche la vue jeu, vers
+la droite la vue normale (ou un toucher sur les points en bas de l'écran), même sans jeu lancé ; pendant une
+partie, ce choix tient jusqu'à la fin du jeu. Jeu en arrière-plan (Alt+Tab, bureau) : dernières valeurs grisées, courbe figée, puis retour
 à la vue normale après le délai choisi dans l'assistant (réglage `GameView` : `AutoNormal`,
 `AutoNormalDelaySec`, 20 s par défaut) ; la vue jeu revient quand le jeu repasse au premier plan.
+Jeux reconnus : ceux de la Game Bar de Windows, ceux ajoutés à la main dans Paramètres › Vue jeu (choisis
+parmi les applications ouvertes, retrouvés par nom d'exécutable : `ExtraGames`), et toute fenêtre de jeu
+Unreal Engine ou Unity (lanceur Epic et éditeurs exclus ; `DetectEngines: false` dans `appsettings.json` pour
+le désactiver, absent de l'interface).
 Animation du changement de vue : `Transition` = `morph` (les widgets communs glissent à leur place, défaut),
 `slide` (balayage latéral), `fade` (fondu) ou `none` ; jauges et compteurs repartent de 0 ensuite.
 
@@ -77,6 +82,10 @@ long sur l'horloge l'affiche ou la masque. Réglage `Weather` de `appsettings.js
 (gratuit, sans compte ni clé, données sous licence CC BY 4.0).
 
 ### Réglages à l'écran
+
+**Toucher court** sur une tuile de température ou de consommation (CPU, GPU) : courbe des 10 ou 30 dernières
+minutes avec actuelle / min / moyenne / max et les seuils d'alerte (mesures gardées depuis le démarrage de
+l'affichage ; le panneau se ferme seul après une minute).
 
 **Appui long** (~0,65 s) sur une mesure du boîtier : un panneau permet de choisir la valeur HWiNFO qui
 l'alimente (liste filtrée : bonne unité, capteurs GPU ou disque, valeur en direct) et, pour les jauges,

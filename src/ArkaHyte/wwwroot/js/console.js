@@ -275,11 +275,13 @@
 		const now = performance.now();
 		let entry = glides.get(key);
 		if (!entry) {
-			entry = { from: null, to: undefined, value: null, start: now, duration: 0, changed: now, draw, samples: [], every: 0, drawn: 0 };
+			entry = { from: null, to: undefined, value: null, start: now, duration: 0, changed: now, draw, samples: [], every: 0, drawn: 0, hidden: null };
 			glides.set(key, entry);
 		}
 		entry.draw = draw;
 		entry.every = options.every || 0;
+		// hidden(): true while the widget is not shown; the value keeps moving, nothing is drawn
+		entry.hidden = options.hidden || null;
 		let next = isNum(target) ? target : null;
 		if (options.average > 1) {
 			if (next === null) {
@@ -303,7 +305,9 @@
 			activeGlides.delete(entry);
 			entry.value = next;
 			entry.drawn = now;
-			draw(next);
+			if (!entry.hidden || !entry.hidden()) {
+				draw(next);
+			}
 			return;
 		}
 		entry.from = entry.value;
@@ -351,7 +355,9 @@
 			const progress = entry.ease ? 1 - Math.pow(1 - t, 3) : t;
 			entry.value = entry.from + (entry.to - entry.from) * progress;
 			// The end of a glide is always drawn, so the last value shown is the exact one
-			if (t >= 1 || now - entry.drawn >= entry.every) {
+			if (entry.hidden && entry.hidden()) {
+				// Redrawn where it stands when its widget shows again (redrawGlide)
+			} else if (t >= 1 || now - entry.drawn >= entry.every) {
 				entry.drawn = now;
 				entry.draw(entry.value);
 			}
@@ -1639,12 +1645,17 @@
 	// Settings (setup wizard): back to the normal view while the game stays in the background
 	let gameViewConfig = { autoNormal: true, autoNormalDelaySec: 20, transition: 'morph' };
 	const dial = { max: 0, ticks: [], blade: null, core: null, low: null };
-	const graph = { area: null, line: null, visible: false, frozen: false, bottom: 0, top: 0, shift: -1 };
-	const switchButtons = [...document.querySelectorAll('#viewSwitch button')];
+	// dirty: the curve changed while the game view was hidden
+	const graph = { area: null, line: null, visible: false, frozen: false, dirty: false, bottom: 0, top: 0, shift: -1 };
+	const pageDots = [...document.querySelectorAll('#pageDots button')];
+	// View picked by a swipe (or a page dot), null when the automatic choice applies. During a game it
+	// holds until the game ends; without one, until a game starts.
+	let viewChoice = null;
 
 	function startGameSession() {
-		// manual: the view was picked with the switch; backgroundSince: when the game lost the focus (0: it has it)
-		return { start: Date.now(), lastSeen: 0, view: 'game', manual: false, backgroundSince: 0, name: '', refreshHz: null, fps: [], fpsSum: 0, fpsCount: 0 };
+		// view: the automatic choice; backgroundSince: when the game lost the focus (0: it has it);
+		// low / reported: the last 1 % low and whether HWiNFO gave it (or it was computed)
+		return { start: Date.now(), lastSeen: 0, view: 'game', backgroundSince: 0, name: '', refreshHz: null, fps: [], fpsSum: 0, fpsCount: 0, low: null, reported: false };
 	}
 
 	function svgElement(parent, name, attributes) {
@@ -1806,18 +1817,66 @@
 		return sorted[Math.floor(sorted.length * 0.01)];
 	}
 
+	// Game view widgets are only painted while shown: their glides and graph wait, then catch up at once
+	const GAME_HIDDEN = () => !gameView;
+	const GAME_NUMBER = { ...NUMBER, hidden: GAME_HIDDEN };
+
+	function paintGameView() {
+		const session = gameSession;
+		paintGameTexts(session, Date.now());
+		if (graph.dirty) {
+			graph.dirty = false;
+			renderGraph(session.fps, session.low);
+		}
+		GAME_GLIDES.forEach(redrawGlide);
+	}
+
+	function paintGameTexts(session, now) {
+		text('gameTitle', session.name || 'Jeu');
+		text('gameSince', `en jeu depuis ${formatTime((now - session.start) / 1000)}`);
+		text('fpsScale', session.refreshHz ? `écran ${session.refreshHz} Hz` : ' ');
+		text('fpsLowLabel', session.reported ? '1 % low' : 'Min 60 s');
+		text('graphLowLabel', session.reported ? '1 % low' : 'min');
+	}
+
 	function applyView() {
 		const inGame = gameSession !== null;
-		const showGame = inGame && gameSession.view === 'game';
+		const showGame = viewChoice ? viewChoice === 'game' : inGame && gameSession.view === 'game';
 		frame.classList.toggle('has-game', inGame);
-		$('viewSwitch').hidden = !inGame;
-		switchButtons.forEach((button) => {
-			button.setAttribute('aria-checked', String(inGame && button.dataset.view === (showGame ? 'game' : 'normal')));
-		});
+		pageDots.forEach((dot) => dot.setAttribute('aria-current', String(dot.dataset.view === (showGame ? 'game' : 'normal'))));
 		if (showGame !== gameView) {
 			gameView = showGame;
+			if (showGame && !inGame) {
+				renderNoGame();
+			} else if (showGame) {
+				paintGameView();
+			}
 			switchView(showGame);
 		}
+	}
+
+	// Game view without a game (reached by a swipe): GPU, CPU and network live, the FPS part empty and greyed
+	function renderNoGame() {
+		GAME_GLIDES.forEach(forgetGlide);
+		if (!dial.max) {
+			buildDial(144);
+		}
+		renderDial(null);
+		renderLow(null);
+		renderGraph([], null);
+		['fpsValue', 'fpsLow', 'frameTime', 'fpsAvg'].forEach((id) => text(id, '--'));
+		text('gameTitle', 'Aucun jeu');
+		text('gameSince', 'en attente d\u2019une partie');
+		text('fpsScale', '\u00a0');
+		text('graphPause', 'Aucun jeu en cours');
+		graph.frozen = true;
+		placePause();
+		setStale(true);
+	}
+
+	function showView(view) {
+		viewChoice = view;
+		applyView();
 	}
 
 	// Greyed state (no frames) faded in and out rather than switched at once: the styles of the .stale
@@ -1866,6 +1925,8 @@
 		if (game) {
 			if (!gameSession) {
 				gameSession = startGameSession();
+				// A game that starts takes the screen, whatever was swiped before
+				viewChoice = null;
 			}
 			gameSession.lastSeen = now;
 			gameSession.name = game.name || '';
@@ -1877,11 +1938,12 @@
 			}
 		} else if (gameSession && now - gameSession.lastSeen > GAME_GRACE_MS) {
 			gameSession = null;
+			viewChoice = null;
 			GAME_GLIDES.forEach(forgetGlide);
 		}
-		// Unless the switch was used: the normal view once the game has stayed long enough in the
-		// background, the game view as soon as it is back in front
-		if (gameSession && !gameSession.manual) {
+		// Automatic choice (a swipe overrides it): the normal view once the game has stayed long enough in
+		// the background, the game view as soon as it is back in front
+		if (gameSession) {
 			const away = gameViewConfig.autoNormal && gameSession.backgroundSince > 0
 				&& now - gameSession.backgroundSince >= gameViewConfig.autoNormalDelaySec * 1000;
 			gameSession.view = away ? 'normal' : 'game';
@@ -1918,38 +1980,295 @@
 			redrawGlide('gameDial');
 			redrawGlide('gameLowMark');
 		}
-		const reported = isNum(gpu.fpsLow) && gpu.fpsLow >= 1;
-		const low = reported ? gpu.fpsLow : computedLow(session.fps);
 		const frameTime = isNum(gpu.frameTimeMs) && gpu.frameTimeMs > 0 ? gpu.frameTimeMs : fps !== null ? 1000 / fps : null;
-
-		text('gameTitle', session.name || 'Jeu');
-		text('gameSince', `en jeu depuis ${formatTime((now - session.start) / 1000)}`);
-		text('fpsScale', session.refreshHz ? `écran ${session.refreshHz} Hz` : ' ');
 		if (stale) {
-			// Values, labels and curve stay as they were last drawn
+			// Values, labels and curve stay as they were last drawn (the elapsed time still counts)
+			if (gameView) {
+				text('gameSince', `en jeu depuis ${formatTime((now - session.start) / 1000)}`);
+			}
 			return;
 		}
-		text('fpsLowLabel', reported ? '1 % low' : 'Min 60 s');
-		text('graphLowLabel', reported ? '1 % low' : 'min');
-		renderGraph(session.fps, low);
-		glide('gameDial', fps, renderDial);
-		glide('gameFps', fps, (value) => text('fpsValue', orDash(value, nf0)), NUMBER);
-		glide('gameLowMark', low, renderLow);
-		glide('gameLow', low, (value) => text('fpsLow', orDash(value, nf0)), NUMBER);
-		glide('frameTime', frameTime, (value) => text('frameTime', orDash(value, (ms) => nf1.format(ms))), NUMBER);
+		session.reported = isNum(gpu.fpsLow) && gpu.fpsLow >= 1;
+		session.low = session.reported ? gpu.fpsLow : computedLow(session.fps);
+		const low = session.low;
+		if (gameView) {
+			paintGameTexts(session, now);
+			renderGraph(session.fps, low);
+		} else {
+			graph.dirty = true;
+		}
+		glide('gameDial', fps, renderDial, { hidden: GAME_HIDDEN });
+		glide('gameFps', fps, (value) => text('fpsValue', orDash(value, nf0)), GAME_NUMBER);
+		glide('gameLowMark', low, renderLow, { hidden: GAME_HIDDEN });
+		glide('gameLow', low, (value) => text('fpsLow', orDash(value, nf0)), GAME_NUMBER);
+		glide('frameTime', frameTime, (value) => text('frameTime', orDash(value, (ms) => nf1.format(ms))), GAME_NUMBER);
 		// Already an average: only its redraws are spaced out
-		glide('fpsAvg', session.fpsCount > 0 ? session.fpsSum / session.fpsCount : null, (value) => text('fpsAvg', orDash(value, nf0)), { every: NUMBER.every });
+		glide('fpsAvg', session.fpsCount > 0 ? session.fpsSum / session.fpsCount : null, (value) => text('fpsAvg', orDash(value, nf0)), { every: NUMBER.every, hidden: GAME_HIDDEN });
 	}
 
-	switchButtons.forEach((button) => {
-		button.addEventListener('click', () => {
-			if (gameSession) {
-				gameSession.view = button.dataset.view;
-				gameSession.manual = true;
-				applyView();
+	// ---------- Swipe between the normal view and the game view ----------
+	// A quick horizontal stroke anywhere on the page, no panel open: towards the left shows the game view
+	// (the page on the right), towards the right the normal one. The click ending a stroke is swallowed,
+	// so a swipe starting on a tile or a dock button does not press it.
+	const SWIPE_MIN_PX = 90;
+	const SWIPE_MAX_MS = 800;
+	let swipeStart = null;
+	let swipedAt = 0;
+
+	frame.addEventListener('pointerdown', (event) => {
+		const panelOpen = document.querySelector('.editor:not([hidden])') !== null;
+		swipeStart = panelOpen ? null : { x: event.clientX, y: event.clientY, time: performance.now(), id: event.pointerId };
+	});
+	frame.addEventListener('pointerup', (event) => {
+		const start = swipeStart;
+		swipeStart = null;
+		if (!start || event.pointerId !== start.id || performance.now() - start.time > SWIPE_MAX_MS) {
+			return;
+		}
+		// Distances in frame pixels: the frame is scaled to fit the window
+		const scale = frame.getBoundingClientRect().width / W;
+		const dx = (event.clientX - start.x) / scale;
+		const dy = (event.clientY - start.y) / scale;
+		if (Math.abs(dx) < SWIPE_MIN_PX || Math.abs(dx) < Math.abs(dy) * 1.5) {
+			return;
+		}
+		swipedAt = performance.now();
+		showView(dx < 0 ? 'game' : 'normal');
+	});
+	frame.addEventListener('pointercancel', () => {
+		swipeStart = null;
+	});
+	frame.addEventListener('click', (event) => {
+		if (performance.now() - swipedAt < 400) {
+			event.stopPropagation();
+			event.preventDefault();
+		}
+	}, true);
+	pageDots.forEach((dot) => dot.addEventListener('click', () => showView(dot.dataset.view)));
+
+	// ---------- Temperature / power history (short tap on a tile) ----------
+	// The last 30 minutes of each metric, one point per sample, kept in the page (a reload starts over).
+	// The chart is drawn when the panel opens and then once per sample while it stays open: nothing in
+	// the 24 fps loop.
+	const HISTORY_SECONDS = 1800;
+	const HISTORY_METRICS = {
+		cpuTemp: { title: 'Température CPU', unit: '°C', limit: 'cpuTemp' },
+		cpuPow: { title: 'Consommation CPU', unit: 'W', limit: 'cpuPower' },
+		gpuTemp: { title: 'Température GPU', unit: '°C', limit: 'gpuTemp' },
+		gpuPow: { title: 'Consommation GPU', unit: 'W', limit: 'gpuPower' }
+	};
+	const HISTORY_AUTO_CLOSE_MS = 60000;
+	// Two samples further apart than this (display paused, host restarted) break the curve
+	const HISTORY_GAP_MS = 5000;
+	const CHART = { width: 586, height: 440, left: 4, right: 4, top: 14, bottom: 36 };
+
+	// Ring buffer of (time, value), NaN for a sample without a value
+	class Series {
+		constructor(size) {
+			this.times = new Float64Array(size);
+			this.values = new Float32Array(size);
+			this.start = 0;
+			this.count = 0;
+		}
+
+		push(time, value) {
+			const size = this.values.length;
+			const index = (this.start + this.count) % size;
+			this.times[index] = time;
+			this.values[index] = isNum(value) ? value : NaN;
+			if (this.count < size) {
+				this.count++;
+			} else {
+				this.start = (this.start + 1) % size;
+			}
+		}
+
+		// Points from the given time on, oldest first
+		since(time) {
+			const points = [];
+			for (let i = 0; i < this.count; i++) {
+				const index = (this.start + i) % this.values.length;
+				if (this.times[index] >= time) {
+					points.push({ t: this.times[index], v: this.values[index] });
+				}
+			}
+			return points;
+		}
+	}
+
+	const histories = Object.fromEntries(Object.keys(HISTORY_METRICS).map((key) => [key, new Series(HISTORY_SECONDS)]));
+	const historyView = { key: null, minutes: 10, closeTimer: 0 };
+	const historyCtx = $('historyChart').getContext('2d');
+
+	function recordHistory(cpu, gpu, time = Date.now()) {
+		histories.cpuTemp.push(time, cpu.temp);
+		histories.cpuPow.push(time, cpu.power);
+		histories.gpuTemp.push(time, gpu.temp);
+		histories.gpuPow.push(time, gpu.power);
+		if (historyView.key) {
+			drawHistory();
+		}
+	}
+
+	function drawHistory() {
+		const metric = HISTORY_METRICS[historyView.key];
+		const now = Date.now();
+		const span = historyView.minutes * 60000;
+		const from = now - span;
+		const points = histories[historyView.key].since(from);
+		const values = points.map((point) => point.v).filter((value) => !Number.isNaN(value));
+		const last = points.length && !Number.isNaN(points[points.length - 1].v) ? points[points.length - 1].v : null;
+		text('historyNow', orDash(last, nf0));
+		text('historyMin', values.length ? nf0(Math.min(...values)) : '--');
+		text('historyAvg', values.length ? nf0(values.reduce((sum, value) => sum + value, 0) / values.length) : '--');
+		text('historyMax', values.length ? nf0(Math.max(...values)) : '--');
+		// The display only keeps what it saw since it started
+		const known = points.length ? (now - points[0].t) / 60000 : 0;
+		text('historyNote', points.length && known < historyView.minutes - 1
+			? `Mesures depuis ${Math.max(1, Math.round(known))} min (démarrage de l'affichage)`
+			: ' ');
+
+		const ctx = historyCtx;
+		const plot = { x: CHART.left, y: CHART.top, w: CHART.width - CHART.left - CHART.right, h: CHART.height - CHART.top - CHART.bottom };
+		ctx.clearRect(0, 0, CHART.width, CHART.height);
+		ctx.font = "15px 'Share Tech Mono', monospace";
+		ctx.textBaseline = 'middle';
+		if (values.length < 2) {
+			ctx.fillStyle = `rgba(${palette.ash}, 0.9)`;
+			ctx.textAlign = 'center';
+			ctx.fillText('Pas encore assez de mesures', CHART.width / 2, CHART.height / 2);
+			return;
+		}
+
+		// From zero to the end of the tile's gauge scale (thresholds), further only when a value goes beyond
+		const low = 0;
+		const high = Math.max(limits[metric.limit].max, Math.max(...values) * 1.06) || 1;
+		const withUnit = (value) => `${nf0(value)} ${metric.unit}`;
+		text('historyTop', withUnit(high));
+		const x = (time) => plot.x + ((time - from) / span) * plot.w;
+		const y = (value) => plot.y + plot.h - ((value - low) / (high - low)) * plot.h;
+
+		// Unlabelled grid (the figures above give the values): four rows
+		ctx.lineWidth = 1;
+		ctx.strokeStyle = `rgba(${palette.ash}, 0.22)`;
+		ctx.fillStyle = `rgba(${palette.ash}, 0.95)`;
+		for (let i = 0; i <= 4; i++) {
+			const row = Math.round(plot.y + (plot.h * i) / 4) + 0.5;
+			ctx.beginPath();
+			ctx.moveTo(plot.x, row);
+			ctx.lineTo(plot.x + plot.w, row);
+			ctx.stroke();
+		}
+		ctx.textAlign = 'center';
+		ctx.textBaseline = 'top';
+		const marks = historyView.minutes === 10 ? [10, 5, 0] : [30, 20, 10, 0];
+		marks.forEach((minutes, i) => {
+			const column = x(now - minutes * 60000);
+			ctx.textAlign = i === 0 ? 'left' : i === marks.length - 1 ? 'right' : 'center';
+			ctx.fillText(minutes === 0 ? 'maintenant' : `-${minutes} min`, i === 0 ? plot.x : column, plot.y + plot.h + 12);
+		});
+
+		// Alert levels of the tile, dashed, when they fall inside the chart
+		const { warm, hot } = limits[metric.limit];
+		text('historyWarm', withUnit(warm));
+		text('historyHot', withUnit(hot));
+		const style = getComputedStyle(document.documentElement);
+		[[warm, style.getPropertyValue('--warm').trim()], [hot, `rgb(${palette.ember})`]].forEach(([level, color]) => {
+			if (isNum(level) && level > low && level < high) {
+				ctx.setLineDash([8, 7]);
+				ctx.strokeStyle = color;
+				ctx.lineWidth = 1.5;
+				ctx.beginPath();
+				ctx.moveTo(plot.x, y(level));
+				ctx.lineTo(plot.x + plot.w, y(level));
+				ctx.stroke();
+				ctx.setLineDash([]);
+				// Its value at the right end, just above the line
+				ctx.fillStyle = color;
+				ctx.textAlign = 'right';
+				ctx.textBaseline = 'bottom';
+				ctx.fillText(withUnit(level), plot.x + plot.w - 4, y(level) - 5);
 			}
 		});
+
+		// Runs of consecutive samples: each one filled down to the axis, then stroked with a glow
+		const runs = [];
+		let run = [];
+		points.forEach((point, i) => {
+			const broken = Number.isNaN(point.v) || (i > 0 && point.t - points[i - 1].t > HISTORY_GAP_MS);
+			if (broken && run.length) {
+				runs.push(run);
+				run = [];
+			}
+			if (!Number.isNaN(point.v)) {
+				run.push(point);
+			}
+		});
+		if (run.length) {
+			runs.push(run);
+		}
+		const fill = ctx.createLinearGradient(0, plot.y, 0, plot.y + plot.h);
+		fill.addColorStop(0, `rgba(${palette.blade}, 0.32)`);
+		fill.addColorStop(1, `rgba(${palette.blade}, 0)`);
+		for (const segment of runs) {
+			ctx.beginPath();
+			segment.forEach((point, i) => (i ? ctx.lineTo(x(point.t), y(point.v)) : ctx.moveTo(x(point.t), y(point.v))));
+			const path = new Path2D();
+			segment.forEach((point, i) => (i ? path.lineTo(x(point.t), y(point.v)) : path.moveTo(x(point.t), y(point.v))));
+			path.lineTo(x(segment[segment.length - 1].t), plot.y + plot.h);
+			path.lineTo(x(segment[0].t), plot.y + plot.h);
+			path.closePath();
+			ctx.fillStyle = fill;
+			ctx.fill(path);
+			ctx.lineJoin = 'round';
+			ctx.lineWidth = 2.5;
+			ctx.strokeStyle = `rgb(${palette.blade})`;
+			ctx.shadowColor = `rgb(${palette.blade})`;
+			ctx.shadowBlur = 8;
+			ctx.stroke();
+			ctx.shadowBlur = 0;
+		}
+	}
+
+	function armHistoryClose() {
+		clearTimeout(historyView.closeTimer);
+		historyView.closeTimer = setTimeout(closeHistory, HISTORY_AUTO_CLOSE_MS);
+	}
+
+	function openHistory(key) {
+		const metric = HISTORY_METRICS[key];
+		historyView.key = key;
+		text('historyTitle', metric.title);
+		document.querySelectorAll('#history .history-unit').forEach((unit) => setText(unit, metric.unit));
+		document.querySelectorAll('.history-range button').forEach((button) => {
+			button.setAttribute('aria-checked', String(Number(button.dataset.minutes) === historyView.minutes));
+		});
+		$('history').hidden = false;
+		drawHistory();
+		armHistoryClose();
+	}
+
+	function closeHistory() {
+		clearTimeout(historyView.closeTimer);
+		historyView.key = null;
+		$('history').hidden = true;
+	}
+
+	document.querySelectorAll('.history-range button').forEach((button) => {
+		button.addEventListener('click', () => {
+			historyView.minutes = Number(button.dataset.minutes);
+			openHistory(historyView.key);
+		});
 	});
+	$('historyClose').addEventListener('click', closeHistory);
+	// A tap outside the panel closes it
+	$('history').addEventListener('click', (event) => {
+		if (event.target === $('history')) {
+			closeHistory();
+		}
+	});
+	// Short tap on a tile; a long press opens its settings instead (attachLongPress stops the click)
+	Object.keys(HISTORY_METRICS).forEach((key) => $(`${key}Tile`).addEventListener('click', () => openHistory(key)));
 
 	// ---------- Snapshot intake ----------
 	function applySnapshot(s) {
@@ -1964,6 +2283,7 @@
 
 		renderCpu(cpu);
 		renderGpu(gpu);
+		recordHistory(cpu, gpu);
 		if (isNum(gpu.vramTotalGb) && gpu.vramTotalGb !== vramTicksFor) {
 			vramTicksFor = gpu.vramTotalGb;
 			renderVramTicks(vramTicksFor);
@@ -2990,6 +3310,17 @@
 		renderWeather({ place: 'Lyon', temperature: 14.6, code: 2, isDay: true, min: 8, max: 16 });
 		// The update banner is part of the preview too
 		renderUpdate({ stage: 'available', version: '2.0.0' });
+		// Half an hour of history, so the charts have something to show
+		const seeded = Date.now();
+		for (let i = HISTORY_SECONDS - 1; i > 0; i--) {
+			const wave = Math.sin(i / 140) * 0.5 + Math.sin(i / 37) * 0.25 + (Math.random() - 0.5) * 0.15;
+			const cpuLoad = clamp(scenario.cpu + wave * 18, 1, 100);
+			const gpuLoad = clamp(scenario.gpu + wave * 22, 0, 100);
+			recordHistory(
+				{ temp: 30 + cpuLoad * 0.63, power: 30 + cpuLoad * 1.25 },
+				{ temp: 31 + gpuLoad * 0.52, power: 25 + gpuLoad * 4.15 },
+				seeded - i * 1000);
+		}
 		if (scenario.game) {
 			// A session already under way: elapsed time and a full minute of history
 			gameSession = startGameSession();
@@ -3075,6 +3406,16 @@
 	}
 	if (!host || demo) {
 		startSimulator(demo || 'idle');
+	}
+	// "?view=game" starts on the game view, game or not (as a swipe would), for captures
+	if (new URLSearchParams(location.search).get('view') === 'game') {
+		setTimeout(() => showView('game'), 1200);
+	}
+	// "?history=cpuTemp" (cpuPow, gpuTemp, gpuPow) opens a history chart at load, "&minutes=30" for the long one
+	const historyPreview = new URLSearchParams(location.search).get('history');
+	if (HISTORY_METRICS[historyPreview]) {
+		historyView.minutes = Number(new URLSearchParams(location.search).get('minutes')) === 30 ? 30 : 10;
+		setTimeout(() => openHistory(historyPreview), 1500);
 	}
 	// "?sheet=cpuTemp" (or disk0, disk1...) opens an on-screen settings sheet at load, for captures
 	const sheetPreview = new URLSearchParams(location.search).get('sheet');

@@ -15,11 +15,6 @@ du non fait.
 ---
 
 # Liste des tâches
-- [ ] Historique des températures : toucher une jauge (CPU / GPU, température ou puissance) ouvre une courbe des
-  10 à 30 dernières minutes
-  - Tampon circulaire côté C# ou JS (1 point / s), canvas redessiné une fois par seconde au plus, rien dans la
-    boucle 24 i/s quand le panneau est fermé
-  - Distinguer du réglage par appui long (toucher court = courbe, appui long = panneau `#sheet`)
 - [ ] Refroidissement : température du liquide de l'AIO TITAN 360, vitesse de la pompe et des ventilateurs RX,
   lus par HWiNFO (capteurs du hub iCUE LINK, sans le SDK iCUE)
   - Vérifier d'abord que HWiNFO les expose (`--dump`), puis nouvelles entrées `HwInfo` + étape de l'assistant

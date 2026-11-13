@@ -6,6 +6,7 @@
 
 	const host = window.chrome && window.chrome.webview ? window.chrome.webview : null;
 	const LAST_STEP = 6;
+	const GAME_VIEW_STEP = 5;
 
 	/* Widgets fed by HWiNFO. Suggestions: entries of the right unit whose sensor matches, label
 	   patterns tried in order (English and French HWiNFO names). */
@@ -66,6 +67,10 @@
 		}
 		if (model.step === LAST_STEP) {
 			renderSummary();
+		}
+		// Game view step: the applications open now, to add one as a game
+		if (model.step === GAME_VIEW_STEP) {
+			send({ type: 'listProcesses' });
 		}
 	}
 
@@ -514,6 +519,7 @@
 			: 'Vue jeu : <b>gardée</b> quand le jeu passe en arrière-plan');
 		const transition = $('gameTransition');
 		add('ok', 'Changement de vue : <b>' + escapeHtml(transition.options[transition.selectedIndex].text.split(' :')[0]) + '</b>');
+		add('ok', 'Jeux ajoutés : <b>' + (extraGames.length ? extraGames.map(g => escapeHtml(g.name || g.exe)).join(', ') : 'aucun') + '</b>');
 		const weatherOn = $('weatherEnabled').checked;
 		add(!weatherOn || weatherPlace ? 'ok' : 'warn', weatherOn
 			? (weatherPlace ? 'Météo : <b>' + escapeHtml(weatherPlace.place) + '</b>' : 'Météo : <b>aucune ville choisie</b>, rien ne s\'affichera')
@@ -531,7 +537,12 @@
 	function save() {
 		const message = { type: 'save', hardware: readHardware() };
 		message.weather = { enabled: $('weatherEnabled').checked };
-		message.gameView = { autoNormal: $('gameAutoNormal').checked, delaySec: Number($('gameAutoDelay').value), transition: $('gameTransition').value };
+		message.gameView = {
+			autoNormal: $('gameAutoNormal').checked,
+			delaySec: Number($('gameAutoDelay').value),
+			transition: $('gameTransition').value,
+			extraGames
+		};
 		if (weatherPlace) {
 			Object.assign(message.weather, weatherPlace);
 		}
@@ -595,8 +606,50 @@
 		select.value = seconds;
 		$('gameAutoNormal').checked = Boolean(gameView.autoNormal);
 		$('gameTransition').value = gameView.transition || 'morph';
+		extraGames = (gameView.extraGames || []).map(game => ({ exe: game.exe, name: game.name || '' }));
+		renderExtraGames();
 		select.disabled = !gameView.autoNormal;
 	}
+
+	// Games added by hand ({ exe, name }) and the applications open now, to pick one from
+	let extraGames = [];
+	let openProcesses = [];
+	const sameExe = (a, b) => a.toLowerCase() === b.toLowerCase();
+
+	function renderExtraGames() {
+		const list = $('extraGames');
+		list.textContent = '';
+		extraGames.forEach((game, index) => {
+			const row = document.createElement('div');
+			row.className = 'game-row';
+			row.innerHTML = '<span class="game-name"></span><span class="game-exe"></span><button type="button" class="link">Retirer</button>';
+			row.querySelector('.game-name').textContent = game.name || game.exe;
+			row.querySelector('.game-exe').textContent = game.exe;
+			row.querySelector('button').addEventListener('click', () => {
+				extraGames.splice(index, 1);
+				renderExtraGames();
+			});
+			list.append(row);
+		});
+		renderProcessPick();
+	}
+
+	function renderProcessPick() {
+		const select = $('processPick');
+		const choices = openProcesses.filter(p => !extraGames.some(g => sameExe(g.exe, p.exe)));
+		select.textContent = '';
+		select.add(new Option(choices.length ? 'Choisir une application ouverte…' : 'Aucune autre application ouverte', ''));
+		choices.forEach(p => select.add(new Option(p.name + ' · ' + p.exe, p.exe)));
+	}
+
+	$('processAdd').addEventListener('click', () => {
+		const picked = openProcesses.find(p => sameExe(p.exe, $('processPick').value));
+		if (picked) {
+			extraGames.push({ exe: picked.exe, name: picked.name });
+			renderExtraGames();
+		}
+	});
+	$('processRefresh').addEventListener('click', () => send({ type: 'listProcesses' }));
 
 	$('gameAutoNormal').addEventListener('change', () => {
 		$('gameAutoDelay').disabled = !$('gameAutoNormal').checked;
@@ -664,6 +717,10 @@
 					showFootStatus('Enregistrement impossible : voir le journal', true);
 				}
 				break;
+			case 'processes':
+				openProcesses = message.processes || [];
+				renderProcessPick();
+				break;
 			case 'saved':
 				$('next').disabled = false;
 				showFootStatus('Réglages enregistrés et appliqués');
@@ -683,10 +740,18 @@
 		const sensorCpu = 'CPU [#0]: AMD Ryzen 7 9800X3D: Enhanced';
 		const sensorGpu = 'GPU [#0]: NVIDIA GeForce RTX 4090: ';
 		dispatch({
+			type: 'processes',
+			processes: [
+				{ exe: 'Discord.exe', name: 'Discord' },
+				{ exe: 'Hades2.exe', name: 'Hades II' },
+				{ exe: 'Spotify.exe', name: 'Spotify Premium' }
+			]
+		});
+		dispatch({
 			type: 'state',
 			// "?mode=settings" previews the settings window instead of the first-run wizard
 			completed: new URLSearchParams(location.search).get('mode') === 'settings',
-			gameView: { autoNormal: true, autoNormalDelaySec: 20, transition: 'morph' },
+			gameView: { autoNormal: true, autoNormalDelaySec: 20, transition: 'morph', detectEngines: true, extraGames: [{ exe: 'TFTClient-Win64-Shipping.exe', name: 'TFT' }] },
 			caseSize: { width: 682, height: 2560 },
 			screens: [
 				{ number: 1, name: 'DISPLAY1', x: -682, y: 1440, width: 682, height: 2560, primary: false },

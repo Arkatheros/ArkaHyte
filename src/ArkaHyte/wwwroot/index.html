@@ -395,6 +395,36 @@
 				</div>
 			</div>
 		</div>
+		<!-- Last minutes of a temperature / power tile (short tap), drawn by console.js -->
+		<div class="editor history" id="history" role="dialog" aria-modal="true" aria-labelledby="historyTitle" hidden>
+			<div class="editor-panel">
+				<div class="editor-head">
+					<span class="label" id="historyTitle">Historique</span>
+					<button type="button" class="editor-close" id="historyClose" aria-label="Fermer">
+						<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
+					</button>
+				</div>
+				<div class="history-range" role="radiogroup" aria-label="Durée">
+					<button type="button" role="radio" data-minutes="10">10 minutes</button>
+					<button type="button" role="radio" data-minutes="30">30 minutes</button>
+				</div>
+				<div class="history-stats">
+					<div><span class="label">Actuelle</span><span class="history-value"><span id="historyNow">--</span><small class="history-unit"></small></span></div>
+					<div><span class="label">Min</span><span class="history-value"><span id="historyMin">--</span><small class="history-unit"></small></span></div>
+					<div><span class="label">Moyenne</span><span class="history-value"><span id="historyAvg">--</span><small class="history-unit"></small></span></div>
+					<div><span class="label">Max</span><span class="history-value"><span id="historyMax">--</span><small class="history-unit"></small></span></div>
+				</div>
+				<canvas id="historyChart" width="586" height="440"></canvas>
+				<div class="history-legend">
+					<span><i class="line"></i>Mesure</span>
+					<span><i class="warm"></i>Seuil chaud <b id="historyWarm">--</b></span>
+					<span><i class="hot"></i>Seuil d'alerte <b id="historyHot">--</b></span>
+					<span>Haut de l'échelle <b id="historyTop">--</b></span>
+				</div>
+				<p class="history-note" id="historyNote"></p>
+			</div>
+		</div>
+
 		<!-- On-screen settings of a metric (long press): HWiNFO value(s) and thresholds, built by console.js -->
 		<div class="editor sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" hidden>
 			<div class="editor-panel">
@@ -411,10 +441,11 @@
 				</div>
 			</div>
 		</div>
-		<!-- Shown while a game runs: switches between the game view and the normal one -->
-		<div class="widget view-switch" id="viewSwitch" role="radiogroup" aria-label="Vue" hidden>
-			<button type="button" role="radio" data-view="normal"><svg><use href="#i-grid"/></svg>Vue normale</button>
-			<button type="button" role="radio" data-view="game"><svg><use href="#i-gamepad"/></svg>Mode jeu</button>
+		<!-- Which view is shown, like the pages of a phone: a swipe moves between them, so does a tap on a dot.
+		     Not a .widget: it stays put while the views change. -->
+		<div class="page-dots" id="pageDots" aria-label="Vues">
+			<button type="button" data-view="normal" aria-label="Vue normale"></button>
+			<button type="button" data-view="game" aria-label="Vue jeu"></button>
 		</div>
 		<!-- Stays until the update is installed (a toast would be gone before anyone looks) -->
 		<button type="button" class="update-banner" id="updateBanner" hidden>

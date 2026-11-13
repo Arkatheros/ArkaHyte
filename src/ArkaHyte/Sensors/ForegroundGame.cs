@@ -32,10 +32,37 @@ internal static partial class ForegroundGame
 	private static uint _lastProcessId;
 	private static string? _lastGamePath;
 
+	// Settings (GameView): games added by hand, keyed by executable name, and engine detection. Replaced
+	// whole by Configure (UI thread), read by the sampling thread; a new instance drops the cached verdict.
+	private sealed record GameRules(IReadOnlyDictionary<string, string> Extra, bool DetectEngines);
+	private static volatile GameRules _rules = new(new Dictionary<string, string>(), true);
+	private static GameRules? _lastRules;
+
+	// Game windows of the Unreal Engine and Unity players; their editors and the Epic Games launcher (an
+	// Unreal application) use them too and are not games
+	private static readonly string[] EngineClasses = ["UnrealWindow", "UnityWndClass"];
+	private static readonly HashSet<string> EngineExclusions = new(StringComparer.OrdinalIgnoreCase)
+	{
+		"EpicGamesLauncher.exe", "EpicWebHelper.exe", "UnrealEditor.exe", "UE4Editor.exe", "Unity.exe", "Unity Hub.exe"
+	};
+
 	// Game being followed: its process handle tells when it exits
 	private static uint _trackedId;
 	private static IntPtr _trackedProcess;
 	private static GameData? _tracked;
+
+	public static void Configure(GameViewSettings settings)
+	{
+		var extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+		foreach (var game in settings.ExtraGames ?? [])
+		{
+			if (!string.IsNullOrWhiteSpace(game.Exe))
+			{
+				extra[game.Exe.Trim()] = game.Name?.Trim() ?? string.Empty;
+			}
+		}
+		_rules = new GameRules(extra, settings.DetectEngines);
+	}
 
 	public static Sample Read()
 	{
@@ -45,7 +72,7 @@ internal static partial class ForegroundGame
 			return new Sample(false, TrackedGame(foreground: false));
 		}
 		var processId = ForegroundProcess(window);
-		var gamePath = KnownGamePath(processId);
+		var gamePath = KnownGamePath(processId, window);
 		if (gamePath is not null)
 		{
 			Track(processId, gamePath, window);
@@ -76,8 +103,11 @@ internal static partial class ForegroundGame
 		return processId;
 	}
 
-	/// <summary>Executable path of the process when Windows lists it as a game, null otherwise.</summary>
-	private static string? KnownGamePath(uint processId)
+	/// <summary>
+	/// Executable path of the process when it is a game (Windows' list, added by hand, Unreal / Unity window),
+	/// null otherwise.
+	/// </summary>
+	private static string? KnownGamePath(uint processId, IntPtr window)
 	{
 		if (processId == 0)
 		{
@@ -86,7 +116,8 @@ internal static partial class ForegroundGame
 		// A game freshly launched for the first time is added by Windows while it runs: refresh the list
 		// when a new process comes to the front, at most once a minute
 		var stale = DateTime.UtcNow - _knownGamesRead >= KnownGamesLifetime;
-		if (processId == _lastProcessId && !stale)
+		var rules = _rules;
+		if (processId == _lastProcessId && !stale && rules == _lastRules)
 		{
 			return _lastGamePath;
 		}
@@ -97,8 +128,28 @@ internal static partial class ForegroundGame
 		}
 		var path = ProcessPath(processId);
 		_lastProcessId = processId;
-		_lastGamePath = path is not null && _knownGames.Contains(path) ? path : null;
+		_lastRules = rules;
+		_lastGamePath = path is not null && IsGame(path, window, rules) ? path : null;
 		return _lastGamePath;
+	}
+
+	private static bool IsGame(string path, IntPtr window, GameRules rules)
+	{
+		if (_knownGames.Contains(path))
+		{
+			return true;
+		}
+		var exe = Path.GetFileName(path);
+		if (rules.Extra.ContainsKey(exe))
+		{
+			return true;
+		}
+		if (!rules.DetectEngines || EngineExclusions.Contains(exe))
+		{
+			return false;
+		}
+		var className = new StringBuilder(64);
+		return GetClassName(window, className, className.Capacity) > 0 && EngineClasses.Contains(className.ToString());
 	}
 
 	private static void Track(uint processId, string path, IntPtr window)
@@ -144,6 +195,11 @@ internal static partial class ForegroundGame
 	/// </summary>
 	private static string GameName(string path, IntPtr window)
 	{
+		// The name given when the game was added by hand
+		if (_rules.Extra.TryGetValue(Path.GetFileName(path), out var given) && given.Length > 0)
+		{
+			return given;
+		}
 		var steam = SteamFolder().Match(path);
 		if (steam.Success)
 		{
@@ -202,7 +258,8 @@ internal static partial class ForegroundGame
 		return games;
 	}
 
-	private static string? ProcessPath(uint processId)
+	/// <summary>Full executable path, readable for most processes without elevation.</summary>
+	internal static string? ProcessPath(uint processId)
 	{
 		var process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, processId);
 		if (process == IntPtr.Zero)

@@ -143,8 +143,18 @@
 						<option value="none">Aucune</option>
 					</select>
 				</div>
-				<p class="hint">La vue jeu revient dès que le jeu repasse au premier plan. Un choix fait avec le
-					bouton Vue normale / Mode jeu de l'écran reste prioritaire jusqu'à la fin de la partie.</p>
+				<p class="hint">La vue jeu revient dès que le jeu repasse au premier plan. Un balayage vers la gauche
+					ou la droite sur l'écran change de vue à tout moment ; pendant une partie, ce choix reste prioritaire
+					jusqu'à la fin du jeu.</p>
+				<h2>Jeux reconnus</h2>
+				<p class="hint">La vue jeu s'ouvre pour les jeux que Windows reconnaît (liste de la Game Bar) et pour les
+					jeux Unreal Engine ou Unity. Ajoutez ici ceux qui ne le sont pas, lancés au préalable.</p>
+				<div class="games" id="extraGames"></div>
+				<div class="row">
+					<select id="processPick" class="grow"></select>
+					<button type="button" class="ghost" id="processAdd">Ajouter</button>
+					<button type="button" class="ghost" id="processRefresh">Actualiser</button>
+				</div>
 			</section>
 
 			<!-- Summary -->
