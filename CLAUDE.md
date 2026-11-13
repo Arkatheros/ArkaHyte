@@ -104,8 +104,11 @@ après un toucher sur le boîtier (+ watchdog). `TrayIcon` + `SithMenuRenderer` 
 sans écran du boîtier), ou par le menu. Messages : `state` (écrans, matériel détecté par
 `HardwareDetector` via le registre), `hwinfo` toutes les 2 s ; retour `save`/`skip`/`identify`/`startHwInfo`.
 `AppSettings.SaveUser` modifie l'arbre JSON (le reste du fichier est conservé) ; capteurs inchangés omis
-pour garder les jokers. Après `save`, `DisplayForm.RestartRequested` → `Program` relance l'exe avec
-`--restarted`, qui attend le mutex de l'instance sortante.
+pour garder les jokers. Deux modes selon `SetupCompleted` : assistant (étapes, résumé, enregistrer et
+redémarrer) ou **Paramètres** (`settings-mode` : navigation libre, Fermer / Enregistrer, fenêtre gardée ouverte,
+message `saved`). `Saved(restart)` : redémarrage seulement au premier setup ou si l'écran du boîtier change
+(`DisplayForm.RestartRequested` → `Program` relance l'exe avec `--restarted`, qui attend le mutex de l'instance
+sortante) ; sinon `DisplayForm.ReloadSettings` applique à chaud (capteurs, matériel, météo, vue jeu).
 
 **Raccourcis du dock.** Défauts dans `appsettings.json` → `Shortcuts`, surchargés par
 `%LOCALAPPDATA%\ArkaHyte\shortcuts.json` (`ShortcutStore`). L'éditeur (appui long) liste les applis via
@@ -148,6 +151,9 @@ L'écran tourne en permanence : cible ~16 % d'un cœur.
   3 derniers échantillons, réécrits 4 fois par seconde au plus). Écritures DOM par `setText` / `setStyle`,
   seulement si le contenu change.
 - Aucune `transition` CSS ni animation CSS infinie, pas de `backdrop-filter`.
+- Seule exception à la boucle : effets ponctuels en Web Animations sur `transform` / `opacity` (compositeur),
+  ex. changement de vue normale ↔ jeu (`switchView`, `GameView.Transition` : `morph` = FLIP des widgets
+  communs + fondu des autres, `slide`, `fade`, `none` ; puis `refillGauges` remonte jauges et cadrans depuis 0).
 - Effets pilotés par variables CSS mises à jour en JS ; `will-change` sur les éléments animés.
 - Une variable animée se pose sur les éléments qui la lisent (`setVar(elements, …)`), jamais sur `.frame` :
   héritée par toute la page, elle forcerait un recalcul de style complet à chaque frame.

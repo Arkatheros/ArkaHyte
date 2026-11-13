@@ -134,6 +134,15 @@
 						<option value="120">2 minutes</option>
 					</select>
 				</div>
+				<div class="row">
+					<label class="hint" for="gameTransition">Animation du changement de vue</label>
+					<select id="gameTransition" class="transition">
+						<option value="morph">Morphing : les widgets glissent à leur place</option>
+						<option value="slide">Balayage latéral</option>
+						<option value="fade">Fondu</option>
+						<option value="none">Aucune</option>
+					</select>
+				</div>
 				<p class="hint">La vue jeu revient dès que le jeu repasse au premier plan. Un choix fait avec le
 					bouton Vue normale / Mode jeu de l'écran reste prioritaire jusqu'à la fin de la partie.</p>
 			</section>
@@ -150,8 +159,10 @@
 
 		<footer class="foot">
 			<button type="button" class="link" id="skip">Passer l'assistant</button>
+			<span class="foot-status" id="footStatus"></span>
 			<div class="foot-actions">
 				<button type="button" class="ghost" id="back">Précédent</button>
+				<button type="button" class="ghost" id="close" hidden>Fermer</button>
 				<button type="button" class="primary" id="next">Suivant</button>
 			</div>
 		</footer>

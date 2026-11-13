@@ -74,11 +74,15 @@ public sealed record WeatherSettings(bool Enabled = false, string Place = "", do
 /// <summary>
 /// Game view: back to the normal view once the game has been in the background (another window has the
 /// focus) for AutoNormalDelaySec, back to the game view when it returns to the foreground.
+/// Transition: animation between the two views, one of <see cref="Transitions"/>.
 /// </summary>
-public sealed record GameViewSettings(bool AutoNormal = true, int AutoNormalDelaySec = 20)
+public sealed record GameViewSettings(bool AutoNormal = true, int AutoNormalDelaySec = 20, string Transition = "morph")
 {
 	public const int MinDelaySec = 5;
 	public const int MaxDelaySec = 600;
+
+	/// <summary>morph: widgets glide to their new place; slide: the views slide sideways; fade; none.</summary>
+	public static readonly string[] Transitions = ["morph", "slide", "fade", "none"];
 }
 
 public sealed record DriveSettings(string Name, SensorSelector? Temp = null);

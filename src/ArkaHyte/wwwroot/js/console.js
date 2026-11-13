@@ -309,6 +309,22 @@
 		entry.from = entry.value;
 		entry.start = now;
 		entry.duration = clamp(now - previous, GLIDE_MIN_MS, GLIDE_MAX_MS);
+		entry.ease = false;
+		activeGlides.add(entry);
+	}
+
+	// Sends a glide back to zero and up again to where it was heading, eased (a view change)
+	function replayGlide(key, duration, delay) {
+		const entry = glides.get(key);
+		if (!entry || !isNum(entry.to) || !motion) {
+			return;
+		}
+		entry.from = 0;
+		entry.value = 0;
+		entry.start = performance.now() + delay;
+		entry.duration = duration;
+		entry.ease = true;
+		entry.draw(0);
 		activeGlides.add(entry);
 	}
 
@@ -332,7 +348,8 @@
 	function stepGlides(now) {
 		for (const entry of activeGlides) {
 			const t = clamp((now - entry.start) / entry.duration, 0, 1);
-			entry.value = entry.from + (entry.to - entry.from) * t;
+			const progress = entry.ease ? 1 - Math.pow(1 - t, 3) : t;
+			entry.value = entry.from + (entry.to - entry.from) * progress;
 			// The end of a glide is always drawn, so the last value shown is the exact one
 			if (t >= 1 || now - entry.drawn >= entry.every) {
 				entry.drawn = now;
@@ -1484,6 +1501,128 @@
 		}
 	}
 
+	// ---------- View change animation (normal <-> game) ----------
+	// A one-off effect, so outside the 24 fps loop: Web Animations on transform and opacity only, which
+	// the compositor runs. Widgets the new view drops fade out first; then the layout switches, widgets
+	// kept by both views glide from their old place to the new one (FLIP) and the new ones fade in, top
+	// to bottom.
+	const VIEW_OUT_MS = 180;
+	const VIEW_MOVE_MS = 600;
+	const VIEW_EASING = 'cubic-bezier(0.2, 0.8, 0.2, 1)';
+	const viewWidgets = [...frame.querySelectorAll(':scope > .widget')];
+	let viewChange = null;
+	// Gauges, bars and dials that refill from zero after a view change (numbers keep their value)
+	const REFILL_GLIDES = ['cpuRing', 'cpuTempGauge', 'cpuPowGauge', 'gpuSegs', 'vramFill', 'gpuTempGauge', 'gpuPowGauge', 'ramLeds', 'netArcs', 'gameDial', 'gameLowMark'];
+	const REFILL_MS = 900;
+
+	function refillGauges() {
+		REFILL_GLIDES.forEach((key) => replayGlide(key, REFILL_MS, 120));
+		igniteStart = performance.now();
+		// The FPS curve rises from the bottom of its window
+		const graphWindow = document.querySelector('.graph-window');
+		if (isShown(graphWindow)) {
+			viewChange.animations.push(graphWindow.animate([{ transform: 'scaleY(0)' }, { transform: 'none' }],
+				{ duration: REFILL_MS, delay: 120, easing: VIEW_EASING, fill: 'backwards' }));
+		}
+	}
+
+	// Hidden widgets (display: none, hidden attribute) have no offset parent
+	const isShown = (element) => element.offsetParent !== null;
+
+	// Layout box in frame pixels (offsets ignore the frame's fit-to-window scale); the clock's digits
+	// change size between the views, their height gives its scale
+	function viewBox(element) {
+		const digits = element.querySelector('.time');
+		return { x: element.offsetLeft, y: element.offsetTop, w: element.offsetWidth, h: element.offsetHeight, digits: digits ? digits.offsetHeight : 0 };
+	}
+
+	function cancelViewChange() {
+		if (viewChange) {
+			clearTimeout(viewChange.timer);
+			viewChange.animations.forEach((animation) => animation.cancel());
+			viewChange = null;
+		}
+	}
+
+	// Per transition (settings, GameView.Transition): how long the old view takes to leave, how the new
+	// one comes in. morph moves the widgets both views share; slide and fade carry the whole view.
+	const VIEW_TRANSITIONS = {
+		morph: { outMs: 180, inMs: 600 },
+		slide: { outMs: 300, inMs: 520 },
+		fade: { outMs: 260, inMs: 420 }
+	};
+
+	function switchView(showGame) {
+		cancelViewChange();
+		const wasGame = frame.classList.contains('game');
+		if (wasGame === showGame) {
+			return;
+		}
+		const kind = VIEW_TRANSITIONS[gameViewConfig.transition] ? gameViewConfig.transition : gameViewConfig.transition === 'none' ? 'none' : 'morph';
+		if (!motion || kind === 'none') {
+			frame.classList.toggle('game', showGame);
+			return;
+		}
+		const timing = VIEW_TRANSITIONS[kind];
+		// Slide: towards the game view the page goes left, back to the normal view it goes right
+		const direction = showGame ? 1 : -1;
+		const before = new Map(viewWidgets.filter(isShown).map((element) => [element, viewBox(element)]));
+		// Widgets the new view keeps: a trial switch, undone before anything is painted
+		frame.classList.toggle('game', showGame);
+		const kept = new Set(viewWidgets.filter(isShown));
+		frame.classList.toggle('game', wasGame);
+		const change = { timer: 0, animations: [] };
+		viewChange = change;
+		const leaving = kind === 'morph' ? [...before.keys()].filter((element) => !kept.has(element)) : [...before.keys()];
+		const outFrames = kind === 'slide'
+			? [{ transform: 'none', opacity: 1 }, { transform: `translateX(${-direction * W}px)`, opacity: 0.4 }]
+			: [{ opacity: 1 }, { opacity: 0 }];
+		for (const element of leaving) {
+			change.animations.push(element.animate(outFrames, { duration: timing.outMs, easing: 'ease-in', fill: 'forwards' }));
+		}
+		change.timer = setTimeout(() => {
+			change.animations.forEach((animation) => animation.cancel());
+			change.animations = [];
+			frame.classList.toggle('game', showGame);
+			for (const element of viewWidgets) {
+				if (!isShown(element)) {
+					continue;
+				}
+				const to = viewBox(element);
+				const from = before.get(element);
+				let frames;
+				let delay = 0;
+				if (kind === 'slide') {
+					frames = [{ transform: `translateX(${direction * W}px)`, opacity: 0.4 }, { transform: 'none', opacity: 1 }];
+					// A slight wave, top first
+					delay = (to.y / H) * 90;
+				} else if (kind === 'fade' || !from) {
+					frames = kind === 'fade'
+						? [{ opacity: 0 }, { opacity: 1 }]
+						: [{ opacity: 0, transform: 'translateY(28px)' }, { opacity: 1, transform: 'none' }];
+					// Cascade: the lower the widget, the later it appears
+					delay = kind === 'fade' ? 0 : 60 + (to.y / H) * 320;
+				} else {
+					const dx = from.x + from.w / 2 - (to.x + to.w / 2);
+					const dy = from.y + from.h / 2 - (to.y + to.h / 2);
+					const scale = from.digits && to.digits ? from.digits / to.digits : 1;
+					if (Math.abs(dx) < 1 && Math.abs(dy) < 1 && scale === 1) {
+						continue;
+					}
+					frames = [{ transform: `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px) scale(${scale.toFixed(3)})` }, { transform: 'none' }];
+				}
+				change.animations.push(element.animate(frames, { duration: timing.inMs, delay, easing: VIEW_EASING, fill: 'backwards' }));
+			}
+			refillGauges();
+			// Finished animations are dropped by the browser; only the reference goes
+			change.timer = setTimeout(() => {
+				if (viewChange === change) {
+					viewChange = null;
+				}
+			}, timing.inMs + 500);
+		}, timing.outMs);
+	}
+
 	// ---------- Game view: while a recognised game runs (snapshot.game) ----------
 	// The view stays 10 s after the game is gone (its process exited); a view picked with the switch
 	// holds until then. Values glide between samples and the graph scrolls in the 24 fps loop.
@@ -1498,7 +1637,7 @@
 	let gameSession = null;
 	let gameView = false;
 	// Settings (setup wizard): back to the normal view while the game stays in the background
-	let gameViewConfig = { autoNormal: true, autoNormalDelaySec: 20 };
+	let gameViewConfig = { autoNormal: true, autoNormalDelaySec: 20, transition: 'morph' };
 	const dial = { max: 0, ticks: [], blade: null, core: null, low: null };
 	const graph = { area: null, line: null, visible: false, frozen: false, bottom: 0, top: 0, shift: -1 };
 	const switchButtons = [...document.querySelectorAll('#viewSwitch button')];
@@ -1643,7 +1782,8 @@
 	const PAUSE_HEIGHT = 20;
 	function placePause() {
 		const entry = glides.get('gameLowMark');
-		const low = entry && graph.visible && isNum(entry.value) ? clamp(graphY(entry.value), 0, GRAPH.height) : 0;
+		// Where the line ends up, not where its glide stands now
+		const low = entry && graph.visible && isNum(entry.to) ? clamp(graphY(entry.to), 0, GRAPH.height) : 0;
 		const top = GRAPH.height - low >= PAUSE_HEIGHT + 8 ? (low + GRAPH.height - PAUSE_HEIGHT) / 2 : (low - PAUSE_HEIGHT) / 2;
 		setStyle($('graphPause'), 'transform', `translateY(${Math.round(top)}px)`);
 	}
@@ -1676,7 +1816,48 @@
 		});
 		if (showGame !== gameView) {
 			gameView = showGame;
-			frame.classList.toggle('game', showGame);
+			switchView(showGame);
+		}
+	}
+
+	// Greyed state (no frames) faded in and out rather than switched at once: the styles of the .stale
+	// classes are read before and after the switch and animated between (one-off Web Animations)
+	const STALE_FADE_MS = 700;
+	const STALE_PROPERTIES = ['filter', 'opacity', 'color', 'textShadow'];
+	let gameStale = false;
+
+	function setStale(stale) {
+		if (stale === gameStale) {
+			return;
+		}
+		gameStale = stale;
+		const parts = [$('fpsDial'), $('fpsGraph'), $('graphLow'), ...document.querySelectorAll('.game-fps-value, .game-fps-unit, .game-trio-value')];
+		const readStyles = (element) => {
+			const style = getComputedStyle(element);
+			return Object.fromEntries(STALE_PROPERTIES.map((property) => [property, style[property]]));
+		};
+		const before = parts.map(readStyles);
+		$('gameFps').classList.toggle('stale', stale);
+		document.querySelector('.game-trio').classList.toggle('stale', stale);
+		document.querySelector('.graph-window').classList.toggle('stale', stale);
+		const pause = $('graphPause');
+		const fade = motion && gameView;
+		if (stale) {
+			pause.hidden = false;
+		}
+		if (!fade) {
+			pause.hidden = !stale;
+			return;
+		}
+		parts.forEach((element, i) => {
+			element.animate([before[i], readStyles(element)], { duration: STALE_FADE_MS, easing: 'ease-in-out' });
+		});
+		const notice = pause.animate([{ opacity: stale ? 0 : 1 }, { opacity: stale ? 1 : 0 }], { duration: STALE_FADE_MS, easing: 'ease-in-out' });
+		if (!stale) {
+			// Hidden once faded out, unless the frames stopped again meanwhile
+			notice.onfinish = () => {
+				pause.hidden = !gameStale;
+			};
 		}
 	}
 
@@ -1713,16 +1894,15 @@
 		const fps = isNum(gpu.fps) && gpu.fps >= 1 ? gpu.fps : null;
 		// No frames (game in the background, loading): the last values and curve stay, greyed and still
 		const stale = fps === null;
-		$('gameFps').classList.toggle('stale', stale);
-		document.querySelector('.game-trio').classList.toggle('stale', stale);
-		document.querySelector('.graph-window').classList.toggle('stale', stale);
 		graph.frozen = stale;
-		const pause = $('graphPause');
-		pause.hidden = !stale;
 		if (stale) {
 			text('graphPause', session.backgroundSince ? 'Jeu en arrière-plan' : 'En attente des images');
-			placePause();
+			// Placed once when the frames stop, then left still
+			if (!gameStale) {
+				placePause();
+			}
 		}
+		setStale(stale);
 		if (fps !== null) {
 			session.fps.push(fps);
 			if (session.fps.length > FPS_HISTORY) {
@@ -1892,7 +2072,8 @@
 	}
 
 	// ---------- Ignition timing for canvas widgets ----------
-	const igniteStart = performance.now();
+	// Reset by a view change: the CPU ring's spikes grow again
+	let igniteStart = performance.now();
 	function ignition(now, delay, duration) {
 		if (!motion) {
 			return 1;
@@ -2875,6 +3056,11 @@
 	// "?theme=jedi" (set by the host from the settings, or by hand in design mode); config messages switch it live
 	applyTheme(new URLSearchParams(location.search).get('theme') || 'sith');
 	drawArtPlaceholder(null);
+	// "?transition=slide|fade|none" picks the view change animation in design mode (the host sends the setting)
+	const transitionParam = new URLSearchParams(location.search).get('transition');
+	if (transitionParam) {
+		gameViewConfig.transition = transitionParam;
+	}
 	// "?demo=<scenario>" (ArkaHyte.exe --demo stress) replaces live sensor data with a scenario
 	const demo = new URLSearchParams(location.search).get('demo');
 	if (host) {

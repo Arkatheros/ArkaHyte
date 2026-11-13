@@ -21,7 +21,7 @@ public sealed class SetupForm : Form
 	private static readonly string[] HwInfoProcessNames = ["HWiNFO64", "HWiNFO32", "HWiNFO"];
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-	private readonly AppSettings _settings;
+	private AppSettings _settings;
 	private readonly int _startStep;
 	private readonly string? _previewPath;
 	private readonly WebView2 _webView;
@@ -29,8 +29,11 @@ public sealed class SetupForm : Form
 	private readonly System.Windows.Forms.Timer _poll = new() { Interval = 2000 };
 	private bool _webReady;
 
-	/// <summary>Settings written: the display restarts to apply them.</summary>
-	public event Action? Saved;
+	/// <summary>
+	/// Settings written. True: the display must restart to apply them (first setup, case screen changed);
+	/// false: it reloads them in place (settings opened from the tray).
+	/// </summary>
+	public event Action<bool>? Saved;
 
 	/// <param name="previewPath">Diagnostics: capture the page to this PNG and quit, never saving anything.</param>
 	public SetupForm(AppSettings settings, int startStep = 0, string? previewPath = null)
@@ -39,7 +42,8 @@ public sealed class SetupForm : Form
 		_startStep = startStep;
 		_previewPath = previewPath;
 
-		Text = $"{TrayIcon.AppName} · Configuration";
+		// Once set up, the same pages are the settings: free navigation, saved without restarting
+		Text = settings.SetupCompleted ? $"{TrayIcon.AppName} · Paramètres" : $"{TrayIcon.AppName} · Configuration";
 		Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
 		AutoScaleMode = AutoScaleMode.Dpi;
 		AutoScaleDimensions = new SizeF(96, 96);
@@ -134,7 +138,10 @@ public sealed class SetupForm : Form
 				_ = SearchPlaceAsync(root.TryGetProperty("query", out var query) ? query.GetString() : null);
 				break;
 			case "skip":
-				Complete(_ => { }, restart: false);
+				Complete(_ => { }, restart: false, close: true);
+				break;
+			case "close":
+				Close();
 				break;
 		}
 	}
@@ -324,6 +331,9 @@ public sealed class SetupForm : Form
 	/// </summary>
 	private void Save(JsonElement message)
 	{
+		// The case screen is only looked for at start: changing it restarts the display, the rest is
+		// applied in place once the first setup is done
+		var displayChanged = false;
 		Complete(root =>
 		{
 			if (message.TryGetProperty("display", out var display)
@@ -331,6 +341,7 @@ public sealed class SetupForm : Form
 				&& display.TryGetProperty("height", out var height) && height.TryGetInt32(out var h) && h > 0)
 			{
 				root["Display"] = new JsonObject { ["Width"] = w, ["Height"] = h };
+				displayChanged = w != _settings.Display.Width || h != _settings.Display.Height;
 			}
 			if (message.TryGetProperty("hardware", out var hardwareElement)
 				&& hardwareElement.Deserialize<HardwareSettings>(JsonOptions) is { } hardware)
@@ -340,10 +351,14 @@ public sealed class SetupForm : Form
 			SensorSettings.ApplyChoices(root, message);
 			SensorSettings.ApplyWeather(root, message);
 			SensorSettings.ApplyGameView(root, message);
-		}, restart: true);
+		}, restart: () => !_settings.SetupCompleted || displayChanged, close: false);
 	}
 
-	private void Complete(Action<JsonObject> change, bool restart)
+	private void Complete(Action<JsonObject> change, bool restart, bool close) => Complete(change, () => restart, close);
+
+	/// <param name="restart">Asked once the change is written (it may depend on what was written).</param>
+	/// <param name="close">Closes the window even when the display does not restart.</param>
+	private void Complete(Action<JsonObject> change, Func<bool> restart, bool close)
 	{
 		if (_previewPath is not null)
 		{
@@ -363,11 +378,18 @@ public sealed class SetupForm : Form
 			Post(new { type = "saveFailed" });
 			return;
 		}
-		Close();
-		if (restart)
+		var mustRestart = restart();
+		if (mustRestart || close)
 		{
-			Saved?.Invoke();
+			Close();
 		}
+		else
+		{
+			// Stays open: later saves compare with what is now written
+			_settings = AppSettings.Load();
+			Post(new { type = "saved" });
+		}
+		Saved?.Invoke(mustRestart);
 	}
 
 	private void Post(object message)

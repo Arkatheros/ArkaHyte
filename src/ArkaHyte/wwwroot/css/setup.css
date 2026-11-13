@@ -452,6 +452,9 @@ option {
 .row select.delay {
 	width: 180px;
 }
+.row select.transition {
+	width: 360px;
+}
 
 /* ---------- Weather step ---------- */
 .switch {
@@ -517,4 +520,20 @@ option {
 .foot-actions {
 	display: flex;
 	gap: 12px;
+}
+.foot-status {
+	flex: 1;
+	padding: 0 18px;
+	font-weight: 600;
+	color: var(--ok);
+}
+.foot-status.bad {
+	color: var(--blade);
+}
+
+/* Settings (opened from the tray once set up): free navigation, no summary step, saved in place */
+.settings-mode #back,
+.settings-mode #skip,
+.settings-mode .steps [data-step="6"] {
+	display: none;
 }

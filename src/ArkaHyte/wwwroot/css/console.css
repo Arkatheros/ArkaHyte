@@ -1982,6 +1982,8 @@ body {
 	height: 140px;
 	margin-top: 10px;
 	overflow: hidden;
+	/* Grows from the bottom after a view change */
+	transform-origin: center bottom;
 }
 .graph-window svg {
 	display: block;

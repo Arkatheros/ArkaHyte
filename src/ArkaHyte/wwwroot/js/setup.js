@@ -35,7 +35,9 @@
 		caseScreen: null,
 		// Per widget: chosen entry key ('sensor|label' or '') and whether the user picked it
 		sensors: {},
-		hardwareFilled: false
+		hardwareFilled: false,
+		// Opened from the tray once set up: the pages are settings, saved without the summary step
+		settingsMode: false
 	};
 
 	const keyOf = entry => entry.sensor + '|' + entry.label;
@@ -49,14 +51,15 @@
 	// ---------- Navigation ----------
 
 	function goTo(step) {
-		model.step = Math.max(0, Math.min(LAST_STEP, step));
+		const last = model.settingsMode ? LAST_STEP - 1 : LAST_STEP;
+		model.step = Math.max(0, Math.min(last, step));
 		pages.forEach((page, index) => page.classList.toggle('current', index === model.step));
 		stepButtons.forEach((button, index) => {
 			button.classList.toggle('current', index === model.step);
-			button.classList.toggle('done', index < model.step);
+			button.classList.toggle('done', !model.settingsMode && index < model.step);
 		});
 		$('back').disabled = model.step === 0;
-		$('next').textContent = model.step === LAST_STEP ? 'Enregistrer et redémarrer' : 'Suivant';
+		$('next').textContent = model.settingsMode ? 'Enregistrer' : model.step === LAST_STEP ? 'Enregistrer et redémarrer' : 'Suivant';
 		// The map is measured from its box, which has no size while its page is hidden
 		if (model.step === 0 && model.state) {
 			renderScreens();
@@ -74,7 +77,24 @@
 
 	stepButtons.forEach((button, index) => button.addEventListener('click', () => goTo(index)));
 	$('back').addEventListener('click', () => goTo(model.step - 1));
-	$('next').addEventListener('click', () => (model.step === LAST_STEP ? save() : goTo(model.step + 1)));
+	$('next').addEventListener('click', () => (model.settingsMode || model.step === LAST_STEP ? save() : goTo(model.step + 1)));
+	$('close').addEventListener('click', () => send({ type: 'close' }));
+
+	function setMode(settings) {
+		model.settingsMode = settings;
+		document.body.classList.toggle('settings-mode', settings);
+		$('close').hidden = !settings;
+		const name = settings ? 'Paramètres' : 'Configuration';
+		document.querySelector('.brand-sub').textContent = name;
+		document.title = 'Arka Hyte · ' + name;
+		goTo(model.step);
+	}
+
+	function showFootStatus(message, bad) {
+		const status = $('footStatus');
+		status.textContent = message;
+		status.classList.toggle('bad', Boolean(bad));
+	}
 	$('skip').addEventListener('click', () => send({ type: 'skip' }));
 	$('identify').addEventListener('click', () => send({ type: 'identify' }));
 	$('startHwInfo').addEventListener('click', () => send({ type: 'startHwInfo' }));
@@ -492,6 +512,8 @@
 		add('ok', $('gameAutoNormal').checked
 			? 'Vue jeu : retour à la vue normale <b>' + escapeHtml(delay.options[delay.selectedIndex].text) + '</b> après le passage du jeu en arrière-plan'
 			: 'Vue jeu : <b>gardée</b> quand le jeu passe en arrière-plan');
+		const transition = $('gameTransition');
+		add('ok', 'Changement de vue : <b>' + escapeHtml(transition.options[transition.selectedIndex].text.split(' :')[0]) + '</b>');
 		const weatherOn = $('weatherEnabled').checked;
 		add(!weatherOn || weatherPlace ? 'ok' : 'warn', weatherOn
 			? (weatherPlace ? 'Météo : <b>' + escapeHtml(weatherPlace.place) + '</b>' : 'Météo : <b>aucune ville choisie</b>, rien ne s\'affichera')
@@ -509,7 +531,7 @@
 	function save() {
 		const message = { type: 'save', hardware: readHardware() };
 		message.weather = { enabled: $('weatherEnabled').checked };
-		message.gameView = { autoNormal: $('gameAutoNormal').checked, delaySec: Number($('gameAutoDelay').value) };
+		message.gameView = { autoNormal: $('gameAutoNormal').checked, delaySec: Number($('gameAutoDelay').value), transition: $('gameTransition').value };
 		if (weatherPlace) {
 			Object.assign(message.weather, weatherPlace);
 		}
@@ -549,10 +571,13 @@
 		}
 		$('saveError').hidden = true;
 		$('next').disabled = true;
+		if (model.settingsMode) {
+			showFootStatus('Enregistrement…');
+		}
 		send(message);
 		if (!host) {
 			console.log('save', message);
-			$('next').disabled = false;
+			dispatch({ type: 'saved' });
 		}
 	}
 
@@ -569,6 +594,7 @@
 		}
 		select.value = seconds;
 		$('gameAutoNormal').checked = Boolean(gameView.autoNormal);
+		$('gameTransition').value = gameView.transition || 'morph';
 		select.disabled = !gameView.autoNormal;
 	}
 
@@ -579,6 +605,9 @@
 	// ---------- Host messages ----------
 
 	function onState(state) {
+		if (Boolean(state.completed) !== model.settingsMode) {
+			setMode(Boolean(state.completed));
+		}
 		if (state.gameView) {
 			showGameView(state.gameView);
 		}
@@ -631,6 +660,13 @@
 			case 'saveFailed':
 				$('saveError').hidden = false;
 				$('next').disabled = false;
+				if (model.settingsMode) {
+					showFootStatus('Enregistrement impossible : voir le journal', true);
+				}
+				break;
+			case 'saved':
+				$('next').disabled = false;
+				showFootStatus('Réglages enregistrés et appliqués');
 				break;
 		}
 	}
@@ -648,8 +684,9 @@
 		const sensorGpu = 'GPU [#0]: NVIDIA GeForce RTX 4090: ';
 		dispatch({
 			type: 'state',
-			completed: false,
-			gameView: { autoNormal: true, autoNormalDelaySec: 20 },
+			// "?mode=settings" previews the settings window instead of the first-run wizard
+			completed: new URLSearchParams(location.search).get('mode') === 'settings',
+			gameView: { autoNormal: true, autoNormalDelaySec: 20, transition: 'morph' },
 			caseSize: { width: 682, height: 2560 },
 			screens: [
 				{ number: 1, name: 'DISPLAY1', x: -682, y: 1440, width: 682, height: 2560, primary: false },

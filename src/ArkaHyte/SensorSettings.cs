@@ -133,7 +133,7 @@ public static class SensorSettings
 		}
 	}
 
-	/// <summary>Writes the game view settings: gameView { autoNormal?, delaySec? }.</summary>
+	/// <summary>Writes the game view settings: gameView { autoNormal?, delaySec?, transition? }.</summary>
 	public static void ApplyGameView(JsonObject root, JsonElement message)
 	{
 		if (!message.TryGetProperty("gameView", out var gameView) || gameView.ValueKind != JsonValueKind.Object)
@@ -152,6 +152,11 @@ public static class SensorSettings
 		if (gameView.TryGetProperty("delaySec", out var delay) && delay.TryGetInt32(out var seconds))
 		{
 			node["AutoNormalDelaySec"] = Math.Clamp(seconds, GameViewSettings.MinDelaySec, GameViewSettings.MaxDelaySec);
+		}
+		if (gameView.TryGetProperty("transition", out var transition) && transition.ValueKind == JsonValueKind.String
+			&& GameViewSettings.Transitions.Contains(transition.GetString()))
+		{
+			node["Transition"] = transition.GetString();
 		}
 	}
 

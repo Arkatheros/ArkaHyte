@@ -46,11 +46,16 @@ Au premier lancement, une fenêtre s'ouvre sur l'écran principal (ensuite : men
 3. **Capteurs** : une valeur HWiNFO par widget, avec suggestion quand le réglage ne trouve rien.
 4. **Matériel** : noms CPU / GPU et mémoire GPU, détectés depuis le registre.
 5. **Météo** : ville affichée sous l'heure.
-6. **Vue jeu** : retour automatique à la vue normale quand le jeu passe en arrière-plan, et après quel délai.
+6. **Vue jeu** : retour automatique à la vue normale quand le jeu passe en arrière-plan, après quel délai, et
+   animation du changement de vue (morphing, balayage latéral, fondu ou aucune).
 7. **Terminer** : écrit `%LOCALAPPDATA%\ArkaHyte\appsettings.json` (`SetupCompleted: true`) et redémarre l'affichage.
 
 « Passer l'assistant » ne change rien d'autre que `SetupCompleted` ; fermer la fenêtre le repropose
 au prochain démarrage.
+
+Une fois la configuration faite, le menu **Paramètres** ouvre les mêmes pages en accès libre (sans résumé) avec
+**Fermer** et **Enregistrer** : les réglages s'appliquent tout de suite, sans redémarrage, sauf un changement
+d'écran du boîtier qui relance l'affichage.
 
 ### Vue jeu
 
@@ -60,6 +65,8 @@ processeur, réseau. Le bouton **Vue normale / Mode jeu** au-dessus du dock chan
 de la partie. Jeu en arrière-plan (Alt+Tab, bureau) : dernières valeurs grisées, courbe figée, puis retour
 à la vue normale après le délai choisi dans l'assistant (réglage `GameView` : `AutoNormal`,
 `AutoNormalDelaySec`, 20 s par défaut) ; la vue jeu revient quand le jeu repasse au premier plan.
+Animation du changement de vue : `Transition` = `morph` (les widgets communs glissent à leur place, défaut),
+`slide` (balayage latéral), `fade` (fondu) ou `none` ; jauges et compteurs repartent de 0 ensuite.
 
 ### Météo
 

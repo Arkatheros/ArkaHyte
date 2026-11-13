@@ -143,10 +143,17 @@ public sealed class DisplayForm : Form
 			return;
 		}
 		_setup = new SetupForm(_settings);
-		_setup.Saved += () =>
+		_setup.Saved += restart =>
 		{
-			RestartRequested = true;
-			Close();
+			if (restart)
+			{
+				RestartRequested = true;
+				Close();
+			}
+			else
+			{
+				ReloadSettings();
+			}
 		};
 		_setup.FormClosed += (_, _) => _setup = null;
 		_setup.Show();
@@ -620,6 +627,13 @@ public sealed class DisplayForm : Form
 			Post(new { type = "toast", text = "Enregistrement impossible" });
 			return;
 		}
+		ReloadSettings();
+		Post(new { type = "toast", text = "Réglages enregistrés" });
+	}
+
+	/// <summary>Settings file changed (on-screen settings, settings window): applied without restarting.</summary>
+	private void ReloadSettings()
+	{
 		var weatherBefore = _settings.Weather;
 		_settings = AppSettings.Load();
 		_hub.UpdateSettings(_settings);
@@ -628,7 +642,6 @@ public sealed class DisplayForm : Form
 			_weather.Configure(_settings.Weather);
 		}
 		SendConfig();
-		Post(new { type = "toast", text = "Réglages enregistrés" });
 	}
 
 	private void SaveShortcut(JsonElement root)
