@@ -19,7 +19,8 @@ public sealed record GpuData(
 
 /// <summary>Game being played (recognised by Windows), shown in the game view.</summary>
 /// <param name="RefreshHz">Refresh rate of the monitor the game was seen on: top of the FPS scale.</param>
-public sealed record GameData(string Name, int? RefreshHz);
+/// <param name="Foreground">The game has the focus; false while another window does (Alt+Tab, desktop).</param>
+public sealed record GameData(string Name, int? RefreshHz, bool Foreground = true);
 
 public sealed record RamData(double UsedGb, double TotalGb);
 

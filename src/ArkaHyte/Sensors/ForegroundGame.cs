@@ -42,7 +42,7 @@ internal static partial class ForegroundGame
 		var window = GetForegroundWindow();
 		if (window == IntPtr.Zero || !GetWindowRect(window, out var rect) || IsShellWindow(window))
 		{
-			return new Sample(false, TrackedGame());
+			return new Sample(false, TrackedGame(foreground: false));
 		}
 		var processId = ForegroundProcess(window);
 		var gamePath = KnownGamePath(processId);
@@ -50,7 +50,7 @@ internal static partial class ForegroundGame
 		{
 			Track(processId, gamePath, window);
 		}
-		return new Sample(gamePath is not null || CoversMonitor(window, rect), TrackedGame());
+		return new Sample(gamePath is not null || CoversMonitor(window, rect), TrackedGame(processId == _trackedId));
 	}
 
 	private static bool IsShellWindow(IntPtr window)
@@ -117,14 +117,14 @@ internal static partial class ForegroundGame
 		_tracked = new GameData(GameName(path, window), RefreshRate(window));
 	}
 
-	private static GameData? TrackedGame()
+	private static GameData? TrackedGame(bool foreground)
 	{
 		// Signalled handle: the process has exited
 		if (_tracked is not null && WaitForSingleObject(_trackedProcess, 0) == WAIT_OBJECT_0)
 		{
 			Untrack();
 		}
-		return _tracked;
+		return _tracked is null || _tracked.Foreground == foreground ? _tracked : _tracked = _tracked with { Foreground = foreground };
 	}
 
 	private static void Untrack()

@@ -5,7 +5,7 @@
 	'use strict';
 
 	const host = window.chrome && window.chrome.webview ? window.chrome.webview : null;
-	const LAST_STEP = 5;
+	const LAST_STEP = 6;
 
 	/* Widgets fed by HWiNFO. Suggestions: entries of the right unit whose sensor matches, label
 	   patterns tried in order (English and French HWiNFO names). */
@@ -488,6 +488,10 @@
 			add('warn', 'Capteurs : réglage actuel conservé');
 		}
 		const hardware = readHardware();
+		const delay = $('gameAutoDelay');
+		add('ok', $('gameAutoNormal').checked
+			? 'Vue jeu : retour à la vue normale <b>' + escapeHtml(delay.options[delay.selectedIndex].text) + '</b> après le passage du jeu en arrière-plan'
+			: 'Vue jeu : <b>gardée</b> quand le jeu passe en arrière-plan');
 		const weatherOn = $('weatherEnabled').checked;
 		add(!weatherOn || weatherPlace ? 'ok' : 'warn', weatherOn
 			? (weatherPlace ? 'Météo : <b>' + escapeHtml(weatherPlace.place) + '</b>' : 'Météo : <b>aucune ville choisie</b>, rien ne s\'affichera')
@@ -505,6 +509,7 @@
 	function save() {
 		const message = { type: 'save', hardware: readHardware() };
 		message.weather = { enabled: $('weatherEnabled').checked };
+		message.gameView = { autoNormal: $('gameAutoNormal').checked, delaySec: Number($('gameAutoDelay').value) };
 		if (weatherPlace) {
 			Object.assign(message.weather, weatherPlace);
 		}
@@ -551,9 +556,32 @@
 		}
 	}
 
+	// ---------- Game view ----------
+
+	// The delay set by hand in appsettings.json may be none of the listed ones: it is added to the list
+	function showGameView(gameView) {
+		const select = $('gameAutoDelay');
+		const seconds = String(gameView.autoNormalDelaySec);
+		if (![...select.options].some(option => option.value === seconds)) {
+			const option = new Option(seconds + ' secondes', seconds);
+			const after = [...select.options].find(o => Number(o.value) > Number(seconds));
+			select.add(option, after || null);
+		}
+		select.value = seconds;
+		$('gameAutoNormal').checked = Boolean(gameView.autoNormal);
+		select.disabled = !gameView.autoNormal;
+	}
+
+	$('gameAutoNormal').addEventListener('change', () => {
+		$('gameAutoDelay').disabled = !$('gameAutoNormal').checked;
+	});
+
 	// ---------- Host messages ----------
 
 	function onState(state) {
+		if (state.gameView) {
+			showGameView(state.gameView);
+		}
 		const weather = state.weather;
 		if (weather) {
 			$('weatherEnabled').checked = Boolean(weather.enabled);
@@ -621,6 +649,7 @@
 		dispatch({
 			type: 'state',
 			completed: false,
+			gameView: { autoNormal: true, autoNormalDelaySec: 20 },
 			caseSize: { width: 682, height: 2560 },
 			screens: [
 				{ number: 1, name: 'DISPLAY1', x: -682, y: 1440, width: 682, height: 2560, primary: false },

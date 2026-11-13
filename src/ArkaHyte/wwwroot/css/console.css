@@ -2012,6 +2012,35 @@ body {
 	will-change: transform;
 }
 
+/* No frames (game in the background): the last values stay, greyed, and the graph stops under a notice */
+.game-fps.stale svg,
+.graph-window.stale svg,
+.graph-window.stale .graph-low {
+	filter: grayscale(1);
+	opacity: 0.45;
+}
+.game-fps.stale .game-fps-value,
+.game-fps.stale .game-fps-unit,
+.game-trio.stale .game-trio-value {
+	color: var(--ash);
+	text-shadow: none;
+}
+/* Placed under the 1 % low line by the script (above it when the line is too low) */
+.graph-pause {
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: 0;
+	text-align: center;
+	line-height: 20px;
+	font-weight: 700;
+	font-size: 15px;
+	letter-spacing: 0.18em;
+	text-transform: uppercase;
+	white-space: nowrap;
+	color: rgb(var(--bone-rgb));
+}
+
 /* GPU and CPU blocks moved under the graph: the CPU ring (load speedometer) on the left, temperature
    and power stacked on its right */
 .frame.game .gpu-head { top: 1064px; }

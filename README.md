@@ -45,10 +45,21 @@ Au premier lancement, une fenêtre s'ouvre sur l'écran principal (ensuite : men
 2. **HWiNFO** : vérifie qu'il tourne et transmet des valeurs à Gadget, guide sa configuration.
 3. **Capteurs** : une valeur HWiNFO par widget, avec suggestion quand le réglage ne trouve rien.
 4. **Matériel** : noms CPU / GPU et mémoire GPU, détectés depuis le registre.
-5. **Terminer** : écrit `%LOCALAPPDATA%\ArkaHyte\appsettings.json` (`SetupCompleted: true`) et redémarre l'affichage.
+5. **Météo** : ville affichée sous l'heure.
+6. **Vue jeu** : retour automatique à la vue normale quand le jeu passe en arrière-plan, et après quel délai.
+7. **Terminer** : écrit `%LOCALAPPDATA%\ArkaHyte\appsettings.json` (`SetupCompleted: true`) et redémarre l'affichage.
 
 « Passer l'assistant » ne change rien d'autre que `SetupCompleted` ; fermer la fenêtre le repropose
 au prochain démarrage.
+
+### Vue jeu
+
+Pendant une partie (jeu reconnu par Windows), l'écran passe en vue jeu : cadran des FPS, 1 % low,
+temps de frame, moyenne, courbe des 60 dernières secondes, carte graphique, compteur de charge du
+processeur, réseau. Le bouton **Vue normale / Mode jeu** au-dessus du dock change de vue jusqu'à la fin
+de la partie. Jeu en arrière-plan (Alt+Tab, bureau) : dernières valeurs grisées, courbe figée, puis retour
+à la vue normale après le délai choisi dans l'assistant (réglage `GameView` : `AutoNormal`,
+`AutoNormalDelaySec`, 20 s par défaut) ; la vue jeu revient quand le jeu repasse au premier plan.
 
 ### Météo
 
@@ -249,6 +260,7 @@ Clic droit sur l'emblème gris dans la zone de notification : **mode démo** (CP
 | `ArkaHyte.exe --screenshot out.png` | Affiche l'interface, enregistre une capture et quitte |
 | `ArkaHyte.exe --demo stress` | Démarre en mode démo (CPU/GPU 100 %, sans internet) |
 | `ArkaHyte.exe --demo game` | Démarre sur la vue jeu avec un jeu simulé (à combiner avec `--screenshot`) |
+| `ArkaHyte.exe --demo desktop` | Même jeu passé en arrière-plan après 3 s : vue jeu figée, puis vue normale |
 | `ArkaHyte.exe --open-editor 0` | Ouvre l'éditeur du 1er raccourci au démarrage |
 | `ArkaHyte.exe --setup` | Ouvre l'assistant de configuration au démarrage |
 | `ArkaHyte.exe --setup-preview out.png [--setup-step 2]` | Rend l'assistant seul (sans rien enregistrer), capture et quitte ; fonctionne à côté d'une instance lancée |

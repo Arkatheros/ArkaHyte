@@ -1497,12 +1497,15 @@
 	const DIAL_STEPS = [10, 20, 25, 30, 40, 50, 60, 75, 100, 120, 150, 200, 250, 300];
 	let gameSession = null;
 	let gameView = false;
+	// Settings (setup wizard): back to the normal view while the game stays in the background
+	let gameViewConfig = { autoNormal: true, autoNormalDelaySec: 20 };
 	const dial = { max: 0, ticks: [], blade: null, core: null, low: null };
-	const graph = { area: null, line: null, visible: false, bottom: 0, top: 0, shift: -1 };
+	const graph = { area: null, line: null, visible: false, frozen: false, bottom: 0, top: 0, shift: -1 };
 	const switchButtons = [...document.querySelectorAll('#viewSwitch button')];
 
 	function startGameSession() {
-		return { start: Date.now(), lastSeen: 0, view: 'game', name: '', refreshHz: null, fps: [], fpsSum: 0, fpsCount: 0 };
+		// manual: the view was picked with the switch; backgroundSince: when the game lost the focus (0: it has it)
+		return { start: Date.now(), lastSeen: 0, view: 'game', manual: false, backgroundSince: 0, name: '', refreshHz: null, fps: [], fpsSum: 0, fpsCount: 0 };
 	}
 
 	function svgElement(parent, name, attributes) {
@@ -1635,6 +1638,16 @@
 		svg.style.transform = 'translateX(0px)';
 	}
 
+	// Pause notice centred between the 1 % low line and the bottom of the graph, or between the top and
+	// the line when there is no room left below it
+	const PAUSE_HEIGHT = 20;
+	function placePause() {
+		const entry = glides.get('gameLowMark');
+		const low = entry && graph.visible && isNum(entry.value) ? clamp(graphY(entry.value), 0, GRAPH.height) : 0;
+		const top = GRAPH.height - low >= PAUSE_HEIGHT + 8 ? (low + GRAPH.height - PAUSE_HEIGHT) / 2 : (low - PAUSE_HEIGHT) / 2;
+		setStyle($('graphPause'), 'transform', `translateY(${Math.round(top)}px)`);
+	}
+
 	function scrollGraph(progress) {
 		const shift = Math.round(progress * GRAPH_STEP * 10) / 10;
 		if (shift !== graph.shift) {
@@ -1676,9 +1689,21 @@
 			gameSession.lastSeen = now;
 			gameSession.name = game.name || '';
 			gameSession.refreshHz = isNum(game.refreshHz) ? game.refreshHz : null;
+			if (game.foreground !== false) {
+				gameSession.backgroundSince = 0;
+			} else if (!gameSession.backgroundSince) {
+				gameSession.backgroundSince = now;
+			}
 		} else if (gameSession && now - gameSession.lastSeen > GAME_GRACE_MS) {
 			gameSession = null;
 			GAME_GLIDES.forEach(forgetGlide);
+		}
+		// Unless the switch was used: the normal view once the game has stayed long enough in the
+		// background, the game view as soon as it is back in front
+		if (gameSession && !gameSession.manual) {
+			const away = gameViewConfig.autoNormal && gameSession.backgroundSince > 0
+				&& now - gameSession.backgroundSince >= gameViewConfig.autoNormalDelaySec * 1000;
+			gameSession.view = away ? 'normal' : 'game';
 		}
 		applyView();
 		if (!gameSession) {
@@ -1686,6 +1711,18 @@
 		}
 		const session = gameSession;
 		const fps = isNum(gpu.fps) && gpu.fps >= 1 ? gpu.fps : null;
+		// No frames (game in the background, loading): the last values and curve stay, greyed and still
+		const stale = fps === null;
+		$('gameFps').classList.toggle('stale', stale);
+		document.querySelector('.game-trio').classList.toggle('stale', stale);
+		document.querySelector('.graph-window').classList.toggle('stale', stale);
+		graph.frozen = stale;
+		const pause = $('graphPause');
+		pause.hidden = !stale;
+		if (stale) {
+			text('graphPause', session.backgroundSince ? 'Jeu en arrière-plan' : 'En attente des images');
+			placePause();
+		}
 		if (fps !== null) {
 			session.fps.push(fps);
 			if (session.fps.length > FPS_HISTORY) {
@@ -1708,9 +1745,13 @@
 		text('gameTitle', session.name || 'Jeu');
 		text('gameSince', `en jeu depuis ${formatTime((now - session.start) / 1000)}`);
 		text('fpsScale', session.refreshHz ? `écran ${session.refreshHz} Hz` : ' ');
+		if (stale) {
+			// Values, labels and curve stay as they were last drawn
+			return;
+		}
 		text('fpsLowLabel', reported ? '1 % low' : 'Min 60 s');
 		text('graphLowLabel', reported ? '1 % low' : 'min');
-		renderGraph(fps !== null ? session.fps : [], low);
+		renderGraph(session.fps, low);
 		glide('gameDial', fps, renderDial);
 		glide('gameFps', fps, (value) => text('fpsValue', orDash(value, nf0)), NUMBER);
 		glide('gameLowMark', low, renderLow);
@@ -1724,6 +1765,7 @@
 		button.addEventListener('click', () => {
 			if (gameSession) {
 				gameSession.view = button.dataset.view;
+				gameSession.manual = true;
 				applyView();
 			}
 		});
@@ -1761,6 +1803,7 @@
 		if (config.theme) applyTheme(config.theme);
 		if (config.thresholds) applyLimits(config.thresholds);
 		if (config.weather) weatherConfig = config.weather;
+		if (config.gameView) gameViewConfig = config.gameView;
 	}
 
 	function onHostMessage(message) {
@@ -2294,7 +2337,8 @@
 		drawRing(now, progress);
 		// The FPS graph only shows in the game view
 		if (gameView) {
-			scrollGraph(motion ? progress : 1);
+			// Frozen at the end of its step: the newest point on the right edge
+			scrollGraph(motion && !graph.frozen ? progress : 1);
 		}
 		drawFx(now, ticks);
 		drawSpeedGauge(ticks);
@@ -2730,7 +2774,9 @@
 		// Everything maxed out and the connection lost, to preview every alarm state at once
 		stress: { cpu: 100, cpuSpread: 0, gpu: 100, vram: 96, ram: 55, offline: true, fps: 144 },
 		// A windowed game on a 240 Hz monitor, 42 min in: previews the game view
-		game: { cpu: 21, cpuSpread: 8, gpu: 46, vram: 13, ram: 24, offline: false, fps: 212, fpsLow: 164, game: { name: 'League of Legends', refreshHz: 240 } }
+		game: { cpu: 21, cpuSpread: 8, gpu: 46, vram: 13, ram: 24, offline: false, fps: 212, fpsLow: 164, game: { name: 'League of Legends', refreshHz: 240 } },
+		// The same game sent to the background (desktop) after 3 s: frozen game view, then the normal view
+		desktop: { cpu: 8, cpuSpread: 5, gpu: 6, vram: 13, ram: 24, offline: false, fps: 212, fpsLow: 164, backgroundAfter: 3, game: { name: 'League of Legends', refreshHz: 240 } }
 	};
 
 	// Set while simulated data replaces the host's: design mode or a demo scenario
@@ -2742,6 +2788,7 @@
 		const sim = { cpu: scenario.cpu, gpu: scenario.gpu, cpuTemp: 30 + scenario.cpu * 0.6, gpuTemp: 31 + scenario.gpu * 0.52, vram: scenario.vram, ram: scenario.ram };
 		let position = 72;
 		let offlineSec = 74;
+		let seconds = 0;
 		const walk = (value, target, spread, min, max) => clamp(value + (target - value) * 0.25 + (Math.random() - 0.5) * spread, min, max);
 		if (scenario.cpu > 50) {
 			cpuHist.forEach((_, i) => {
@@ -2782,12 +2829,14 @@
 			sim.ram = walk(sim.ram, scenario.ram, 0.2, 8, 60);
 			position = (position + 1) % 182;
 			offlineSec += 1;
+			seconds += 1;
+			const background = isNum(scenario.backgroundAfter) && seconds > scenario.backgroundAfter;
 			const burst = Math.random() < 0.15;
 			const down = scenario.offline ? Math.random() * 400 : (burst ? Math.random() * 22 : Math.random() * 0.7) * MB;
 			onHostMessage({
 				type: 'snapshot',
 				cpu: { load: sim.cpu, temp: sim.cpuTemp, power: 30 + sim.cpu * 1.25 },
-				gpu: { load: sim.gpu, temp: sim.gpuTemp, power: 25 + sim.gpu * 4.15, vramPercent: sim.vram, vramTotalGb: 24, fps: scenario.fps ? scenario.fps - Math.random() * 12 : null, fpsLow: scenario.fpsLow ? scenario.fpsLow + Math.random() * 4 : null, frameTimeMs: null },
+				gpu: { load: sim.gpu, temp: sim.gpuTemp, power: 25 + sim.gpu * 4.15, vramPercent: sim.vram, vramTotalGb: 24, fps: scenario.fps && !background ? scenario.fps - Math.random() * 12 : null, fpsLow: scenario.fpsLow && !background ? scenario.fpsLow + Math.random() * 4 : null, frameTimeMs: null },
 				ram: { usedGb: sim.ram, totalGb: 62 },
 				disks: [
 					{ name: 'C:', label: 'Windows', usedGb: 539.4, totalGb: 818.3, temp: 41, disk: 0 },
@@ -2803,7 +2852,7 @@
 					offlineSec: scenario.offline ? offlineSec : null
 				},
 				media: { source: 'Spotify', kind: 'music', title: 'The Imperial March', artist: 'John Williams · London Symphony Orchestra', positionSec: position, durationSec: 182, playing: true, live: false, artKey: null },
-				game: scenario.game || null
+				game: scenario.game ? { ...scenario.game, foreground: !background } : null
 			});
 		}, 1000);
 	}

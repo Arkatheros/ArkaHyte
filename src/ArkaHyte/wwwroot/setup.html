@@ -23,7 +23,8 @@
 			<button type="button" data-step="2"><span class="step-dot"></span>Capteurs</button>
 			<button type="button" data-step="3"><span class="step-dot"></span>Matériel</button>
 			<button type="button" data-step="4"><span class="step-dot"></span>Météo</button>
-			<button type="button" data-step="5"><span class="step-dot"></span>Terminer</button>
+			<button type="button" data-step="5"><span class="step-dot"></span>Vue jeu</button>
+			<button type="button" data-step="6"><span class="step-dot"></span>Terminer</button>
 		</nav>
 
 		<main class="pages">
@@ -116,8 +117,29 @@
 				<p class="status" id="placeStatus"></p>
 			</section>
 
-			<!-- Summary -->
+			<!-- Game view -->
 			<section class="page" data-page="5">
+				<h1>Vue jeu</h1>
+				<p class="lead">Pendant une partie, l'écran du boîtier passe en vue jeu (FPS, carte graphique,
+					processeur). Quand le jeu passe en arrière-plan (Alt+Tab, bureau), l'écran peut revenir seul
+					à la vue normale.</p>
+				<label class="switch"><input type="checkbox" id="gameAutoNormal"><span>Revenir à la vue normale quand le jeu est en arrière-plan</span></label>
+				<div class="row">
+					<label class="hint" for="gameAutoDelay">Après</label>
+					<select id="gameAutoDelay" class="delay">
+						<option value="10">10 secondes</option>
+						<option value="20">20 secondes</option>
+						<option value="30">30 secondes</option>
+						<option value="60">1 minute</option>
+						<option value="120">2 minutes</option>
+					</select>
+				</div>
+				<p class="hint">La vue jeu revient dès que le jeu repasse au premier plan. Un choix fait avec le
+					bouton Vue normale / Mode jeu de l'écran reste prioritaire jusqu'à la fin de la partie.</p>
+			</section>
+
+			<!-- Summary -->
+			<section class="page" data-page="6">
 				<h1>Terminer</h1>
 				<p class="lead">Les réglages sont enregistrés dans votre dossier de données, puis l'affichage
 					du boîtier redémarre pour les appliquer. L'assistant reste accessible depuis le menu de l'icône.</p>

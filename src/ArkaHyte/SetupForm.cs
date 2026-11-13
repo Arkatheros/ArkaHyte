@@ -165,7 +165,8 @@ public sealed class SetupForm : Form
 			detected,
 			drives = ReadDrives(),
 			hwInfoPath = FindHwInfo(),
-			weather = _settings.Weather
+			weather = _settings.Weather,
+			gameView = _settings.EffectiveGameView
 		});
 		SendHwInfo();
 	}
@@ -338,6 +339,7 @@ public sealed class SetupForm : Form
 			}
 			SensorSettings.ApplyChoices(root, message);
 			SensorSettings.ApplyWeather(root, message);
+			SensorSettings.ApplyGameView(root, message);
 		}, restart: true);
 	}
 

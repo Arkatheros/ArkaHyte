@@ -133,6 +133,28 @@ public static class SensorSettings
 		}
 	}
 
+	/// <summary>Writes the game view settings: gameView { autoNormal?, delaySec? }.</summary>
+	public static void ApplyGameView(JsonObject root, JsonElement message)
+	{
+		if (!message.TryGetProperty("gameView", out var gameView) || gameView.ValueKind != JsonValueKind.Object)
+		{
+			return;
+		}
+		if (root["GameView"] is not JsonObject node)
+		{
+			node = new JsonObject();
+			root["GameView"] = node;
+		}
+		if (gameView.TryGetProperty("autoNormal", out var autoNormal) && autoNormal.ValueKind is JsonValueKind.True or JsonValueKind.False)
+		{
+			node["AutoNormal"] = autoNormal.GetBoolean();
+		}
+		if (gameView.TryGetProperty("delaySec", out var delay) && delay.TryGetInt32(out var seconds))
+		{
+			node["AutoNormalDelaySec"] = Math.Clamp(seconds, GameViewSettings.MinDelaySec, GameViewSettings.MaxDelaySec);
+		}
+	}
+
 	private static JsonObject? ToSelector(JsonElement choice) =>
 		choice.ValueKind == JsonValueKind.Object
 			? new JsonObject

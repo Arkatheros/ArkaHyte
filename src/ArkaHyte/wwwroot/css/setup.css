@@ -448,6 +448,11 @@ option {
 	color: var(--ash);
 }
 
+/* ---------- Game view step ---------- */
+.row select.delay {
+	width: 180px;
+}
+
 /* ---------- Weather step ---------- */
 .switch {
 	display: flex;

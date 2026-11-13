@@ -8,7 +8,7 @@ using Microsoft.Web.WebView2.WinForms;
 
 namespace ArkaHyte;
 
-/// <param name="Demo">Scenario name forwarded to the page ("idle", "stress", "game") to preview it with simulated data.</param>
+/// <param name="Demo">Scenario name forwarded to the page ("idle", "stress", "game", "desktop") to preview it with simulated data.</param>
 /// <param name="OpenEditor">Dock button whose shortcut editor opens at start (diagnostics).</param>
 /// <param name="PreviewSpeedTest">"preview" (dial during upload) or "done" (summary): speed test view with sample values, no network use.</param>
 /// <param name="OpenSetup">Opens the setup wizard at start even when it was already completed.</param>
@@ -564,6 +564,7 @@ public sealed class DisplayForm : Form
 				place = _settings.Weather?.Place ?? string.Empty,
 				located = _settings.Weather is { Latitude: not null, Longitude: not null }
 			},
+			gameView = _settings.EffectiveGameView,
 			shortcuts = _dockButtons
 		});
 	}

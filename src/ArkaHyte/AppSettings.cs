@@ -71,6 +71,16 @@ public sealed record ThresholdSettings(
 /// <summary>Weather under the clock (Open-Meteo): the place picked in the setup wizard.</summary>
 public sealed record WeatherSettings(bool Enabled = false, string Place = "", double? Latitude = null, double? Longitude = null);
 
+/// <summary>
+/// Game view: back to the normal view once the game has been in the background (another window has the
+/// focus) for AutoNormalDelaySec, back to the game view when it returns to the foreground.
+/// </summary>
+public sealed record GameViewSettings(bool AutoNormal = true, int AutoNormalDelaySec = 20)
+{
+	public const int MinDelaySec = 5;
+	public const int MaxDelaySec = 600;
+}
+
 public sealed record DriveSettings(string Name, SensorSelector? Temp = null);
 
 public sealed record NetworkSettings(string Adapter = "", string PingHost = "1.1.1.1", string FallbackPingHost = "8.8.8.8");
@@ -93,8 +103,11 @@ public sealed record AppSettings(
 	bool SetupCompleted = false,
 	string Theme = Themes.Sith,
 	ThresholdSettings? Thresholds = null,
-	WeatherSettings? Weather = null)
+	WeatherSettings? Weather = null,
+	GameViewSettings? GameView = null)
 {
+	public GameViewSettings EffectiveGameView => GameView ?? new GameViewSettings();
+
 	/// <summary>Thresholds with the defaults filled in for the metrics the file leaves out.</summary>
 	public ThresholdSettings EffectiveThresholds => (Thresholds ?? ThresholdSettings.Defaults).WithDefaults();
 

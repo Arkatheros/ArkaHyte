@@ -40,8 +40,8 @@ Pas de tests automatisés ni de linter. Vérification par les options one-shot d
 
 - `--screenshot out.png` : rend l'interface, capture, quitte. Moyen principal de valider un changement visuel.
 - `--dump out.json` : un échantillon de tous les capteurs + entrées HWiNFO disponibles.
-- `--demo stress|idle|game`, `--preview-speedtest [done]`, `--open-editor 0` : états à combiner avec `--screenshot`.
-- `--setup-preview out.png [--setup-step 0-4]` : capture de l'assistant, autonome (pas de mutex) et sans écriture.
+- `--demo stress|idle|game|desktop`, `--preview-speedtest [done]`, `--open-editor 0` : états à combiner avec `--screenshot`.
+- `--setup-preview out.png [--setup-step 0-6]` : capture de l'assistant, autonome (pas de mutex) et sans écriture.
 - `--speedtest out.txt` : vrai test de débit (sature la connexion, ne pas lancer sans raison).
 - `--devtools` : F12.
 
@@ -80,7 +80,9 @@ suffixe neutralisé par `HwInfoReader`) et ne comptant que si la fenêtre au pre
 (`ForegroundGame` → `Snapshot.Game` : nom, fréquence de l'écran). `console.js` (`renderGame`) passe alors
 `.frame` en `game` (+ `has-game` tant qu'un jeu tourne) : mêmes widgets GPU / CPU / réseau déplacés, dock gardé (lecture en cours masquée)
 par CSS, éléments `.game-only` (en-tête, cadran FPS en SVG, trio, courbe 60 s), retour 10 s après le jeu.
-Bouton `#viewSwitch` (vue normale ↔ jeu, choix gardé jusqu'à la fin du jeu). Valeurs lissées comme ailleurs,
+Bouton `#viewSwitch` (vue normale ↔ jeu, choix gardé jusqu'à la fin du jeu). Jeu en arrière-plan
+(`GameData.Foreground` faux) ou sans FPS : valeurs et courbe figées en gris (`.stale`) ; sans choix manuel,
+vue normale après `GameView.AutoNormalDelaySec` si `AutoNormal` (étape « Vue jeu » de l'assistant, `config.gameView`). Valeurs lissées comme ailleurs,
 courbe défilée par `transform` (`scrollGraph`), anneau CPU (compteur de charge) à gauche de température / consommation. 1 % low / temps de frame : `HwInfo.GpuFpsLow`,
 `GpuFrameTime` facultatifs, sinon calculés côté page.
 `wlanapi` natif lu à offsets fixes (`WifiReader`), `NetworkInterface` + `Ping` (statut
