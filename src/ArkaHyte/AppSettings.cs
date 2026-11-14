@@ -125,6 +125,17 @@ public sealed record NetworkSettings(string Adapter = "", string PingHost = "1.1
 /// </summary>
 public sealed record ShortcutSettings(string Label, string Target, string? Icon = null, string? Arguments = null);
 
+/// <summary>
+/// Action defined in the settings window and offered by the dock editor: a URL (Kind "url") or a PowerShell
+/// script (Kind "script", Target = path of the .ps1). Dock buttons refer to it as "custom:{Id}".
+/// </summary>
+public sealed record CustomAction(string Id, string Name, string Kind, string Target)
+{
+	public const string Url = "url";
+	public const string Script = "script";
+	public const int Max = 20;
+}
+
 public sealed record AppSettings(
 	DisplaySettings Display,
 	HardwareSettings Hardware,
@@ -139,7 +150,8 @@ public sealed record AppSettings(
 	WeatherSettings? Weather = null,
 	GameViewSettings? GameView = null,
 	// Clock and voltage next to the CPU dial (toggled from the processor detail panel)
-	bool CpuDetails = true)
+	bool CpuDetails = true,
+	IReadOnlyList<CustomAction>? CustomActions = null)
 {
 	public GameViewSettings EffectiveGameView => GameView ?? new GameViewSettings();
 

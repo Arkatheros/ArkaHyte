@@ -41,7 +41,7 @@ Pas de tests automatisés ni de linter. Vérification par les options one-shot d
 - `--screenshot out.png` : rend l'interface, capture, quitte. Moyen principal de valider un changement visuel.
 - `--dump out.json` : un échantillon de tous les capteurs + entrées HWiNFO disponibles.
 - `--demo stress|idle|game|desktop`, `--preview-speedtest [done]`, `--open-editor 0` : états à combiner avec `--screenshot`.
-- `--setup-preview out.png [--setup-step 0-6]` : capture de l'assistant, autonome (pas de mutex) et sans écriture.
+- `--setup-preview out.png [--setup-step 0-7]` : capture de l'assistant, autonome (pas de mutex) et sans écriture.
 - `--speedtest out.txt` : vrai test de débit (sature la connexion, ne pas lancer sans raison).
 - `--devtools` : F12.
 
@@ -67,6 +67,10 @@ toucher le compteur CPU → `#cpuDetail` (fréquence, tension, PPT, cœurs actif
 `*Defaults` nommés comme HWiNFO ; fréquences par cœur `HwInfoReader.CoreClocks` ; charge par fil
 `SystemMetrics.ReadThreadLoads` / `NtQuerySystemInformation`), option `CpuDetails` (`saveMetric { cpuDetails }`) pour
 fréquence et tension à côté du compteur ;
+éditeur du dock : onglets applications / actions, cibles `action:lock|sleep|screenshot` (`SystemCommands`,
+`ms-screenclip:`) et `custom:{id}` (`AppSettings.CustomActions` : url ou script .ps1, résolus au lancement par
+`ShortcutLauncher`, créés à l'étape « Raccourcis » des Paramètres, fichier choisi par `pickScript`) ; veille confirmée
+par un second toucher ; bouton vidé (`clearShortcut`, cible vide) affiché « + », ouvre l'éditeur ;
 barre de progression de la lecture en cours (`MediaData.CanSeek`, message `media` `{ action: seek, position }`
 → `MediaMonitor.SeekAsync`, exclue du balayage par `data-no-swipe`) ;
 pastille audio de la lecture en cours → `#audioPanel` (`Audio/AudioService` : Core Audio par COM, `Native/CoreAudio.cs`,

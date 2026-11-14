@@ -5,7 +5,7 @@
 	'use strict';
 
 	const host = window.chrome && window.chrome.webview ? window.chrome.webview : null;
-	const LAST_STEP = 6;
+	const LAST_STEP = 7;
 	const GAME_VIEW_STEP = 5;
 
 	/* Widgets fed by HWiNFO. Suggestions: entries of the right unit whose sensor matches, label
@@ -558,6 +558,8 @@
 		const transition = $('gameTransition');
 		add('ok', 'Changement de vue : <b>' + escapeHtml(transition.options[transition.selectedIndex].text.split(' :')[0]) + '</b>');
 		add('ok', 'Jeux ajoutés : <b>' + (extraGames.length ? extraGames.map(g => escapeHtml(g.name || g.exe)).join(', ') : 'aucun') + '</b>');
+		const ready = customActions.filter(a => a.name.trim() && a.target.trim());
+		add('ok', 'Raccourcis : <b>' + (ready.length ? ready.map(a => escapeHtml(a.name.trim())).join(', ') : 'aucune action personnelle') + '</b>');
 		const weatherOn = $('weatherEnabled').checked;
 		add(!weatherOn || weatherPlace ? 'ok' : 'warn', weatherOn
 			? (weatherPlace ? 'Météo : <b>' + escapeHtml(weatherPlace.place) + '</b>' : 'Météo : <b>aucune ville choisie</b>, rien ne s\'affichera')
@@ -582,6 +584,10 @@
 			transition: $('gameTransition').value,
 			extraGames
 		};
+		// Rows left half filled are not kept (the host checks the rest)
+		message.customActions = customActions
+			.filter(a => a.name.trim() && a.target.trim())
+			.map(a => ({ id: a.id, name: a.name.trim(), kind: a.kind, target: a.target.trim() }));
 		if (weatherPlace) {
 			Object.assign(message.weather, weatherPlace);
 		}
@@ -700,12 +706,107 @@
 	$('gameAutoGame').addEventListener('change', updateAutoControls);
 	$('gameAutoNormal').addEventListener('change', updateAutoControls);
 
+	// ---------- Shortcuts: the user's own dock actions ----------
+	// [{ id, name, kind: url | script, target }]; the id stays when the action is edited, so dock buttons
+	// bound to it follow
+	let customActions = [];
+	const newActionId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+	function renderCustomActions() {
+		const list = $('customActions');
+		list.textContent = '';
+		if (!customActions.length) {
+			const empty = document.createElement('p');
+			empty.className = 'hint';
+			empty.textContent = 'Aucune action pour l\u2019instant.';
+			list.append(empty);
+			return;
+		}
+		customActions.forEach((action, index) => {
+			const row = document.createElement('div');
+			row.className = 'custom-action';
+			const kind = document.createElement('span');
+			kind.className = 'custom-action-kind';
+			kind.textContent = action.kind === 'url' ? 'Web' : 'Script';
+			const name = document.createElement('input');
+			name.maxLength = 40;
+			name.placeholder = 'Nom affiché';
+			name.value = action.name;
+			name.addEventListener('input', () => {
+				action.name = name.value;
+			});
+			const target = document.createElement('div');
+			target.className = 'custom-action-target';
+			if (action.kind === 'url') {
+				const url = document.createElement('input');
+				url.type = 'url';
+				url.placeholder = 'https://…';
+				url.value = action.target;
+				url.addEventListener('input', () => {
+					action.target = url.value;
+				});
+				target.append(url);
+			} else {
+				const path = document.createElement('span');
+				path.textContent = action.target || 'Aucun fichier choisi';
+				path.title = action.target;
+				const pick = document.createElement('button');
+				pick.type = 'button';
+				pick.className = 'ghost';
+				pick.textContent = 'Choisir…';
+				pick.addEventListener('click', () => send({ type: 'pickScript', id: action.id }));
+				target.append(path, pick);
+			}
+			const remove = document.createElement('button');
+			remove.type = 'button';
+			remove.className = 'link';
+			remove.textContent = 'Retirer';
+			remove.addEventListener('click', () => {
+				customActions.splice(index, 1);
+				renderCustomActions();
+			});
+			row.append(kind, name, target, remove);
+			list.append(row);
+		});
+	}
+
+	function addCustomAction(kind) {
+		const action = { id: newActionId(), name: '', kind, target: kind === 'url' ? 'https://' : '' };
+		customActions.push(action);
+		renderCustomActions();
+		const rows = $('customActions').querySelectorAll('.custom-action input');
+		const last = $('customActions').lastElementChild;
+		if (last) {
+			last.querySelector('input').focus();
+		}
+		if (kind === 'script') {
+			send({ type: 'pickScript', id: action.id });
+		}
+	}
+
+	// A script chosen in Windows' file dialog; its file name becomes the name when there is none yet
+	function onPickedScript(message) {
+		const action = customActions.find(a => a.id === message.id);
+		if (action && message.path) {
+			action.target = message.path;
+			if (!action.name.trim()) {
+				action.name = message.path.split('\\').pop().replace(/\.ps1$/i, '');
+			}
+			renderCustomActions();
+		}
+	}
+
+	$('addUrl').addEventListener('click', () => addCustomAction('url'));
+	$('addScript').addEventListener('click', () => addCustomAction('script'));
+
 	// ---------- Host messages ----------
 
 	function onState(state) {
 		if (Boolean(state.completed) !== model.settingsMode) {
 			setMode(Boolean(state.completed));
 		}
+		customActions = (state.customActions || []).map(a => ({ id: a.id, name: a.name, kind: a.kind, target: a.target }));
+		renderCustomActions();
 		if (state.gameView) {
 			showGameView(state.gameView);
 		}
@@ -765,9 +866,15 @@
 					showFootStatus('Enregistrement impossible : voir le journal', true);
 				}
 				break;
+			case 'pickedScript':
+				onPickedScript(message);
+				break;
 			case 'processes':
 				openProcesses = message.processes || [];
 				renderProcessPick();
+				break;
+			case 'goto':
+				goTo(message.step);
 				break;
 			case 'saved':
 				$('next').disabled = false;
@@ -799,6 +906,10 @@
 			type: 'state',
 			// "?mode=settings" previews the settings window instead of the first-run wizard
 			completed: new URLSearchParams(location.search).get('mode') === 'settings',
+			customActions: [
+				{ id: 'tw1', name: 'Twitch', kind: 'url', target: 'https://www.twitch.tv' },
+				{ id: 'bk1', name: 'Sauvegarde', kind: 'script', target: 'D:\\Scripts\\sauvegarde.ps1' }
+			],
 			gameView: { autoGame: new URLSearchParams(location.search).get('autoGame') !== 'off', autoNormal: true, autoNormalDelaySec: 20, transition: 'morph', detectEngines: true, extraGames: [{ exe: 'TFTClient-Win64-Shipping.exe', name: 'TFT' }] },
 			caseSize: { width: 682, height: 2560 },
 			screens: [

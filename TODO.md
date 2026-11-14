@@ -15,12 +15,6 @@ du non fait.
 ---
 
 # Liste des tâches
-- [ ] Lecture en cours enrichie : barre de progression touchable pour avancer / reculer
-  - SMTC : `GetTimelineProperties` + `TryChangePlaybackPositionAsync` ; volume via la session audio de l'appli
-    (dépend du point Audio)
-- [ ] Actions dans le dock : en plus des applis, raccourcis verrouiller le PC, mettre en veille, capture d'écran,
-  lancer un script PowerShell, ouvrir une URL
-  - Nouveaux types dans `ShortcutStore` / éditeur, icônes Lucide ; confirmation au toucher pour la veille
 - [ ] Coût électrique du PC : compteur kWh et € (jour, session de jeu) à partir des puissances CPU + GPU (+ forfait
   pour le reste, réglable), prix du kWh dans les réglages
   - Cumul côté C# (persisté dans `%LOCALAPPDATA%\ArkaHyte` pour survivre au redémarrage), remise à zéro quotidienne

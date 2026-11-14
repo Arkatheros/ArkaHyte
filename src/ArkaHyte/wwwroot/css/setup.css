@@ -448,6 +448,48 @@ option {
 	color: var(--ash);
 }
 
+/* ---------- Shortcuts step ---------- */
+.custom-actions {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	max-width: 760px;
+}
+.custom-action {
+	display: grid;
+	grid-template-columns: 70px 200px 1fr auto;
+	align-items: center;
+	gap: 12px;
+	padding: 10px 12px;
+	border: 1px solid var(--line);
+	background: #12070a;
+}
+.custom-action-kind {
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--ash);
+}
+.custom-action-target {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+}
+.custom-action-target span {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	font-size: 13px;
+	color: var(--ash);
+}
+.custom-action input:invalid {
+	border-color: var(--blade);
+}
+
 /* ---------- Game view step ---------- */
 .row select.delay {
 	width: 180px;
@@ -571,6 +613,6 @@ h2 {
 /* Settings (opened from the tray once set up): free navigation, no summary step, saved in place */
 .settings-mode #back,
 .settings-mode #skip,
-.settings-mode .steps [data-step="6"] {
+.settings-mode .steps [data-step="7"] {
 	display: none;
 }

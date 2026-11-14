@@ -31,7 +31,7 @@ public sealed class ShortcutStore
 		_items[index] = shortcut;
 		Directory.CreateDirectory(DataFolder.Root);
 		File.WriteAllText(OverridePath, JsonSerializer.Serialize(_items, JsonOptions));
-		Log.Info($"Shortcut {index} set to '{shortcut.Label}' -> {shortcut.Target}");
+		Log.Info(string.IsNullOrEmpty(shortcut.Target) ? $"Shortcut {index} cleared" : $"Shortcut {index} set to '{shortcut.Label}' -> {shortcut.Target}");
 		return true;
 	}
 

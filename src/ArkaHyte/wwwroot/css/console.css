@@ -1626,6 +1626,99 @@ body {
 	background: rgba(var(--blade-rgb), 0.16);
 	border-color: var(--blade);
 }
+.editor-tabs {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 12px;
+	margin: 22px 0 12px;
+}
+.editor-tabs button {
+	height: 58px;
+	border: 1px solid var(--line);
+	background: transparent;
+	color: var(--ash);
+	font: 700 18px var(--font-label);
+	letter-spacing: 0.2em;
+	text-transform: uppercase;
+}
+.editor-tabs button[aria-selected="true"] {
+	color: var(--core);
+	border-color: var(--blade);
+	background: rgba(var(--blade-rgb), 0.22);
+	box-shadow: 0 0 18px rgba(var(--blade-rgb), 0.45);
+}
+.editor-apps-wrap[hidden],
+.editor-action-list[hidden] {
+	display: none;
+}
+.editor-action-list {
+	flex: 1;
+	min-height: 0;
+}
+.editor-action-more {
+	display: flex;
+	align-items: center;
+	gap: 18px;
+	margin-top: 14px;
+	padding: 16px 14px;
+	border-top: 1px solid var(--line);
+	font-size: 16px;
+	line-height: 1.4;
+	color: var(--ash);
+}
+.editor-action-more .action-pill {
+	flex: none;
+}
+.editor-action-icon {
+	flex: none;
+	width: 46px;
+	height: 46px;
+	display: grid;
+	place-items: center;
+}
+.editor-action-icon svg {
+	width: 34px;
+	height: 34px;
+	fill: none;
+	stroke: var(--blade);
+	stroke-width: 1.6;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	filter: drop-shadow(0 0 4px var(--blade));
+}
+.editor-app small {
+	margin-left: auto;
+	flex: none;
+	font-size: 13px;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--ash);
+}
+#editorRemove[hidden] {
+	display: none;
+}
+#editorRemove {
+	border-color: rgba(var(--ember-rgb), 0.6);
+	color: var(--ember);
+}
+/* Empty dock slot: a "+" in a dashed ring, a touch opens the editor */
+.dock-item.empty .dock-icon {
+	border-style: dashed;
+	background: transparent;
+	color: var(--ash);
+}
+.dock-item.empty .dock-label {
+	opacity: 0.7;
+}
+
+/* Sleep from the dock: a first touch asks, a second within 3 s confirms */
+.dock-item.confirm .dock-icon {
+	border-color: var(--ember);
+	box-shadow: 0 0 22px rgba(var(--ember-rgb), 0.75);
+}
+.dock-item.confirm .dock-label {
+	color: var(--ember);
+}
 .editor-status {
 	padding: 30px 10px;
 	font-family: var(--font-data);
@@ -1708,18 +1801,48 @@ body {
 }
 .editor-actions {
 	display: grid;
-	grid-template-columns: 1fr 1fr;
+	grid-auto-flow: column;
+	grid-auto-columns: 1fr;
 	gap: 18px;
 	margin-top: 26px;
 }
 .editor-btn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 12px;
+	min-width: 0;
 	height: 78px;
+	padding: 0 12px;
 	border: 1px solid var(--line);
 	background: transparent;
 	color: var(--bone);
 	font: 700 22px var(--font-label);
 	letter-spacing: 0.2em;
 	text-transform: uppercase;
+	white-space: nowrap;
+}
+/* Every button carries an icon left of its text, drawn in the text colour */
+.editor-btn svg {
+	flex: none;
+	width: 26px;
+	height: 26px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 2;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+/* Three buttons on one row (Retirer shown): smaller text so icon and label fit, same button height */
+.editor-actions:has(#editorRemove:not([hidden])) .editor-btn {
+	gap: 8px;
+	padding: 0 8px;
+	font-size: 17px;
+	letter-spacing: 0.1em;
+}
+.editor-actions:has(#editorRemove:not([hidden])) .editor-btn svg {
+	width: 22px;
+	height: 22px;
 }
 .editor-btn.primary {
 	background: var(--blade);

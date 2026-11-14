@@ -66,7 +66,8 @@ public sealed class DisplayForm : Form
 		_demo = options.Demo;
 		_shortcuts = new ShortcutStore(settings.Shortcuts);
 		_theme = Themes.Normalize(settings.Theme);
-		_launcher = new ShortcutLauncher(_shortcuts, settings.CpuClickTarget);
+		// Reads the settings at launch: custom actions edited in the settings window apply at once
+		_launcher = new ShortcutLauncher(_shortcuts, () => _settings);
 
 		Text = TrayIcon.AppName;
 		FormBorderStyle = FormBorderStyle.None;
@@ -86,7 +87,7 @@ public sealed class DisplayForm : Form
 			_tray.ReloadRequested += () => _webView.CoreWebView2?.Reload();
 			_tray.ExitRequested += Close;
 			_tray.UpdateRequested += () => _ = _updater.ActAsync();
-			_tray.SetupRequested += OpenSetup;
+			_tray.SetupRequested += () => OpenSetup();
 			_tray.ThemeSelected += SetTheme;
 			_tray.SetTheme(_theme);
 			_updater.StateChanged += state => PostToUiThread(() => OnUpdateState(state));
@@ -139,14 +140,19 @@ public sealed class DisplayForm : Form
 	}
 
 	/// <summary>Shows the setup wizard, or brings it forward when it is already open.</summary>
-	private void OpenSetup()
+	/// <param name="step">Page shown first (SetupForm.ShortcutsStep from the dock editor), or the current one when open.</param>
+	private void OpenSetup(int step = 0)
 	{
 		if (_setup is { IsDisposed: false })
 		{
+			if (step > 0)
+			{
+				_setup.GoToStep(step);
+			}
 			_setup.Activate();
 			return;
 		}
-		_setup = new SetupForm(_settings);
+		_setup = new SetupForm(_settings, step);
 		_setup.Saved += restart =>
 		{
 			if (restart)
@@ -470,11 +476,19 @@ public sealed class DisplayForm : Form
 			case "saveShortcut":
 				SaveShortcut(root);
 				break;
+			case "clearShortcut":
+				ClearShortcut(root);
+				break;
 			case "speedtest" when action == "start":
 				StartSpeedTest();
 				break;
 			case "speedtest" when action == "cancel":
 				_speedTestRun?.Cancel();
+				break;
+			case "openSettings":
+				// From the dock editor: the settings window opens on the main screen, cursor brought back there
+				_touchGuard.ReturnCursorNow();
+				OpenSetup(SetupForm.ShortcutsStep);
 				break;
 			case "audio" when action is not null:
 				ControlAudio(action, root);
@@ -573,8 +587,9 @@ public sealed class DisplayForm : Form
 	{
 		var hardware = _settings.Hardware;
 		// Icons are resolved once (file reads / icon extraction) and reused until a shortcut changes
+		// A custom action shows under its current name (renamed in the settings window since)
 		_dockButtons ??= _shortcuts.Items
-			.Select(s => new { label = s.Label, target = s.Target, icon = IconProvider.Resolve(s.Icon) })
+			.Select(s => new { label = CustomActionOf(s.Target)?.Name ?? s.Label, target = s.Target, icon = IconProvider.Resolve(s.Icon) })
 			.ToList<object>();
 		Post(new
 		{
@@ -593,6 +608,8 @@ public sealed class DisplayForm : Form
 				located = _settings.Weather is { Latitude: not null, Longitude: not null }
 			},
 			gameView = _settings.EffectiveGameView,
+			// Offered by the dock editor next to the system actions
+			customActions = (_settings.CustomActions ?? []).Select(a => new { id = a.Id, name = a.Name, kind = a.Kind }),
 			cpuDetails = _settings.CpuDetails,
 			shortcuts = _dockButtons
 		});
@@ -664,23 +681,47 @@ public sealed class DisplayForm : Form
 		{
 			_weather.Configure(_settings.Weather);
 		}
+		_dockButtons = null;
 		SendConfig();
 	}
 
+	/// <summary>Dock button emptied from the on-screen editor: the slot stays, shown as "+".</summary>
+	private void ClearShortcut(JsonElement root)
+	{
+		if (root.TryGetProperty("index", out var indexElement) && indexElement.TryGetInt32(out var index)
+			&& _shortcuts.Replace(index, new ShortcutSettings(string.Empty, string.Empty)))
+		{
+			_dockButtons = null;
+			SendConfig();
+			Post(new { type = "toast", text = "Raccourci retiré" });
+		}
+	}
+
+	private CustomAction? CustomActionOf(string target) =>
+		target.StartsWith(ShortcutLauncher.CustomPrefix, StringComparison.OrdinalIgnoreCase)
+			? _settings.CustomActions?.FirstOrDefault(a => a.Id == target[ShortcutLauncher.CustomPrefix.Length..])
+			: null;
+
+	/// <summary>
+	/// Dock button chosen in the on-screen editor: an application { appId } or an action { target: "action:…" |
+	/// "custom:…" }, with its label and icon ("app": the application's own icon).
+	/// </summary>
 	private void SaveShortcut(JsonElement root)
 	{
 		var appId = ReadString(root, "appId");
+		var actionTarget = ReadString(root, "target");
 		var label = ReadString(root, "label");
 		var icon = ReadString(root, "icon");
 		if (!root.TryGetProperty("index", out var indexElement) || !indexElement.TryGetInt32(out var index)
-			|| string.IsNullOrWhiteSpace(appId) || string.IsNullOrWhiteSpace(label))
+			|| string.IsNullOrWhiteSpace(label) || (string.IsNullOrWhiteSpace(appId) && !IsKnownAction(actionTarget)))
 		{
 			Log.Error("Incomplete shortcut received from the web UI");
 			return;
 		}
 
-		var target = AppCatalog.AppsFolderPrefix + appId;
-		var iconSetting = icon is null or "app" ? target : icon;
+		var target = actionTarget is not null && IsKnownAction(actionTarget) ? actionTarget : AppCatalog.AppsFolderPrefix + appId;
+		// An action has no icon of its own: a built-in one always
+		var iconSetting = icon is null or "app" ? (actionTarget is null ? target : "app") : icon;
 		if (_shortcuts.Replace(index, new ShortcutSettings(label, target, iconSetting)))
 		{
 			_dockButtons = null;
@@ -688,6 +729,12 @@ public sealed class DisplayForm : Form
 			Post(new { type = "toast", text = $"{label} enregistré" });
 		}
 	}
+
+	private bool IsKnownAction(string? target) =>
+		target is not null
+		&& (target.StartsWith(ShortcutLauncher.ActionPrefix, StringComparison.Ordinal)
+			&& ShortcutLauncher.SystemActions.Contains(target[ShortcutLauncher.ActionPrefix.Length..])
+			|| CustomActionOf(target) is not null);
 
 	private async Task SeekMediaAsync(double seconds)
 	{

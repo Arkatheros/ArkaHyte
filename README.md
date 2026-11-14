@@ -88,6 +88,11 @@ long sur l'horloge l'affiche ou la masque. Réglage `Weather` de `appsettings.js
 
 ### Réglages à l'écran
 
+**Dock** : appui long sur un bouton, l'éditeur propose deux onglets, **Applications** et **Actions** (verrouiller
+le PC, mettre en veille, capture d'écran, et les actions personnelles). La veille demande confirmation (deuxième
+toucher dans les 3 s). **Retirer** vide un bouton : il devient un « + » qui ouvre l'éditeur au toucher. Les actions personnelles (adresse web, script PowerShell lancé par `powershell.exe -File`) se
+créent dans Paramètres › **Raccourcis** (réglage `CustomActions`) ; modifiées là, le dock suit.
+
 **Lecture en cours** : glisser le doigt sur la barre de progression avance ou recule dans le morceau (si le lecteur
 l'accepte : Spotify, navigateurs… ; un curseur apparaît alors sur la barre).
 

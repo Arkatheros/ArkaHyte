@@ -1185,6 +1185,30 @@
 				opened = false;
 				return;
 			}
+			// An empty slot has nothing to launch: a touch opens the editor
+			if (!dockShortcuts[index] || !dockShortcuts[index].target) {
+				openEditor(index);
+				return;
+			}
+			// Sleep asks first: the label turns to a question for a few seconds, a second touch confirms
+			const shortcut = dockShortcuts[index];
+			if (shortcut && shortcut.target === 'action:sleep' && !button.classList.contains('confirm')) {
+				const label = button.querySelector('.dock-label');
+				const caption = label.textContent;
+				button.classList.add('confirm');
+				label.textContent = 'Confirmer ?';
+				button.confirmTimer = setTimeout(() => {
+					button.classList.remove('confirm');
+					label.textContent = caption;
+				}, SLEEP_CONFIRM_MS);
+				button.confirmCaption = caption;
+				return;
+			}
+			if (button.classList.contains('confirm')) {
+				clearTimeout(button.confirmTimer);
+				button.classList.remove('confirm');
+				button.querySelector('.dock-label').textContent = button.confirmCaption;
+			}
 			send({ type: 'launch', action: String(index) });
 		});
 	}
@@ -1195,17 +1219,22 @@
 		dock.replaceChildren(...shortcuts.map((shortcut, index) => {
 			const button = document.createElement('button');
 			button.type = 'button';
-			button.className = 'dock-item';
-			button.setAttribute('aria-label', shortcut.label || `Raccourci ${index + 1}`);
+			const empty = !shortcut.target;
+			button.className = empty ? 'dock-item empty' : 'dock-item';
+			button.setAttribute('aria-label', empty ? `Ajouter un raccourci ${index + 1}` : shortcut.label || `Raccourci ${index + 1}`);
 			attachPress(button, index);
 
 			const iconBox = document.createElement('span');
 			iconBox.className = 'dock-icon';
-			renderIcon(iconBox, shortcut.icon);
+			if (empty) {
+				iconBox.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>';
+			} else {
+				renderIcon(iconBox, shortcut.icon);
+			}
 
 			const label = document.createElement('span');
 			label.className = 'dock-label';
-			label.textContent = shortcut.label || '';
+			label.textContent = empty ? 'Ajouter' : shortcut.label || '';
 			button.append(iconBox, label);
 			return button;
 		}));
@@ -1215,8 +1244,115 @@
 	const APPS_PREFIX = 'shell:AppsFolder\\';
 	const EDITOR_ICONS = ['app', 'phone', 'chat', 'music', 'gamepad', 'pulse', 'globe', 'folder', 'video', 'code', 'headset', 'camera'];
 	const LETTERS = ['#', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'];
+	const SLEEP_CONFIRM_MS = 3000;
+	// Actions a dock button can run instead of an application; "custom:" ones come from the settings
+	const SYSTEM_ACTIONS = [
+		{ target: 'action:lock', name: 'Verrouiller le PC', icon: 'lock' },
+		{ target: 'action:sleep', name: 'Mettre en veille', icon: 'moon', hint: 'confirmation' },
+		{ target: 'action:screenshot', name: 'Capture d\u2019écran', icon: 'scissors' }
+	];
+	let customActionsConfig = [];
 	let apps = null;
-	const editor = { index: -1, appId: null, appName: null, appIcon: null, icon: 'app' };
+	// target: the action chosen (null for an application); tab: list shown
+	const editor = { index: -1, appId: null, appName: null, appIcon: null, icon: 'app', target: null, tab: 'apps' };
+
+	function editorActions() {
+		return [
+			...SYSTEM_ACTIONS,
+			...customActionsConfig.map((action) => ({
+				target: `custom:${action.id}`,
+				name: action.name,
+				icon: action.kind === 'script' ? 'square-terminal' : 'globe',
+				hint: action.kind === 'script' ? 'script' : 'web'
+			}))
+		];
+	}
+
+	const isActionTarget = (target) => typeof target === 'string' && (target.startsWith('action:') || target.startsWith('custom:'));
+
+	function setEditorTab(tab) {
+		editor.tab = tab;
+		document.querySelectorAll('.editor-tabs button').forEach((button) => button.setAttribute('aria-selected', String(button.dataset.tab === tab)));
+		$('editorAppsWrap').hidden = tab !== 'apps';
+		$('editorActionList').hidden = tab !== 'actions';
+		if (tab === 'actions') {
+			renderActionList();
+		}
+	}
+
+	function renderActionList() {
+		$('editorActionList').replaceChildren(...editorActions().map((action) => {
+			const row = document.createElement('button');
+			row.type = 'button';
+			row.className = 'editor-app';
+			row.dataset.target = action.target;
+			const icon = document.createElement('i');
+			icon.className = 'editor-action-icon';
+			renderIcon(icon, { kind: 'builtin', value: action.icon });
+			const name = document.createElement('span');
+			name.textContent = action.name;
+			row.append(icon, name);
+			if (action.hint) {
+				const hint = document.createElement('small');
+				hint.textContent = action.hint;
+				row.appendChild(hint);
+			}
+			row.addEventListener('click', () => {
+				editor.target = action.target;
+				editor.appId = null;
+				editor.appName = action.name;
+				editor.appIcon = null;
+				editor.icon = action.icon;
+				renderEditorState();
+			});
+			return row;
+		}), actionsFooter());
+		renderEditorState();
+	}
+
+	// Settings saved while the editor is open: added actions show, removed ones go (and their selection)
+	function refreshEditorActions() {
+		if ($('editor').hidden) {
+			return;
+		}
+		if (editor.target && !editorActions().some((action) => action.target === editor.target)) {
+			editor.target = null;
+			editor.appName = null;
+			editor.icon = 'app';
+		}
+		if (editor.tab === 'actions') {
+			renderActionList();
+		} else {
+			renderEditorState();
+		}
+	}
+
+	// Web addresses and scripts need a keyboard: they are created in the settings window, opened from here;
+	// the editor stays open and lists them as soon as the settings are saved
+	function actionsFooter() {
+		const footer = document.createElement('div');
+		footer.className = 'editor-action-more';
+		const hint = document.createElement('span');
+		hint.textContent = 'Une adresse web ou un script PowerShell ? Ils se créent dans Paramètres › Raccourcis, sur l\u2019écran principal.';
+		const add = document.createElement('button');
+		add.type = 'button';
+		add.className = 'action-pill';
+		add.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Ajouter</span>';
+		add.addEventListener('click', () => {
+			send({ type: 'openSettings' });
+			showToast('Paramètres ouverts sur l\u2019écran principal');
+		});
+		footer.append(hint, add);
+		return footer;
+	}
+
+	document.querySelectorAll('.editor-tabs button').forEach((button) => button.addEventListener('click', () => setEditorTab(button.dataset.tab)));
+
+	// Icon of an action when "the application's icon" is picked: an action has none of its own
+	function defaultActionIcon() {
+		const action = editorActions().find((a) => a.target === editor.target);
+		return action ? action.icon : 'app';
+	}
 
 	const letterOf = (name) => {
 		const first = name.normalize('NFD').replace(/[̀-ͯ]/g, '').charAt(0).toUpperCase();
@@ -1227,11 +1363,15 @@
 		const shortcut = dockShortcuts[index] || {};
 		editor.index = index;
 		editor.appId = shortcut.target && shortcut.target.startsWith(APPS_PREFIX) ? shortcut.target.slice(APPS_PREFIX.length) : null;
-		editor.appName = editor.appId ? shortcut.label : null;
+		editor.target = isActionTarget(shortcut.target) ? shortcut.target : null;
+		editor.appName = editor.appId || editor.target ? shortcut.label : null;
 		editor.appIcon = shortcut.icon && shortcut.icon.kind === 'image' ? shortcut.icon.value : null;
 		editor.icon = shortcut.icon && shortcut.icon.kind === 'builtin' ? shortcut.icon.value : 'app';
 		text('editorTitle', `Raccourci ${index + 1}`);
+		// An empty slot has nothing to remove
+		$('editorRemove').hidden = !shortcut.target;
 		$('editor').hidden = false;
+		setEditorTab(editor.target ? 'actions' : 'apps');
 		if (apps) {
 			renderAppList();
 		} else {
@@ -1292,6 +1432,7 @@
 			row.appendChild(name);
 			row.addEventListener('click', () => {
 				editor.appId = app.id;
+				editor.target = null;
 				editor.appName = app.name;
 				editor.appIcon = app.icon;
 				renderEditorState();
@@ -1320,6 +1461,9 @@
 	}
 
 	function currentEditorIcon() {
+		if (editor.target && editor.icon === 'app') {
+			return { kind: 'builtin', value: defaultActionIcon() };
+		}
 		if (editor.icon === 'app') {
 			return editor.appIcon ? { kind: 'image', value: editor.appIcon } : { kind: 'builtin', value: 'app' };
 		}
@@ -1327,10 +1471,11 @@
 	}
 
 	function renderEditorState() {
-		text('editorAppName', editor.appName || 'Choisis une application');
+		text('editorAppName', editor.appName || 'Choisis une application ou une action');
 		renderIcon($('editorPreviewIcon'), currentEditorIcon());
-		$('editorSave').disabled = !editor.appId;
-		document.querySelectorAll('.editor-app').forEach((row) => row.classList.toggle('selected', row.dataset.id === editor.appId));
+		$('editorSave').disabled = !editor.appId && !editor.target;
+		document.querySelectorAll('#editorApps .editor-app').forEach((row) => row.classList.toggle('selected', !editor.target && row.dataset.id === editor.appId));
+		document.querySelectorAll('#editorActionList .editor-app').forEach((row) => row.classList.toggle('selected', row.dataset.target === editor.target));
 
 		for (const tile of editorIconTiles.values()) {
 			tile.classList.toggle('selected', editor.icon === tile.dataset.icon);
@@ -1381,6 +1526,19 @@
 	}
 
 	function saveEditor() {
+		if (editor.target) {
+			const label = editor.appName || 'Action';
+			const icon = editor.icon === 'app' ? defaultActionIcon() : editor.icon;
+			if (host) {
+				host.postMessage({ type: 'saveShortcut', index: editor.index, target: editor.target, label, icon });
+			} else {
+				dockShortcuts[editor.index] = { label, target: editor.target, icon: { kind: 'builtin', value: icon } };
+				buildDock(dockShortcuts);
+				showToast(`${label} enregistré`);
+			}
+			closeEditor();
+			return;
+		}
 		if (!editor.appId) {
 			return;
 		}
@@ -1395,6 +1553,19 @@
 		closeEditor();
 	}
 
+	// The slot is kept, shown as a "+" until something else is chosen
+	function removeShortcut() {
+		if (host) {
+			host.postMessage({ type: 'clearShortcut', index: editor.index });
+		} else {
+			dockShortcuts[editor.index] = { label: '', target: '', icon: null };
+			buildDock(dockShortcuts);
+			showToast('Raccourci retiré');
+		}
+		closeEditor();
+	}
+
+	$('editorRemove').addEventListener('click', removeShortcut);
 	$('editorClose').addEventListener('click', closeEditor);
 	$('editorCancel').addEventListener('click', closeEditor);
 	$('editorSave').addEventListener('click', saveEditor);
@@ -2692,6 +2863,10 @@
 		if (config.cpuModel) text('cpuModel', config.cpuModel);
 		if (config.gpuMaker) text('gpuMaker', config.gpuMaker);
 		if (config.gpuModel) text('gpuModel', config.gpuModel);
+		if (Array.isArray(config.customActions)) {
+			customActionsConfig = config.customActions;
+			refreshEditorActions();
+		}
 		if (Array.isArray(config.shortcuts)) buildDock(config.shortcuts);
 		if (config.theme) applyTheme(config.theme);
 		if (config.thresholds) applyLimits(config.thresholds);
@@ -3685,10 +3860,14 @@
 		onHostMessage({
 			type: 'config',
 			shortcuts: [
-				{ label: 'WhatsApp', icon: { kind: 'builtin', value: 'phone' } },
-				{ label: 'Spotify', icon: { kind: 'builtin', value: 'music' } },
-				{ label: 'Discord', icon: { kind: 'builtin', value: 'chat' } },
-				{ label: 'Tâches', icon: { kind: 'builtin', value: 'pulse' } }
+				{ label: 'WhatsApp', target: 'shell:AppsFolder\\WhatsApp', icon: { kind: 'builtin', value: 'phone' } },
+				{ label: 'Spotify', target: 'spotify:', icon: { kind: 'builtin', value: 'music' } },
+				{ label: 'Discord', target: 'discord://', icon: { kind: 'builtin', value: 'chat' } },
+				{ label: 'Tâches', target: 'taskmgr.exe', icon: { kind: 'builtin', value: 'pulse' } }
+			],
+			customActions: [
+				{ id: 'tw1', name: 'Twitch', kind: 'url' },
+				{ id: 'bk1', name: 'Sauvegarde', kind: 'script' }
 			]
 		});
 		// Weather line with a sample reading (design mode / demo)
@@ -3861,7 +4040,13 @@
 	// "?editor=<index>" (ArkaHyte.exe --open-editor N) opens a shortcut editor once the dock is known
 	const editorParam = new URLSearchParams(location.search).get('editor');
 	if (editorParam !== null) {
-		setTimeout(() => openEditor(Number(editorParam) || 0), 1200);
+		setTimeout(() => {
+			openEditor(Number(editorParam) || 0);
+			// "&tab=actions" shows the actions list
+			if (new URLSearchParams(location.search).get('tab') === 'actions') {
+				setEditorTab('actions');
+			}
+		}, 1200);
 	}
 	loop();
 })();

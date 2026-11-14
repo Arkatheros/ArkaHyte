@@ -24,7 +24,8 @@
 			<button type="button" data-step="3"><span class="step-dot"></span>Matériel</button>
 			<button type="button" data-step="4"><span class="step-dot"></span>Météo</button>
 			<button type="button" data-step="5"><span class="step-dot"></span>Vue jeu</button>
-			<button type="button" data-step="6"><span class="step-dot"></span>Terminer</button>
+			<button type="button" data-step="6"><span class="step-dot"></span>Raccourcis</button>
+			<button type="button" data-step="7"><span class="step-dot"></span>Terminer</button>
 		</nav>
 
 		<main class="pages">
@@ -170,8 +171,22 @@
 				</div>
 			</section>
 
-			<!-- Summary -->
+			<!-- Shortcuts: the user's own dock actions -->
 			<section class="page" data-page="6">
+				<h1>Raccourcis</h1>
+				<p class="lead">Actions à placer dans le dock de l'écran du boîtier, en plus des applications : une
+					adresse web ou un script PowerShell. Elles apparaissent dans l'onglet <strong>Actions</strong> de
+					l'éditeur du dock (appui long sur un bouton du dock), avec Verrouiller le PC, Mettre en veille et
+					Capture d'écran.</p>
+				<div class="custom-actions" id="customActions"></div>
+				<div class="row">
+					<button type="button" class="ghost" id="addUrl">Ajouter une adresse web</button>
+					<button type="button" class="ghost" id="addScript">Ajouter un script PowerShell</button>
+				</div>
+			</section>
+
+			<!-- Summary -->
+			<section class="page" data-page="7">
 				<h1>Terminer</h1>
 				<p class="lead">Les réglages sont enregistrés dans votre dossier de données, puis l'affichage
 					du boîtier redémarre pour les appliquer. L'assistant reste accessible depuis le menu de l'icône.</p>

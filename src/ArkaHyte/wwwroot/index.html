@@ -404,20 +404,26 @@
 				<div class="editor-preview">
 					<span class="dock-icon" id="editorPreviewIcon"></span>
 					<div class="editor-preview-text">
-						<span class="editor-app-name" id="editorAppName">Choisis une application</span>
-						<span class="data">Touche une application, puis une icône</span>
+						<span class="editor-app-name" id="editorAppName">Choisis une application ou une action</span>
+						<span class="data">Touche une application ou une action, puis une icône</span>
 					</div>
 				</div>
-				<span class="label editor-section">Application</span>
-				<div class="editor-apps-wrap">
+				<div class="editor-tabs" role="tablist">
+					<button type="button" role="tab" data-tab="apps" aria-selected="true">Applications</button>
+					<button type="button" role="tab" data-tab="actions" aria-selected="false">Actions</button>
+				</div>
+				<div class="editor-apps-wrap" id="editorAppsWrap">
 					<div class="editor-apps" id="editorApps"></div>
 					<div class="editor-letters" id="editorLetters"></div>
 				</div>
+				<!-- System actions, then the user's own (Settings > Shortcuts) -->
+				<div class="editor-apps editor-action-list" id="editorActionList" hidden></div>
 				<span class="label editor-section">Icône</span>
 				<div class="editor-icons" id="editorIcons"></div>
 				<div class="editor-actions">
-					<button type="button" class="editor-btn" id="editorCancel">Annuler</button>
-					<button type="button" class="editor-btn primary" id="editorSave" disabled>Enregistrer</button>
+					<button type="button" class="editor-btn" id="editorRemove"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg><span>Retirer</span></button>
+					<button type="button" class="editor-btn" id="editorCancel"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg><span>Annuler</span></button>
+					<button type="button" class="editor-btn primary" id="editorSave" disabled><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg><span>Enregistrer</span></button>
 				</div>
 			</div>
 		</div>
@@ -461,7 +467,7 @@
 				<button type="button" class="cpu-detail-toggle" id="cpuDetailToggle" aria-pressed="true">
 					<span>Afficher fréquence et tension à côté du compteur</span><i></i>
 				</button>
-				<button type="button" class="editor-btn" data-action="cpu">Ouvrir le Gestionnaire des tâches</button>
+				<button type="button" class="editor-btn" data-action="cpu"><svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg><span>Ouvrir le Gestionnaire des tâches</span></button>
 			</div>
 		</div>
 
@@ -530,8 +536,8 @@
 				</div>
 				<div class="sheet-body" id="sheetBody"></div>
 				<div class="editor-actions">
-					<button type="button" class="editor-btn" id="sheetCancel">Annuler</button>
-					<button type="button" class="editor-btn primary" id="sheetSave" disabled>Enregistrer</button>
+					<button type="button" class="editor-btn" id="sheetCancel"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg><span>Annuler</span></button>
+					<button type="button" class="editor-btn primary" id="sheetSave" disabled><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg><span>Enregistrer</span></button>
 				</div>
 			</div>
 		</div>

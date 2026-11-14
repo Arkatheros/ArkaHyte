@@ -28,6 +28,9 @@ public sealed class SetupForm : Form
 	private readonly System.Windows.Forms.Timer _poll = new() { Interval = 2000 };
 	private bool _webReady;
 
+	/// <summary>Page of the user's own dock actions (setup.html, data-page="6").</summary>
+	public const int ShortcutsStep = 6;
+
 	/// <summary>
 	/// Settings written. True: the display must restart to apply them (first setup, case screen changed);
 	/// false: it reloads them in place (settings opened from the tray).
@@ -148,6 +151,9 @@ public sealed class SetupForm : Form
 			case "listProcesses":
 				SendProcesses();
 				break;
+			case "pickScript":
+				PickScript(ReadId(root));
+				break;
 		}
 	}
 
@@ -178,9 +184,31 @@ public sealed class SetupForm : Form
 			drives = ReadDrives(),
 			hwInfoPath = HwInfoInstall.FindExecutable(),
 			weather = _settings.Weather,
-			gameView = _settings.EffectiveGameView
+			gameView = _settings.EffectiveGameView,
+			customActions = (_settings.CustomActions ?? []).Select(a => new { id = a.Id, name = a.Name, kind = a.Kind, target = a.Target })
 		});
 		SendHwInfo();
+	}
+
+	/// <summary>Shows a page of the already open window (the dock editor asks for the shortcuts one).</summary>
+	public void GoToStep(int step) => Post(new { type = "goto", step });
+
+	private static string? ReadId(JsonElement message) =>
+		message.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.String ? id.GetString() : null;
+
+	/// <summary>Shortcuts step: the PowerShell script of an action, chosen with Windows' file dialog.</summary>
+	private void PickScript(string? id)
+	{
+		using var dialog = new OpenFileDialog
+		{
+			Title = "Script PowerShell",
+			Filter = "Scripts PowerShell (*.ps1)|*.ps1",
+			CheckFileExists = true
+		};
+		if (dialog.ShowDialog(this) == DialogResult.OK)
+		{
+			Post(new { type = "pickedScript", id, path = dialog.FileName });
+		}
 	}
 
 	/// <summary>Game view step: applications with a window, one of which can be added as a game.</summary>
@@ -394,6 +422,7 @@ public sealed class SetupForm : Form
 			SensorSettings.ApplyChoices(root, message);
 			SensorSettings.ApplyWeather(root, message);
 			SensorSettings.ApplyGameView(root, message);
+			SensorSettings.ApplyCustomActions(root, message);
 		}, restart: () => !_settings.SetupCompleted || displayChanged, close: false);
 	}
 

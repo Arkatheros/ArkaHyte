@@ -133,6 +133,42 @@ public static class SensorSettings
 		}
 	}
 
+	/// <summary>
+	/// Writes the user's actions: customActions [{ id, name, kind: url | script, target }] (the whole list,
+	/// entries that do not hold together left out).
+	/// </summary>
+	public static void ApplyCustomActions(JsonObject root, JsonElement message)
+	{
+		if (!message.TryGetProperty("customActions", out var actions) || actions.ValueKind != JsonValueKind.Array)
+		{
+			return;
+		}
+		var list = new JsonArray();
+		var ids = new HashSet<string>(StringComparer.Ordinal);
+		foreach (var action in actions.EnumerateArray())
+		{
+			if (action.ValueKind != JsonValueKind.Object || list.Count >= CustomAction.Max)
+			{
+				continue;
+			}
+			string? Read(string name) => action.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString()?.Trim() : null;
+			var id = Read("id");
+			var name = Read("name");
+			var kind = Read("kind");
+			var target = Read("target");
+			var valid = !string.IsNullOrEmpty(id) && id.Length <= 32 && id.All(char.IsAsciiLetterOrDigit) && ids.Add(id)
+				&& !string.IsNullOrEmpty(name) && name.Length <= 40
+				&& !string.IsNullOrEmpty(target) && target.Length <= 2048
+				&& (kind == CustomAction.Url && Uri.TryCreate(target, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
+					|| kind == CustomAction.Script && target.EndsWith(".ps1", StringComparison.OrdinalIgnoreCase) && Path.IsPathFullyQualified(target));
+			if (valid)
+			{
+				list.Add(new JsonObject { ["Id"] = id, ["Name"] = name, ["Kind"] = kind, ["Target"] = target });
+			}
+		}
+		root["CustomActions"] = list;
+	}
+
 	/// <summary>Writes the display options set on the case screen: cpuDetails (bool).</summary>
 	public static void ApplyDisplay(JsonObject root, JsonElement message)
 	{
