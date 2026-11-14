@@ -178,6 +178,36 @@ public static class SensorSettings
 		}
 	}
 
+	/// <summary>Writes the electricity cost settings: energy { price?, otherWatts?, efficiency?, show? }.</summary>
+	public static void ApplyEnergy(JsonObject root, JsonElement message)
+	{
+		if (!message.TryGetProperty("energy", out var energy) || energy.ValueKind != JsonValueKind.Object)
+		{
+			return;
+		}
+		if (root["Energy"] is not JsonObject node)
+		{
+			node = new JsonObject();
+			root["Energy"] = node;
+		}
+		if (energy.TryGetProperty("price", out var price) && price.TryGetDouble(out var perKwh) && double.IsFinite(perKwh))
+		{
+			node["PricePerKwh"] = Math.Round(Math.Clamp(perKwh, 0, EnergySettings.MaxPrice), 4);
+		}
+		if (energy.TryGetProperty("otherWatts", out var other) && other.TryGetInt32(out var watts))
+		{
+			node["OtherWatts"] = Math.Clamp(watts, 0, EnergySettings.MaxOtherWatts);
+		}
+		if (energy.TryGetProperty("efficiency", out var efficiency) && efficiency.TryGetInt32(out var percent))
+		{
+			node["PsuEfficiency"] = Math.Clamp(percent, EnergySettings.MinEfficiency, EnergySettings.MaxEfficiency);
+		}
+		if (energy.TryGetProperty("show", out var show) && show.ValueKind is JsonValueKind.True or JsonValueKind.False)
+		{
+			node["Show"] = show.GetBoolean();
+		}
+	}
+
 	/// <summary>
 	/// Writes the game view settings: gameView { autoGame?, autoNormal?, delaySec?, transition?, detectEngines?,
 	/// extraGames?: [{ exe, name }] }.

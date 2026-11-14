@@ -15,9 +15,6 @@ du non fait.
 ---
 
 # Liste des tâches
-- [ ] Coût électrique du PC : compteur kWh et € (jour, session de jeu) à partir des puissances CPU + GPU (+ forfait
-  pour le reste, réglable), prix du kWh dans les réglages
-  - Cumul côté C# (persisté dans `%LOCALAPPDATA%\ArkaHyte` pour survivre au redémarrage), remise à zéro quotidienne
 
 # En attente — uniquement sur demande explicite du propriétaire
 

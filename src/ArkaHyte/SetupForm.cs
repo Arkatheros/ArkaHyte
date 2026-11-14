@@ -31,6 +31,9 @@ public sealed class SetupForm : Form
 	/// <summary>Page of the user's own dock actions (setup.html, data-page="6").</summary>
 	public const int ShortcutsStep = 6;
 
+	/// <summary>Page of the electricity cost settings (data-page="7"), opened from the energy panel.</summary>
+	public const int EnergyStep = 7;
+
 	/// <summary>
 	/// Settings written. True: the display must restart to apply them (first setup, case screen changed);
 	/// false: it reloads them in place (settings opened from the tray).
@@ -185,6 +188,7 @@ public sealed class SetupForm : Form
 			hwInfoPath = HwInfoInstall.FindExecutable(),
 			weather = _settings.Weather,
 			gameView = _settings.EffectiveGameView,
+			energy = _settings.EffectiveEnergy,
 			customActions = (_settings.CustomActions ?? []).Select(a => new { id = a.Id, name = a.Name, kind = a.Kind, target = a.Target })
 		});
 		SendHwInfo();
@@ -423,6 +427,7 @@ public sealed class SetupForm : Form
 			SensorSettings.ApplyWeather(root, message);
 			SensorSettings.ApplyGameView(root, message);
 			SensorSettings.ApplyCustomActions(root, message);
+			SensorSettings.ApplyEnergy(root, message);
 		}, restart: () => !_settings.SetupCompleted || displayChanged, close: false);
 	}
 

@@ -59,6 +59,7 @@
 			<span class="game-title" id="gameTitle">--</span>
 			<span class="game-mic" id="gameMic" hidden><svg><use href="#i-mic-off"/></svg>Micro coupé</span>
 			<span class="data game-since" id="gameSince">&nbsp;</span>
+			<span class="data game-energy" id="gameEnergy" hidden><svg><use href="#i-bolt"/></svg>session <b id="gameEnergyCost">--</b> · <span id="gameEnergyKwh">--</span></span>
 		</div>
 		<div class="widget game-only game-rule"></div>
 		<!-- Arc: FPS against the refresh rate of the game's monitor; built by console.js -->
@@ -119,6 +120,15 @@
 			<span class="cpu-side-unit">V</span>
 			<span class="cpu-side-sub">cœur</span>
 		</div>
+		<!-- Electricity cost of the day (EnergyMeter, option), right of the dial; the voltage then goes under
+		     the clock on the left. A tap opens the detail panel -->
+		<button type="button" class="widget energy-side" id="energyCorner" aria-label="Consommation électrique" hidden>
+			<span class="label"><svg><use href="#i-bolt"/></svg>Aujourd'hui</span>
+			<span class="cpu-side-rule"></span>
+			<span class="cpu-side-value" id="energyToday">--</span>
+			<span class="cpu-side-unit">€</span>
+			<span class="cpu-side-sub" id="energyTodayKwh">-- kWh</span>
+		</button>
 
 		<div class="widget metrics cpu-metrics">
 			<div class="metric" id="cpuTempTile">
@@ -522,6 +532,40 @@
 					<span>Haut de l'échelle <b id="historyTop">--</b></span>
 				</div>
 				<p class="history-note" id="historyNote"></p>
+			</div>
+		</div>
+
+		<!-- Electricity cost detail (tap on the day's cost): today, game session, past days, power now -->
+		<div class="editor energy" id="energy" role="dialog" aria-modal="true" aria-labelledby="energyTitle" hidden>
+			<div class="editor-panel">
+				<div class="editor-head">
+					<span class="label" id="energyTitle">Consommation électrique</span>
+					<button type="button" class="editor-close" id="energyClose" aria-label="Fermer">
+						<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
+					</button>
+				</div>
+				<div class="en-hero">
+					<div><span class="label">Aujourd'hui</span><div class="en-big"><span id="enToday">--</span><small>€</small></div></div>
+					<div class="en-side"><span class="en-kwh"><span id="enTodayKwh">--</span><small>kWh</small></span><span class="data" id="enTodayInfo"></span></div>
+				</div>
+				<div class="en-grid">
+					<div class="en-cell" id="enSessionCell"><span class="label" id="enSessionLabel">Session de jeu</span><span class="en-value"><span id="enSession">--</span><small>€</small></span><span class="data" id="enSessionInfo"></span></div>
+					<div class="en-cell"><span class="label">Hier</span><span class="en-value"><span id="enYesterday">--</span><small>€</small></span><span class="data" id="enYesterdayInfo"></span></div>
+					<div class="en-cell"><span class="label">7 derniers jours</span><span class="en-value"><span id="enWeek">--</span><small>€</small></span><span class="data" id="enWeekInfo"></span></div>
+					<div class="en-cell"><span class="label" id="enMonthLabel">Ce mois</span><span class="en-value"><span id="enMonth">--</span><small>€</small></span><span class="data" id="enMonthInfo"></span></div>
+				</div>
+				<div class="en-bars-head"><span class="label">14 derniers jours</span><span class="data" id="enBarsMax"></span></div>
+				<div class="en-bars" id="enBars"></div>
+				<div class="en-days" id="enDays"></div>
+				<div class="en-power">
+					<div class="en-power-top"><span class="label">Puissance estimée maintenant</span><span class="en-kwh"><span id="enPower">--</span><small>W</small></span></div>
+					<div class="en-stack"><i class="en-gpu" id="enStackGpu"></i><i class="en-cpu" id="enStackCpu"></i><i class="en-rest" id="enStackRest"></i><i class="en-loss" id="enStackLoss"></i></div>
+					<div class="en-legend"><span>GPU <b id="enGpuW">--</b></span><span>CPU <b id="enCpuW">--</b></span><span>Reste <b id="enRestW">--</b></span><span>Pertes alim. <b id="enLossW">--</b></span></div>
+				</div>
+				<div class="en-foot">
+					<span id="enSettings"></span>
+					<button type="button" class="action-pill" id="enConfigure"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Régler</span></button>
+				</div>
 			</div>
 		</div>
 

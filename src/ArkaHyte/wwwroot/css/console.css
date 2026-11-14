@@ -1862,7 +1862,8 @@ body {
 
 /* ---------- Processor details: clock and voltage beside the dial, detail panel on a tap ---------- */
 /* Clock on the left of the dial, voltage on the right */
-.cpu-side {
+.cpu-side,
+.energy-side {
 	top: 478px;
 	width: 112px;
 	display: flex;
@@ -1873,11 +1874,22 @@ body {
 }
 .cpu-side-clock { left: 44px; }
 .cpu-side-volt { left: 526px; }
+.energy-side {
+	left: 526px;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--bone);
+}
+/* Energy shown on the right: clock and voltage share the left side */
+.frame.energy-on .cpu-side-clock { top: 396px; }
+.frame.energy-on .cpu-side-volt { top: 548px; left: 44px; }
 .frame.game .cpu-side,
 .frame.cpu-details-off .cpu-side {
 	display: none;
 }
-.cpu-side .label {
+.cpu-side .label,
+.energy-side .label {
 	font-size: 14px;
 	letter-spacing: 0.2em;
 	color: var(--bone);
@@ -2050,6 +2062,206 @@ body {
 }
 .cpu-detail .editor-btn {
 	width: 100%;
+}
+
+/* ---------- Electricity cost: today's cost right of the clock, detail panel on a tap ---------- */
+.energy-side[hidden],
+.game-energy[hidden] {
+	display: none;
+}
+.energy-side svg,
+.game-energy svg {
+	width: 15px;
+	height: 15px;
+	fill: var(--blade);
+	filter: drop-shadow(0 0 4px var(--blade));
+}
+.energy-side .label {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+.energy-side:active {
+	transform: scale(0.96);
+}
+.game-energy {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 15px;
+	color: var(--ash);
+}
+.game-energy b {
+	color: var(--bone);
+	font-weight: 600;
+}
+.energy .editor-panel {
+	top: 700px;
+	height: auto;
+	gap: 24px;
+}
+.en-hero {
+	display: flex;
+	align-items: flex-end;
+	justify-content: space-between;
+	padding-bottom: 20px;
+	border-bottom: 1px solid var(--line);
+}
+.en-hero .label,
+.en-bars-head .label,
+.en-power-top .label {
+	font-size: 15px;
+}
+.en-big {
+	font-family: var(--font-display);
+	font-weight: 200;
+	font-size: 104px;
+	line-height: 0.95;
+	font-variant-numeric: tabular-nums;
+}
+.en-big small {
+	margin-left: 8px;
+	font-size: 34px;
+	color: var(--ash);
+}
+.en-side {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 6px;
+}
+.en-kwh {
+	font-family: var(--font-display);
+	font-weight: 300;
+	font-size: 44px;
+	font-variant-numeric: tabular-nums;
+}
+.en-kwh small,
+.en-value small {
+	margin-left: 4px;
+	font-size: 18px;
+	color: var(--ash);
+}
+.en-side .data,
+.en-cell .data,
+.en-bars-head .data {
+	font-size: 14px;
+	color: var(--ash);
+}
+.en-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 14px;
+}
+.en-cell {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 16px 18px;
+	border: 1px solid var(--line);
+}
+.en-cell .label {
+	font-size: 14px;
+}
+.en-cell.en-now {
+	border-color: rgba(var(--blade-rgb), 0.6);
+	box-shadow: inset 0 0 18px rgba(var(--blade-rgb), 0.15);
+}
+.en-value {
+	font-family: var(--font-display);
+	font-weight: 300;
+	font-size: 46px;
+	line-height: 1.05;
+	font-variant-numeric: tabular-nums;
+}
+.en-bars-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+}
+.en-bars,
+.en-days {
+	display: grid;
+	grid-template-columns: repeat(14, 1fr);
+	gap: 8px;
+}
+.en-bars {
+	height: 170px;
+	align-items: end;
+}
+.en-bars i {
+	display: block;
+	min-height: 2px;
+	background: linear-gradient(180deg, var(--blade), rgba(var(--blade-rgb), 0.25));
+	box-shadow: 0 0 8px rgba(var(--blade-rgb), 0.4);
+}
+.en-bars i.today {
+	background: var(--bone);
+	box-shadow: 0 0 12px rgba(var(--blade-rgb), 0.8);
+}
+.en-days {
+	margin-top: -14px;
+	text-align: center;
+	font-size: 12px;
+	color: var(--ash);
+}
+.en-power {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding: 16px 18px;
+	border: 1px solid var(--line);
+}
+.en-power-top {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+}
+.en-stack {
+	display: flex;
+	gap: 3px;
+	height: 14px;
+}
+.en-stack i {
+	display: block;
+}
+.en-stack .en-gpu {
+	background: var(--blade);
+	box-shadow: 0 0 8px var(--blade);
+}
+.en-stack .en-cpu {
+	background: rgba(var(--blade-rgb), 0.6);
+}
+.en-stack .en-rest {
+	background: rgba(var(--blade-rgb), 0.3);
+}
+.en-stack .en-loss {
+	background: repeating-linear-gradient(45deg, rgba(var(--blade-rgb), 0.35) 0 4px, transparent 4px 8px);
+}
+.en-legend {
+	display: flex;
+	justify-content: space-between;
+	font-size: 14px;
+	color: var(--ash);
+}
+.en-legend b,
+.en-foot b {
+	color: var(--bone);
+	font-weight: 600;
+}
+.en-foot {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	padding-top: 18px;
+	border-top: 1px solid var(--line);
+	font-size: 16px;
+	line-height: 1.4;
+	color: var(--ash);
+}
+.en-foot .action-pill {
+	flex: none;
 }
 
 /* ---------- Temperature / power history (short tap on a tile; same frame as the editor) ---------- */
@@ -2353,6 +2565,7 @@ body {
 .frame.game .vault,
 .frame.game .media,
 .frame.game .weather,
+.frame.game .energy-side,
 .frame.game .gpu-load .fps,
 .frame.game #netTestBtn,
 .frame.has-game .update-banner {

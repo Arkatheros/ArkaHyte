@@ -2833,6 +2833,190 @@
 	// Short tap on a tile; a long press opens its settings instead (attachLongPress stops the click)
 	Object.keys(HISTORY_METRICS).forEach((key) => $(`${key}Tile`).addEventListener('click', () => openHistory(key)));
 
+	// ---------- Electricity cost (EnergyMeter): today's cost by the clock, detail panel on a tap ----------
+	// Costs are worked out here with the current price; the host counts kWh only
+	let energyConfig = { pricePerKwh: 0.1952, otherWatts: 40, psuEfficiency: 90, show: true };
+	let energyData = null;
+	// Days before today, asked for when the panel opens
+	let energyHistory = null;
+	const energyView = { open: false, closeTimer: 0, bars: [], days: [] };
+	const MONTH_NAMES = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+	const DAY_LETTERS = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
+	const ENERGY_DAYS = 14;
+	const decimals = [0, 1, 2, 4].reduce((formats, digits) => {
+		formats[digits] = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+		return formats;
+	}, {});
+	const formatEuro = (value) => decimals[value < 100 ? 2 : 0].format(value);
+	const formatKwh = (value) => decimals[value < 10 ? 2 : value < 100 ? 1 : 0].format(value);
+	const energyCost = (kwh) => kwh * energyConfig.pricePerKwh;
+	const formatDuration = (seconds) => {
+		const minutes = Math.floor(seconds / 60);
+		return minutes >= 60 ? `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')}` : `${minutes} min`;
+	};
+	const setHidden = (element, hidden) => {
+		if (element.hidden !== hidden) {
+			element.hidden = hidden;
+		}
+	};
+	const isoDay = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+	function applyEnergyConfig(config) {
+		energyConfig = { ...energyConfig, ...config };
+		renderEnergy(energyData);
+	}
+
+	function renderEnergy(energy) {
+		energyData = energy;
+		const shown = Boolean(energy) && energyConfig.show;
+		setHidden($('energyCorner'), !shown);
+		if (frame.classList.contains('energy-on') !== shown) {
+			frame.classList.toggle('energy-on', shown);
+		}
+		const session = energy && energy.session && energy.session.active ? energy.session : null;
+		setHidden($('gameEnergy'), !session || !energyConfig.show);
+		if (!energy) {
+			return;
+		}
+		text('energyToday', formatEuro(energyCost(energy.todayKwh)));
+		text('energyTodayKwh', `${formatKwh(energy.todayKwh)} kWh`);
+		if (session) {
+			text('gameEnergyCost', `${formatEuro(energyCost(session.kwh))} €`);
+			text('gameEnergyKwh', `${formatKwh(session.kwh)} kWh`);
+		}
+		if (energyView.open) {
+			renderEnergyPanel();
+		}
+	}
+
+	// Bars and day letters are built once; afterwards only heights and letters change
+	function buildEnergyBars() {
+		for (let i = 0; i < ENERGY_DAYS; i++) {
+			const bar = document.createElement('i');
+			const day = document.createElement('span');
+			if (i === ENERGY_DAYS - 1) {
+				bar.className = 'today';
+			}
+			$('enBars').append(bar);
+			$('enDays').append(day);
+			energyView.bars.push(bar);
+			energyView.days.push(day);
+		}
+	}
+	buildEnergyBars();
+
+	function renderEnergyPanel() {
+		const energy = energyData;
+		if (!energy) {
+			return;
+		}
+		const today = energy.todayKwh;
+		text('enToday', formatEuro(energyCost(today)));
+		text('enTodayKwh', formatKwh(today));
+		text('enTodayInfo', `depuis minuit · ${formatDuration(energy.todaySeconds)} compté`);
+
+		const session = energy.session;
+		$('enSessionCell').classList.toggle('en-now', Boolean(session && session.active));
+		text('enSessionLabel', session && !session.active ? 'Dernière session' : 'Session de jeu');
+		text('enSession', session ? formatEuro(energyCost(session.kwh)) : '--');
+		text('enSessionInfo', session ? `${session.name} · ${formatDuration(session.seconds)} · ${formatKwh(session.kwh)} kWh` : 'aucune partie');
+
+		const now = new Date();
+		text('enMonthLabel', MONTH_NAMES[now.getMonth()]);
+		const past = energyHistory;
+		const cell = (id, kwh, info) => {
+			text(id, isNum(kwh) ? formatEuro(energyCost(kwh)) : '--');
+			text(`${id}Info`, isNum(kwh) ? info : 'pas encore de mesure');
+		};
+		cell('enYesterday', past ? past.yesterdayKwh : null, past && isNum(past.yesterdayKwh) ? `${formatKwh(past.yesterdayKwh)} kWh` : '');
+		const week = past ? past.weekKwh + today : null;
+		cell('enWeek', week, isNum(week) ? `${formatKwh(week)} kWh` : '');
+		const month = past ? past.monthKwh + today : null;
+		const monthDays = past ? past.monthDays + 1 : 0;
+		cell('enMonth', month, isNum(month) ? `${formatKwh(month)} kWh · ${monthDays} jour${monthDays > 1 ? 's' : ''}` : '');
+
+		// Oldest first, today last (live)
+		const days = (past ? past.days : []).slice(-(ENERGY_DAYS - 1));
+		while (days.length < ENERGY_DAYS - 1) {
+			days.unshift({ date: null, kwh: 0 });
+		}
+		days.push({ date: isoDay(now), kwh: today });
+		const top = Math.max(...days.map((day) => day.kwh), 0.001);
+		days.forEach((day, i) => {
+			setStyle(energyView.bars[i], 'height', `${((day.kwh / top) * 100).toFixed(1)}%`);
+			const date = new Date(now);
+			date.setDate(now.getDate() - (ENERGY_DAYS - 1 - i));
+			setText(energyView.days[i], DAY_LETTERS[date.getDay()]);
+		});
+		text('enBarsMax', `max ${formatEuro(energyCost(top))} €`);
+
+		const watts = (value) => (isNum(value) ? `${Math.round(value)} W` : '--');
+		text('enPower', isNum(energy.powerW) ? Math.round(energy.powerW) : '--');
+		[['enStackGpu', energy.gpuW], ['enStackCpu', energy.cpuW], ['enStackRest', energy.otherW], ['enStackLoss', energy.lossW]].forEach(([id, value]) => {
+			setStyle($(id), 'flex', String(isNum(value) ? Math.max(value, 0).toFixed(0) : 0));
+		});
+		text('enGpuW', watts(energy.gpuW));
+		text('enCpuW', watts(energy.cpuW));
+		text('enRestW', watts(energy.otherW));
+		text('enLossW', watts(energy.lossW));
+		$('enSettings').innerHTML = `Prix <b>${decimals[4].format(energyConfig.pricePerKwh)} €/kWh</b> · reste du PC <b>${energyConfig.otherWatts} W</b> · alimentation <b>${energyConfig.psuEfficiency} %</b>`;
+	}
+
+	function armEnergyClose() {
+		clearTimeout(energyView.closeTimer);
+		energyView.closeTimer = setTimeout(closeEnergyPanel, HISTORY_AUTO_CLOSE_MS);
+	}
+
+	function openEnergyPanel() {
+		energyView.open = true;
+		if (host) {
+			host.postMessage({ type: 'energyHistory' });
+		} else {
+			energyHistory = designEnergyHistory();
+		}
+		renderEnergyPanel();
+		$('energy').hidden = false;
+		armEnergyClose();
+	}
+
+	function closeEnergyPanel() {
+		clearTimeout(energyView.closeTimer);
+		energyView.open = false;
+		$('energy').hidden = true;
+	}
+
+	// Design mode: two weeks of plausible days
+	function designEnergyHistory() {
+		const days = [2.1, 2.75, 1.9, 3.05, 3.55, 1.65, 1.45, 2.4, 2.6, 3.3, 2.2, 1.95, 2.61];
+		const now = new Date();
+		return {
+			type: 'energy',
+			days: days.map((kwh, i) => {
+				const date = new Date(now);
+				date.setDate(now.getDate() - (days.length - i));
+				return { date: isoDay(date), kwh };
+			}),
+			yesterdayKwh: 2.61,
+			weekKwh: 14.5,
+			monthKwh: 31,
+			monthDays: now.getDate() - 1
+		};
+	}
+
+	$('energyCorner').addEventListener('click', openEnergyPanel);
+	$('gameEnergy').addEventListener('click', openEnergyPanel);
+	$('energyClose').addEventListener('click', closeEnergyPanel);
+	$('energy').addEventListener('click', (event) => {
+		if (event.target === $('energy')) {
+			closeEnergyPanel();
+		}
+	});
+	$('enConfigure').addEventListener('click', () => {
+		send({ type: 'openSettings', step: 'energy' });
+		closeEnergyPanel();
+		showToast('Paramètres ouverts sur l\u2019écran principal');
+	});
+
 	// ---------- Snapshot intake ----------
 	function applySnapshot(s) {
 		current = s;
@@ -2856,6 +3040,7 @@
 		renderNetwork(net);
 		renderMedia(s.media || null);
 		renderGame(s.game || null, gpu);
+		renderEnergy(s.energy || null);
 	}
 
 	function applyConfig(config) {
@@ -2873,6 +3058,7 @@
 		if (config.weather) weatherConfig = config.weather;
 		if (config.gameView) gameViewConfig = config.gameView;
 		if (typeof config.cpuDetails === 'boolean') applyCpuDetailsOption(config.cpuDetails);
+		if (config.energy) applyEnergyConfig(config.energy);
 	}
 
 	function onHostMessage(message) {
@@ -2892,6 +3078,11 @@
 			renderUpdate(message);
 		} else if (message.type === 'hwinfo') {
 			onHwInfoList(message);
+		} else if (message.type === 'energy') {
+			energyHistory = message;
+			if (energyView.open) {
+				renderEnergyPanel();
+			}
 		} else if (message.type === 'weather') {
 			renderWeather(message.weather);
 		} else if (message.type === 'audio') {
@@ -3857,8 +4048,11 @@
 				cpuHist[i] = clamp(scenario.cpu - 12 + Math.random() * 14, 0, 100);
 			});
 		}
+		// Today so far, and a game session under way in the game scenarios
+		const energySim = { kwh: 1.84, seconds: 6 * 3600 + 20 * 60, sessionKwh: 0.41, sessionSeconds: 42 * 60 + 18 };
 		onHostMessage({
 			type: 'config',
+			energy: { pricePerKwh: 0.1952, otherWatts: 40, psuEfficiency: 90, show: true },
 			shortcuts: [
 				{ label: 'WhatsApp', target: 'shell:AppsFolder\\WhatsApp', icon: { kind: 'builtin', value: 'phone' } },
 				{ label: 'Spotify', target: 'spotify:', icon: { kind: 'builtin', value: 'music' } },
@@ -3951,7 +4145,28 @@
 					offlineSec: scenario.offline ? offlineSec : null
 				},
 				media: { source: 'Spotify', kind: 'music', title: 'The Imperial March', artist: 'John Williams · London Symphony Orchestra', positionSec: position, durationSec: 182, playing: true, live: false, artKey: null, canSeek: true },
-				game: scenario.game ? { ...scenario.game, foreground: !background } : null
+				game: scenario.game ? { ...scenario.game, foreground: !background } : null,
+				energy: (() => {
+					const cpuW = 30 + sim.cpu * 1.25;
+					const gpuW = 25 + sim.gpu * 4.15;
+					const powerW = (cpuW + gpuW + 40) / 0.9;
+					energySim.kwh += powerW / 3600000;
+					energySim.seconds += 1;
+					if (scenario.game) {
+						energySim.sessionKwh += powerW / 3600000;
+						energySim.sessionSeconds += 1;
+					}
+					return {
+						todayKwh: energySim.kwh,
+						todaySeconds: energySim.seconds,
+						powerW,
+						cpuW,
+						gpuW,
+						otherW: 40,
+						lossW: powerW - (cpuW + gpuW + 40),
+						session: { name: scenario.game ? scenario.game.name : 'League of Legends', kwh: energySim.sessionKwh, seconds: energySim.sessionSeconds, active: Boolean(scenario.game) }
+					};
+				})()
 			});
 		}, 1000);
 	}
@@ -4001,6 +4216,10 @@
 	// "?audio=panel" opens the Audio panel at load, for captures
 	if (new URLSearchParams(location.search).get('audio') === 'panel') {
 		setTimeout(openAudioPanel, 2500);
+	}
+	// "?energy=panel" opens the electricity cost panel at load, for captures
+	if (new URLSearchParams(location.search).get('energy') === 'panel') {
+		setTimeout(openEnergyPanel, 2500);
 	}
 	// "?cpu=detail" opens the processor detail panel at load, for captures
 	if (new URLSearchParams(location.search).get('cpu') === 'detail') {

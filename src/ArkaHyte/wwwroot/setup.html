@@ -25,7 +25,8 @@
 			<button type="button" data-step="4"><span class="step-dot"></span>Météo</button>
 			<button type="button" data-step="5"><span class="step-dot"></span>Vue jeu</button>
 			<button type="button" data-step="6"><span class="step-dot"></span>Raccourcis</button>
-			<button type="button" data-step="7"><span class="step-dot"></span>Terminer</button>
+			<button type="button" data-step="7"><span class="step-dot"></span>Énergie</button>
+			<button type="button" data-step="8"><span class="step-dot"></span>Terminer</button>
 		</nav>
 
 		<main class="pages">
@@ -185,8 +186,30 @@
 				</div>
 			</section>
 
-			<!-- Summary -->
+			<!-- Electricity cost -->
 			<section class="page" data-page="7">
+				<h1>Énergie</h1>
+				<p class="lead">L'écran du boîtier estime ce que consomme le PC et ce que ça coûte : puissance du
+					processeur et de la carte graphique (lue dans HWiNFO), plus un forfait pour le reste de la machine,
+					le tout divisé par le rendement de l'alimentation. Le coût du jour s'affiche à droite du compteur du
+					processeur (la tension passe alors sous la fréquence, à gauche) ; un toucher ouvre le détail (session de jeu, hier, 7 jours, mois).</p>
+				<label class="switch"><input type="checkbox" id="energyShow"><span>Afficher le coût du jour à droite du compteur du processeur</span></label>
+				<div class="energy-fields">
+					<label class="field"><span class="hint">Prix du kWh (TTC)</span>
+						<span class="unit-input"><input type="number" id="energyPrice" min="0" max="5" step="0.0001"><em>€</em></span></label>
+					<label class="field"><span class="hint">Reste du PC</span>
+						<span class="unit-input"><input type="number" id="energyOther" min="0" max="500" step="5"><em>W</em></span></label>
+					<label class="field"><span class="hint">Rendement de l'alimentation</span>
+						<span class="unit-input"><input type="number" id="energyEfficiency" min="50" max="100" step="1"><em>%</em></span></label>
+				</div>
+				<p class="hint">Le prix est celui de votre contrat, abonnement non compris. Le reste du PC couvre ce
+					que HWiNFO ne mesure pas : carte mère, mémoire, disques, ventilateurs, pompe (40 W par défaut).
+					Une alimentation 80 Plus Gold a un rendement d'environ 90 % à mi-charge. Le compteur ne tient pas
+					compte des écrans. Changer le prix recalcule aussi les jours passés.</p>
+			</section>
+
+			<!-- Summary -->
+			<section class="page" data-page="8">
 				<h1>Terminer</h1>
 				<p class="lead">Les réglages sont enregistrés dans votre dossier de données, puis l'affichage
 					du boîtier redémarre pour les appliquer. L'assistant reste accessible depuis le menu de l'icône.</p>

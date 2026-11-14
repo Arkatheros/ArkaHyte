@@ -16,6 +16,7 @@ public sealed class SensorHub : IDisposable
 	private readonly WifiReader _wifi = new();
 	private readonly NetworkMonitor _network;
 	private readonly MediaMonitor _media = new();
+	private readonly EnergyMeter _energy = new();
 	private readonly CancellationTokenSource _stop = new();
 	// Partition layout does not change while running: looked up once per drive
 	private readonly Dictionary<string, int?> _diskNumbers = new(StringComparer.OrdinalIgnoreCase);
@@ -28,6 +29,7 @@ public sealed class SensorHub : IDisposable
 	public (string Key, string DataUrl)? LatestCover { get; private set; }
 	public MediaMonitor Media => _media;
 	public HwInfoReader HwInfo => _hwInfo;
+	public EnergyMeter Energy => _energy;
 
 	/// <summary>Skips sampling while nobody can see the display (monitors off, session locked).</summary>
 	public bool Paused
@@ -66,11 +68,17 @@ public sealed class SensorHub : IDisposable
 		{
 			if (Paused)
 			{
+				// The PC still draws power with its monitors off: only the meter goes on
+				CountEnergyWhilePaused();
 				continue;
 			}
 			try
 			{
-				var snapshot = await SampleAsync();
+				var sample = await SampleAsync();
+				var snapshot = sample with
+				{
+					Energy = _energy.Add(sample.Cpu.Power, sample.Gpu.Power, sample.Game?.Name, keepSession: false, _settings.EffectiveEnergy)
+				};
 				Latest = snapshot;
 				SnapshotReady?.Invoke(snapshot);
 			}
@@ -84,6 +92,20 @@ public sealed class SensorHub : IDisposable
 			}
 		}
 		while (await timer.WaitForNextTickAsync(token).ConfigureAwait(false));
+	}
+
+	private void CountEnergyWhilePaused()
+	{
+		try
+		{
+			_hwInfo.Refresh();
+			var settings = _settings;
+			_energy.Add(_hwInfo.Get(settings.HwInfo.CpuPower), _hwInfo.Get(settings.HwInfo.GpuPower), null, keepSession: true, settings.EffectiveEnergy);
+		}
+		catch (Exception exception)
+		{
+			Log.Error("Energy sampling failed", exception);
+		}
 	}
 
 	/// <summary>
@@ -183,6 +205,7 @@ public sealed class SensorHub : IDisposable
 		{
 			// Cancellation surfaces here; nothing left to clean up
 		}
+		_energy.Save();
 		_wifi.Dispose();
 		_hwInfo.Dispose();
 		_network.Dispose();

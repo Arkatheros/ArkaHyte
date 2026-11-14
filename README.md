@@ -53,7 +53,9 @@ Au premier lancement, une fenêtre s'ouvre sur l'écran principal (ensuite : men
 6. **Vue jeu** : passage automatique en vue jeu au lancement d'un jeu (ou seulement au balayage), retour
    automatique à la vue normale quand le jeu passe en arrière-plan, après quel délai, et
    animation du changement de vue (morphing, balayage latéral, fondu ou aucune).
-7. **Terminer** : écrit `%LOCALAPPDATA%\ArkaHyte\appsettings.json` (`SetupCompleted: true`) et redémarre l'affichage.
+7. **Raccourcis** : actions personnelles du dock (adresse web, script PowerShell).
+8. **Énergie** : prix du kWh, forfait pour le reste du PC, rendement de l'alimentation, affichage du coût.
+9. **Terminer** : écrit `%LOCALAPPDATA%\ArkaHyte\appsettings.json` (`SetupCompleted: true`) et redémarre l'affichage.
 
 « Passer l'assistant » ne change rien d'autre que `SetupCompleted` ; fermer la fenêtre le repropose
 au prochain démarrage.
@@ -85,6 +87,18 @@ La ville se choisit dans l'assistant de configuration (étape **Météo**, reche
 long sur l'horloge l'affiche ou la masque. Réglage `Weather` de `appsettings.json` (`Enabled`, `Place`,
 `Latitude`, `Longitude`). Données météo et recherche de villes : [Open-Meteo](https://open-meteo.com)
 (gratuit, sans compte ni clé, données sous licence CC BY 4.0).
+
+### Coût électrique
+
+À droite du compteur du processeur : coût et kWh du jour (la tension passe alors sous la fréquence, à gauche). Estimation : (puissance CPU + puissance GPU lues dans
+HWiNFO + forfait pour le reste du PC) ÷ rendement de l'alimentation, cumulée chaque seconde, y compris écrans
+éteints ; rien n'est compté sans HWiNFO ni pendant la veille. Vue jeu : coût de la session en cours sous
+« en jeu depuis ». Un toucher ouvre le détail : aujourd'hui, session de jeu (ou la dernière), hier,
+7 derniers jours, mois en cours, barres des 14 derniers jours, puissance estimée maintenant décomposée,
+bouton **Régler** vers Paramètres › **Énergie**. Réglage `Energy` de `appsettings.json` (`PricePerKwh`,
+défaut 0,1952 €, `OtherWatts` 40 W, `PsuEfficiency` 90 %, `Show`) ; cumul par jour dans
+`%LOCALAPPDATA%\ArkaHyte\energy.json` (400 jours gardés, nouveau jour à minuit). Le coût est calculé au prix
+actuel, changer le prix recalcule donc aussi les jours passés.
 
 ### Réglages à l'écran
 

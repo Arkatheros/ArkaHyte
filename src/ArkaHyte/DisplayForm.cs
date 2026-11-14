@@ -140,7 +140,7 @@ public sealed class DisplayForm : Form
 	}
 
 	/// <summary>Shows the setup wizard, or brings it forward when it is already open.</summary>
-	/// <param name="step">Page shown first (SetupForm.ShortcutsStep from the dock editor), or the current one when open.</param>
+	/// <param name="step">Page shown first (shortcuts from the dock editor, energy from its panel), or the current one when open.</param>
 	private void OpenSetup(int step = 0)
 	{
 		if (_setup is { IsDisposed: false })
@@ -486,9 +486,13 @@ public sealed class DisplayForm : Form
 				_speedTestRun?.Cancel();
 				break;
 			case "openSettings":
-				// From the dock editor: the settings window opens on the main screen, cursor brought back there
+				// From the dock editor or the energy panel: the settings window opens on the main screen,
+				// cursor brought back there
 				_touchGuard.ReturnCursorNow();
-				OpenSetup(SetupForm.ShortcutsStep);
+				OpenSetup(ReadString(root, "step") == "energy" ? SetupForm.EnergyStep : SetupForm.ShortcutsStep);
+				break;
+			case "energyHistory":
+				Post(_hub.Energy.History());
 				break;
 			case "audio" when action is not null:
 				ControlAudio(action, root);
@@ -611,6 +615,7 @@ public sealed class DisplayForm : Form
 			// Offered by the dock editor next to the system actions
 			customActions = (_settings.CustomActions ?? []).Select(a => new { id = a.Id, name = a.Name, kind = a.Kind }),
 			cpuDetails = _settings.CpuDetails,
+			energy = _settings.EffectiveEnergy,
 			shortcuts = _dockButtons
 		});
 	}

@@ -136,6 +136,22 @@ public sealed record CustomAction(string Id, string Name, string Kind, string Ta
 	public const int Max = 20;
 }
 
+/// <summary>
+/// Electricity cost (EnergyMeter): price per kWh, a flat allowance for what HWiNFO does not measure
+/// (motherboard, memory, drives, fans, pump) and the power supply efficiency, in percent.
+/// </summary>
+public sealed record EnergySettings(
+	double PricePerKwh = 0.1952,
+	int OtherWatts = 40,
+	int PsuEfficiency = 90,
+	bool Show = true)
+{
+	public const double MaxPrice = 5;
+	public const int MaxOtherWatts = 500;
+	public const int MinEfficiency = 50;
+	public const int MaxEfficiency = 100;
+}
+
 public sealed record AppSettings(
 	DisplaySettings Display,
 	HardwareSettings Hardware,
@@ -151,9 +167,20 @@ public sealed record AppSettings(
 	GameViewSettings? GameView = null,
 	// Clock and voltage next to the CPU dial (toggled from the processor detail panel)
 	bool CpuDetails = true,
-	IReadOnlyList<CustomAction>? CustomActions = null)
+	IReadOnlyList<CustomAction>? CustomActions = null,
+	EnergySettings? Energy = null)
 {
 	public GameViewSettings EffectiveGameView => GameView ?? new GameViewSettings();
+
+	/// <summary>Energy settings, out-of-range values from a hand-edited file brought back in range.</summary>
+	public EnergySettings EffectiveEnergy => Energy is { } energy
+		? energy with
+		{
+			PricePerKwh = Math.Clamp(energy.PricePerKwh, 0, EnergySettings.MaxPrice),
+			OtherWatts = Math.Clamp(energy.OtherWatts, 0, EnergySettings.MaxOtherWatts),
+			PsuEfficiency = Math.Clamp(energy.PsuEfficiency, EnergySettings.MinEfficiency, EnergySettings.MaxEfficiency)
+		}
+		: new EnergySettings();
 
 	/// <summary>Thresholds with the defaults filled in for the metrics the file leaves out.</summary>
 	public ThresholdSettings EffectiveThresholds => (Thresholds ?? ThresholdSettings.Defaults).WithDefaults();

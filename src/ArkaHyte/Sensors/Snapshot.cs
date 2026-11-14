@@ -78,6 +78,20 @@ public sealed record MediaData(
 	// The player accepts a new position (the progress bar can then be dragged)
 	bool CanSeek = false);
 
+/// <summary>Electricity used today and the power it is counted at (EnergyMeter); watts null without HWiNFO.</summary>
+public sealed record EnergyData(
+	double TodayKwh,
+	double TodaySeconds,
+	double? PowerW,
+	double? CpuW,
+	double? GpuW,
+	double? OtherW,
+	double? LossW,
+	EnergySession? Session);
+
+/// <summary>Current game session, or the last one once the game has ended (Active false).</summary>
+public sealed record EnergySession(string Name, double Kwh, double Seconds, bool Active);
+
 public sealed record Snapshot(
 	CpuData Cpu,
 	GpuData Gpu,
@@ -85,7 +99,8 @@ public sealed record Snapshot(
 	IReadOnlyList<DiskData> Disks,
 	NetworkData Network,
 	MediaData? Media,
-	GameData? Game)
+	GameData? Game,
+	EnergyData? Energy = null)
 {
 	public string Type => "snapshot";
 }

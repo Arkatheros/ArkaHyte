@@ -120,6 +120,12 @@ courbe défilée par `transform` (`scrollGraph`), anneau CPU (compteur de charge
 online/no-internet/offline), SMTC pour la lecture en cours (`MediaMonitor`), API Windows pour CPU/RAM/disques.
 Météo : `WeatherService` (Open-Meteo, HTTP toutes les 15 min, ville géocodée dans l'assistant) → message
 `weather` ; activée / désactivée par appui long sur l'horloge (`saveMetric` `{ weather }`).
+Coût électrique : `EnergyMeter` (dans `SensorHub`, y compris en pause : seule la lecture HWiNFO tourne alors)
+intègre (CPU + GPU + `Energy.OtherWatts`) ÷ `PsuEfficiency` en kWh par jour (`energy.json`, écart > 5 s entre
+échantillons ignoré = veille) et par session de jeu (`Snapshot.Game`) → `Snapshot.Energy` ; le coût est calculé
+côté page au prix courant. Bloc `#energyCorner` (`.energy-side`) à droite du cadran CPU, `.frame.energy-on` range alors
+fréquence et tension à gauche ; panneau `#energy` (toucher sur `#energyCorner` ou `#gameEnergy`), jours passés
+demandés à l'ouverture (`energyHistory` → `energy`), « Régler » → `openSettings { step: 'energy' }`.
 `SpeedTest` pilote le CLI Ookla (`--format=jsonl --progress=yes`), téléchargé au premier usage dans
 `%LOCALAPPDATA%\ArkaHyte\tools` (licence : ne pas l'inclure au dépôt). Cloudflare abandonné (blocage IP).
 
@@ -147,7 +153,7 @@ sortante) ; sinon `DisplayForm.ReloadSettings` applique à chaud (capteurs, mat�
 (`monochromeIcon`) ; icônes intégrées = `BUILTIN_ICONS` (`console.js`, noms déjà enregistrés : ne pas renommer)
 + sélection Lucide générée dans `js/icons.js` (`LUCIDE_ICONS`, `LUCIDE_GROUPS`).
 
-**Données utilisateur** : `%LOCALAPPDATA%\ArkaHyte\` (`DataFolder`) : réglages et shortcuts à la racine, `logs\`
+**Données utilisateur** : `%LOCALAPPDATA%\ArkaHyte\` (`DataFolder`) : réglages, shortcuts et `energy.json` à la racine, `logs\`
 (`Log` : un fichier par jour `display-AAAA-MM-JJ.log`, 7 jours gardés, 10 Mo max par jour ; `launcher-*` du
 lanceur de dev), `hwinfo\` (`backup-*.reg` : la dernière seulement, `catalog.json`, `added.json`), `ui\` (profil
 WebView2, renommé depuis `WebView2\` quand aucun navigateur ne le tient), `tools\`. `DataFolder.MoveLegacyFiles`

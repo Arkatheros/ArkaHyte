@@ -490,6 +490,34 @@ option {
 	border-color: var(--blade);
 }
 
+/* ---------- Energy step ---------- */
+.energy-fields {
+	display: grid;
+	grid-template-columns: repeat(3, 230px);
+	gap: 18px;
+	margin-top: 18px;
+}
+.field {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+.unit-input {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.unit-input em {
+	font-style: normal;
+	color: var(--ash);
+}
+.energy-fields + .hint {
+	max-width: 760px;
+}
+.unit-input input:invalid {
+	border-color: var(--blade);
+}
+
 /* ---------- Game view step ---------- */
 .row select.delay {
 	width: 180px;
@@ -613,6 +641,6 @@ h2 {
 /* Settings (opened from the tray once set up): free navigation, no summary step, saved in place */
 .settings-mode #back,
 .settings-mode #skip,
-.settings-mode .steps [data-step="7"] {
+.settings-mode .steps [data-step="8"] {
 	display: none;
 }

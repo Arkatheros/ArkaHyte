@@ -5,7 +5,7 @@
 	'use strict';
 
 	const host = window.chrome && window.chrome.webview ? window.chrome.webview : null;
-	const LAST_STEP = 7;
+	const LAST_STEP = 8;
 	const GAME_VIEW_STEP = 5;
 
 	/* Widgets fed by HWiNFO. Suggestions: entries of the right unit whose sensor matches, label
@@ -558,6 +558,9 @@
 		const transition = $('gameTransition');
 		add('ok', 'Changement de vue : <b>' + escapeHtml(transition.options[transition.selectedIndex].text.split(' :')[0]) + '</b>');
 		add('ok', 'Jeux ajoutés : <b>' + (extraGames.length ? extraGames.map(g => escapeHtml(g.name || g.exe)).join(', ') : 'aucun') + '</b>');
+		add('ok', $('energyShow').checked
+			? 'Énergie : <b>' + escapeHtml(formatPrice($('energyPrice').value)) + ' €/kWh</b>, reste du PC ' + escapeHtml($('energyOther').value || '?') + ' W, alimentation ' + escapeHtml($('energyEfficiency').value || '?') + ' %'
+			: 'Énergie : <b>coût non affiché</b> (le compteur tourne quand même)');
 		const ready = customActions.filter(a => a.name.trim() && a.target.trim());
 		add('ok', 'Raccourcis : <b>' + (ready.length ? ready.map(a => escapeHtml(a.name.trim())).join(', ') : 'aucune action personnelle') + '</b>');
 		const weatherOn = $('weatherEnabled').checked;
@@ -584,6 +587,7 @@
 			transition: $('gameTransition').value,
 			extraGames
 		};
+		message.energy = readEnergy();
 		// Rows left half filled are not kept (the host checks the rest)
 		message.customActions = customActions
 			.filter(a => a.name.trim() && a.target.trim())
@@ -636,6 +640,32 @@
 			dispatch({ type: 'saved' });
 		}
 	}
+
+	// ---------- Energy ----------
+	// Fields left empty or out of range are not sent: the saved value stays
+	function readEnergy() {
+		const energy = { show: $('energyShow').checked };
+		const read = (id, key, parse) => {
+			const input = $(id);
+			const value = parse(input.value);
+			if (input.value.trim() !== '' && input.checkValidity() && Number.isFinite(value)) {
+				energy[key] = value;
+			}
+		};
+		read('energyPrice', 'price', (v) => Number(v.replace(',', '.')));
+		read('energyOther', 'otherWatts', (v) => Math.round(Number(v)));
+		read('energyEfficiency', 'efficiency', (v) => Math.round(Number(v)));
+		return energy;
+	}
+
+	function showEnergy(energy) {
+		$('energyShow').checked = energy.show !== false;
+		$('energyPrice').value = energy.pricePerKwh;
+		$('energyOther').value = energy.otherWatts;
+		$('energyEfficiency').value = energy.psuEfficiency;
+	}
+
+	const formatPrice = (value) => String(Number(String(value).replace(',', '.'))).replace('.', ',');
 
 	// ---------- Game view ----------
 
@@ -810,6 +840,9 @@
 		if (state.gameView) {
 			showGameView(state.gameView);
 		}
+		if (state.energy) {
+			showEnergy(state.energy);
+		}
 		const weather = state.weather;
 		if (weather) {
 			$('weatherEnabled').checked = Boolean(weather.enabled);
@@ -910,6 +943,7 @@
 				{ id: 'tw1', name: 'Twitch', kind: 'url', target: 'https://www.twitch.tv' },
 				{ id: 'bk1', name: 'Sauvegarde', kind: 'script', target: 'D:\\Scripts\\sauvegarde.ps1' }
 			],
+			energy: { pricePerKwh: 0.1952, otherWatts: 40, psuEfficiency: 90, show: true },
 			gameView: { autoGame: new URLSearchParams(location.search).get('autoGame') !== 'off', autoNormal: true, autoNormalDelaySec: 20, transition: 'morph', detectEngines: true, extraGames: [{ exe: 'TFTClient-Win64-Shipping.exe', name: 'TFT' }] },
 			caseSize: { width: 682, height: 2560 },
 			screens: [
