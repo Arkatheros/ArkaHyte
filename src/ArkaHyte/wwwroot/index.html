@@ -19,6 +19,11 @@
 			<symbol id="i-live" viewBox="0 0 24 24"><path d="M5 4h15v10l-4 4h-4l-3 3v-3H5z"/><path d="M11 8v4M15 8v4"/></symbol>
 			<symbol id="i-load" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></symbol>
 			<symbol id="i-gamepad" viewBox="0 0 24 24"><path d="M6 8h12a4 4 0 0 1 3.9 4.9l-1 4A2.6 2.6 0 0 1 16.4 18L14 15h-4l-2.4 3a2.6 2.6 0 0 1-4.5-1.1l-1-4A4 4 0 0 1 6 8z"/><path d="M7.5 11v3M6 12.5h3"/></symbol>
+			<symbol id="i-speaker" viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></symbol>
+			<symbol id="i-headset" viewBox="0 0 24 24"><path d="M3 14v-2a9 9 0 0 1 18 0v2"/><path d="M21 15a2 2 0 0 1-2 2h-1v-6h1a2 2 0 0 1 2 2zM3 15a2 2 0 0 0 2 2h1v-6H5a2 2 0 0 0-2 2z"/></symbol>
+			<symbol id="i-display" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/></symbol>
+			<symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol>
+			<symbol id="i-mic-off" viewBox="0 0 24 24"><path d="M3 3l18 18"/><path d="M9 9v2a3 3 0 0 0 5.1 2.1M15 9.3V6a3 3 0 0 0-5.7-1.3"/><path d="M5 11a7 7 0 0 0 11.5 5.4M19 11a7 7 0 0 1-.6 2.8M12 18v3"/></symbol>
 			<symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
 		</defs>
 	</svg>
@@ -52,6 +57,7 @@
 		<div class="widget game-only game-head">
 			<span class="chip"><svg><use href="#i-gamepad"/></svg>Mode jeu</span>
 			<span class="game-title" id="gameTitle">--</span>
+			<span class="game-mic" id="gameMic" hidden><svg><use href="#i-mic-off"/></svg>Micro coupé</span>
 			<span class="data game-since" id="gameSince">&nbsp;</span>
 		</div>
 		<div class="widget game-only game-rule"></div>
@@ -293,7 +299,7 @@
 			<div class="net-head">
 				<span class="label">Réseau</span>
 				<div class="net-actions">
-					<button type="button" class="net-test" id="netTestBtn" aria-label="Lancer un test de débit">
+					<button type="button" class="action-pill net-test" id="netTestBtn" aria-label="Lancer un test de débit">
 						<svg viewBox="0 0 24 24"><path d="M4 18a8 8 0 1 1 16 0"/><path d="m12 18 4-6"/><path d="M6.6 13.6h.01M8.6 9.6h.01M12 8h.01M15.4 9.6h.01"/></svg>
 						<span>Test débit</span>
 					</button>
@@ -353,6 +359,10 @@
 			<div class="media-head">
 				<span class="label">Lecture en cours</span>
 				<span class="media-tags">
+					<!-- Audio: one pill (output, volume, a muted microphone) that opens the Audio panel -->
+					<button type="button" class="action-pill audio-pill audio-mic" id="audioPill" aria-label="Audio" hidden>
+						<svg class="audio-pill-output"><use href="#i-speaker"/></svg><span id="audioVolumeText">--</span><svg class="audio-pill-mic" hidden><use href="#i-mic-off"/></svg>
+					</button>
 					<span class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
 					<span class="chip" id="mediaSource"><svg><use href="#i-note"/></svg><span>--</span></span>
 				</span>
@@ -452,6 +462,30 @@
 					<span>Afficher fréquence et tension à côté du compteur</span><i></i>
 				</button>
 				<button type="button" class="editor-btn" data-action="cpu">Ouvrir le Gestionnaire des tâches</button>
+			</div>
+		</div>
+
+		<!-- Audio (tap on the output or volume pill): volume, default output, microphone -->
+		<div class="editor audio-panel" id="audioPanel" role="dialog" aria-modal="true" aria-labelledby="audioPanelTitle" hidden>
+			<div class="editor-panel">
+				<div class="editor-head">
+					<span class="label" id="audioPanelTitle">Audio</span>
+					<button type="button" class="editor-close" id="audioPanelClose" aria-label="Fermer">
+						<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
+					</button>
+				</div>
+				<div class="cpu-section-title"><span class="label">Volume général</span></div>
+				<div class="audio-volume" id="audioVolume">
+					<svg><use href="#i-speaker"/></svg>
+					<div class="audio-track" id="audioTrack"><div class="audio-fill" id="audioFill"></div><div class="audio-knob" id="audioKnob"></div></div>
+					<span class="audio-value"><span id="audioVolumeValue">--</span><small>%</small></span>
+				</div>
+				<div class="cpu-section-title"><span class="label">Sortie</span></div>
+				<div class="audio-outputs" id="audioOutputs"></div>
+				<div class="cpu-section-title"><span class="label">Micro</span></div>
+				<button type="button" class="audio-chip audio-mic audio-mic-big" id="audioMicButton">
+					<svg><use href="#i-mic"/></svg><span><span id="audioMicState">--</span><small id="audioMicName">&nbsp;</small></span>
+				</button>
 			</div>
 		</div>
 

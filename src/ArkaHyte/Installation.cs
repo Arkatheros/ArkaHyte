@@ -159,7 +159,7 @@ public static class Installation
 		var shipped = Path.Combine(AppContext.BaseDirectory, AppSettings.FileName);
 		if (!File.Exists(AppSettings.UserFilePath) && File.Exists(shipped))
 		{
-			Directory.CreateDirectory(Log.Directory);
+			Directory.CreateDirectory(DataFolder.Root);
 			File.Copy(shipped, AppSettings.UserFilePath);
 			Log.Info($"Settings copied to {AppSettings.UserFilePath}");
 		}

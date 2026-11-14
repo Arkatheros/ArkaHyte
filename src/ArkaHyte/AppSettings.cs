@@ -157,7 +157,7 @@ public sealed record AppSettings(
 	public const string FileName = "appsettings.json";
 
 	/// <summary>Copy kept in the data folder by installed versions, so updates never overwrite it.</summary>
-	public static string UserFilePath => Path.Combine(Log.Directory, FileName);
+	public static string UserFilePath => Path.Combine(DataFolder.Root, FileName);
 
 	/// <summary>The user copy when there is one, otherwise the file shipped next to the executable.</summary>
 	public static AppSettings Load() => Load(CurrentFilePath);
@@ -177,7 +177,7 @@ public sealed record AppSettings(
 			: null;
 		root ??= new JsonObject();
 		change(root);
-		Directory.CreateDirectory(Log.Directory);
+		Directory.CreateDirectory(DataFolder.Root);
 		var json = root.ToJsonString(new JsonSerializerOptions
 		{
 			WriteIndented = true,

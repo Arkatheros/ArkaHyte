@@ -38,6 +38,10 @@ public sealed class DisplayForm : Form
 	private readonly System.Windows.Forms.Timer _placementRetry = new() { Interval = 5000 };
 	private readonly SpeedTest _speedTest = new();
 	private readonly WeatherService _weather = new();
+	// Volume, microphone and default output (audio controls of the now playing widget)
+	private readonly Audio.AudioService _audio = new();
+	private bool _audioStarted;
+	private int _audioPostPending;
 	private CancellationTokenSource? _speedTestRun;
 	private string? _demo;
 	private bool _webReady;
@@ -303,7 +307,7 @@ public sealed class DisplayForm : Form
 	{
 		try
 		{
-			var environment = await CoreWebView2Environment.CreateAsync(null, Path.Combine(Log.Directory, "WebView2"));
+			var environment = await CoreWebView2Environment.CreateAsync(null, DataFolder.Ui);
 			await _webView.EnsureCoreWebView2Async(environment);
 		}
 		catch (Exception exception)
@@ -465,7 +469,9 @@ public sealed class DisplayForm : Form
 				break;
 			case "speedtest" when action == "cancel":
 				_speedTestRun?.Cancel();
-			_weather.Dispose();
+				break;
+			case "audio" when action is not null:
+				ControlAudio(action, root);
 				break;
 			case "update" when action == "install":
 				// Tapping the banner: same as the tray entry (installs the version found)
@@ -534,6 +540,15 @@ public sealed class DisplayForm : Form
 		SendConfig();
 		PostUpdateState(_updater.State);
 		PostWeather(_weather.Latest);
+		_ = Task.Run(() =>
+		{
+			if (!_audioStarted)
+			{
+				_audioStarted = _audio.Start();
+				_audio.Changed += ScheduleAudioPost;
+			}
+			PostAudioState();
+		});
 		if (_hub.LatestCover is { } cover)
 		{
 			Post(new { type = "cover", key = cover.Key, dataUrl = cover.DataUrl });
@@ -682,6 +697,54 @@ public sealed class DisplayForm : Form
 
 	private void PostFromAnyThread(object message) => PostToUiThread(() => Post(message));
 
+	/// <summary>Audio commands from the page: volume { value }, output { id }, mic (toggle); off the UI thread.</summary>
+	private void ControlAudio(string action, JsonElement message)
+	{
+		if (!_audioStarted)
+		{
+			return;
+		}
+		switch (action)
+		{
+			case "volume" when message.TryGetProperty("value", out var value) && value.TryGetInt32(out var percent):
+				_ = Task.Run(() => _audio.SetVolume(percent));
+				break;
+			case "output" when ReadString(message, "id") is { } id:
+				_ = Task.Run(() =>
+				{
+					_audio.SetDefaultOutput(id);
+					PostAudioState();
+				});
+				break;
+			case "mic":
+				_ = Task.Run(_audio.ToggleMic);
+				break;
+		}
+	}
+
+	// Notifications come in bursts (a volume drag): one state sent per short window
+	private void ScheduleAudioPost()
+	{
+		if (Interlocked.Exchange(ref _audioPostPending, 1) == 1)
+		{
+			return;
+		}
+		_ = Task.Run(async () =>
+		{
+			await Task.Delay(60);
+			Interlocked.Exchange(ref _audioPostPending, 0);
+			PostAudioState();
+		});
+	}
+
+	private void PostAudioState()
+	{
+		if (_audioStarted)
+		{
+			PostFromAnyThread(new { type = "audio", audio = _audio.GetState() });
+		}
+	}
+
 	private void Post(object message) => PostJson(JsonSerializer.Serialize(message, message.GetType(), JsonOptions));
 
 	private void PostJson(string json)
@@ -717,6 +780,8 @@ public sealed class DisplayForm : Form
 			// Static event: would keep the form alive otherwise
 			Microsoft.Win32.SystemEvents.SessionSwitch -= OnSessionSwitch;
 			_speedTestRun?.Cancel();
+			_weather.Dispose();
+			_audio.Dispose();
 			_tray?.Dispose();
 			_setup?.Dispose();
 			_placementRetry.Dispose();

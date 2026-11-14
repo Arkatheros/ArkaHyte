@@ -823,29 +823,35 @@ body {
 	align-items: center;
 	gap: 10px;
 }
-.net-test {
+/* Action buttons of the panel headers (speed test, audio): one look, sized for a finger */
+.action-pill {
 	display: inline-flex;
 	align-items: center;
-	gap: 6px;
-	padding: 4px 12px;
+	justify-content: center;
+	gap: 8px;
+	min-width: 150px;
+	height: 42px;
+	padding: 0 14px;
 	border: 1px solid var(--line);
-	background: rgba(var(--blade-rgb), 0.08);
+	background: rgba(var(--panel-rgb), 0.85);
 	color: var(--bone);
-	font: 700 13px var(--font-label);
-	letter-spacing: 0.16em;
+	font: 700 15px var(--font-label);
+	letter-spacing: 0.14em;
 	text-transform: uppercase;
 	cursor: pointer;
 }
-.net-test svg {
-	width: 18px;
-	height: 18px;
+.action-pill svg {
+	flex: none;
+	width: 22px;
+	height: 22px;
 	fill: none;
 	stroke: var(--blade);
-	stroke-width: 2;
+	stroke-width: 1.8;
 	stroke-linecap: round;
 	stroke-linejoin: round;
+	filter: drop-shadow(0 0 4px var(--blade));
 }
-.net-test:active {
+.action-pill:active {
 	transform: scale(0.95);
 }
 .net-test:disabled {
@@ -1094,6 +1100,181 @@ body {
 .media-tags {
 	display: flex;
 	align-items: center;
+	gap: 8px;
+}
+
+/* ---------- Audio: pills in the now playing header, Audio panel ---------- */
+.audio-pill[hidden],
+.audio-pill svg[hidden] {
+	display: none;
+}
+.audio-chip {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	border: 1px solid var(--line);
+	background: rgba(var(--panel-rgb), 0.85);
+	color: var(--bone);
+	font: 700 16px var(--font-label);
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+}
+.audio-chip svg {
+	flex: none;
+	width: 26px;
+	height: 26px;
+	fill: none;
+	stroke: var(--blade);
+	stroke-width: 1.8;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	filter: drop-shadow(0 0 4px var(--blade));
+}
+.audio-chip small {
+	display: block;
+	margin-top: 2px;
+	font-size: 11px;
+	letter-spacing: 0.1em;
+	color: var(--ash);
+}
+/* Muted microphone: the alert colour, a glow, the crossed-out icon */
+.audio-mic.muted {
+	border-color: var(--ember);
+	background: rgba(var(--ember-rgb), 0.22);
+	color: var(--core);
+	box-shadow: 0 0 22px rgba(var(--ember-rgb), 0.75), inset 0 0 14px rgba(var(--ember-rgb), 0.4);
+}
+.audio-mic.muted svg {
+	stroke: var(--ember);
+	filter: drop-shadow(0 0 6px var(--ember));
+}
+.audio-mic.muted small {
+	color: var(--bone);
+}
+.audio-panel .editor-panel {
+	top: 1180px;
+	height: auto;
+	gap: 22px;
+}
+.audio-volume {
+	height: 96px;
+	display: flex;
+	align-items: center;
+	gap: 18px;
+	padding: 0 20px;
+	border: 1px solid var(--line);
+	background: rgba(var(--panel-rgb), 0.85);
+	touch-action: none;
+}
+.audio-volume svg {
+	flex: none;
+	width: 28px;
+	height: 28px;
+	fill: none;
+	stroke: var(--bone);
+	stroke-width: 1.8;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+.audio-track {
+	position: relative;
+	flex: 1;
+	height: 12px;
+	border-radius: 6px;
+	background: var(--track);
+}
+.audio-fill {
+	position: absolute;
+	left: 0;
+	top: 0;
+	bottom: 0;
+	width: 0;
+	border-radius: 6px;
+	background: linear-gradient(180deg, var(--blade), var(--core) 50%, var(--blade));
+	box-shadow: 0 0 10px var(--blade), 0 0 22px rgba(var(--blade-rgb), 0.6);
+}
+.audio-knob {
+	position: absolute;
+	top: 50%;
+	left: 0;
+	width: 34px;
+	height: 34px;
+	margin: -17px 0 0 -17px;
+	border-radius: 50%;
+	background: var(--core);
+	box-shadow: 0 0 12px var(--blade);
+}
+.audio-value {
+	flex: none;
+	width: 90px;
+	text-align: right;
+	font-family: var(--font-display);
+	font-weight: 300;
+	font-size: 44px;
+	font-variant-numeric: tabular-nums;
+}
+.audio-value small {
+	font-size: 16px;
+	color: var(--ash);
+}
+.audio-outputs {
+	display: grid;
+	gap: 10px;
+}
+.audio-output {
+	height: 70px;
+	justify-content: flex-start;
+	padding: 0 20px;
+	font-size: 19px;
+	letter-spacing: 0.04em;
+	text-transform: none;
+	text-align: left;
+}
+.audio-output span {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+.audio-output.current {
+	border-color: var(--blade);
+	background: rgba(var(--blade-rgb), 0.2);
+	box-shadow: 0 0 16px rgba(var(--blade-rgb), 0.45);
+}
+.audio-output em {
+	margin-left: auto;
+	font-style: normal;
+	font-size: 13px;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--ash);
+}
+.audio-mic-big {
+	height: 76px;
+}
+/* Muted microphone in the game view header, where the now playing widget is hidden */
+.game-mic {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 5px 12px;
+	border: 1px solid var(--ember);
+	background: rgba(var(--ember-rgb), 0.25);
+	box-shadow: 0 0 14px rgba(var(--ember-rgb), 0.7);
+	color: var(--core);
+	font: 700 13px var(--font-label);
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+}
+.game-mic[hidden] {
+	display: none;
+}
+.game-mic svg {
+	width: 16px;
+	height: 16px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 2;
 }
 .media-body {
 	display: grid;

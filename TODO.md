@@ -15,7 +15,7 @@ du non fait.
 ---
 
 # Liste des tâches
-- [ ] Audio au toucher : volume général et par application, bouton micro coupé / actif avec voyant bien visible,
+- [ ] Audio au toucher : volume général, bouton micro coupé / actif avec voyant bien visible,
   bascule de la sortie par défaut (casque ↔ enceintes)
   - API Core Audio (`IMMDeviceEnumerator`, `IAudioEndpointVolume`, sessions audio) dans l'hôte : pas de shell
     chargé ; changement de sortie par défaut via l'interface non documentée `IPolicyConfig` (à valider)

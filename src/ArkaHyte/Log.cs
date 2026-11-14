@@ -1,15 +1,21 @@
 namespace ArkaHyte;
 
-/// <summary>Minimal append-only log next to the launcher log, rotated when it grows past 1 MB.</summary>
+/// <summary>
+/// Append-only log, one file per day in the logs folder (display-2026-11-14.log); files older than a week
+/// are deleted. A day's file stops growing past a size cap, so a fault repeating every second cannot fill
+/// the disk.
+/// </summary>
 public static class Log
 {
-	private const long MaxBytes = 1024 * 1024;
+	private const int KeptDays = 7;
+	private const long MaxBytesPerDay = 10 * 1024 * 1024;
 	private static readonly object Gate = new();
+	private static DateTime _cleanedFor;
 
-	public static string Directory { get; } = Path.Combine(
-		Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ArkaHyte");
+	/// <summary>The logs folder (opened from the tray menu).</summary>
+	public static string Directory => DataFolder.Logs;
 
-	private static string FilePath => Path.Combine(Directory, "display.log");
+	private static string FilePath => Path.Combine(Directory, $"display-{DateTime.Now:yyyy-MM-dd}.log");
 
 	public static void Info(string message) => Write("INFO", message);
 
@@ -34,16 +40,35 @@ public static class Log
 			try
 			{
 				System.IO.Directory.CreateDirectory(Directory);
-				var file = new FileInfo(FilePath);
-				if (file.Exists && file.Length > MaxBytes)
+				// Once a day: the files of the days past the last week go
+				if (_cleanedFor != DateTime.Today)
 				{
-					File.Move(FilePath, FilePath + ".old", overwrite: true);
+					_cleanedFor = DateTime.Today;
+					DeleteOldFiles();
+				}
+				var file = new FileInfo(FilePath);
+				if (file.Exists && file.Length > MaxBytesPerDay)
+				{
+					return;
 				}
 				File.AppendAllText(FilePath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {level} {message}{Environment.NewLine}");
 			}
-			catch (IOException)
+			catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
 			{
 				// Logging must never take the display down
+			}
+		}
+	}
+
+	/// <summary>Every log of the folder (display, development launcher) older than the kept days.</summary>
+	private static void DeleteOldFiles()
+	{
+		var limit = DateTime.Today.AddDays(-(KeptDays - 1));
+		foreach (var path in System.IO.Directory.EnumerateFiles(Directory, "*.log"))
+		{
+			if (File.GetLastWriteTime(path) < limit)
+			{
+				File.Delete(path);
 			}
 		}
 	}

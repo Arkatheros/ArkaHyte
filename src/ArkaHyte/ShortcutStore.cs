@@ -18,7 +18,7 @@ public sealed class ShortcutStore
 		_items = LoadOverrides() ?? defaults.ToList();
 	}
 
-	public static string OverridePath => Path.Combine(Log.Directory, "shortcuts.json");
+	public static string OverridePath => Path.Combine(DataFolder.Root, "shortcuts.json");
 
 	public IReadOnlyList<ShortcutSettings> Items => _items;
 
@@ -29,7 +29,7 @@ public sealed class ShortcutStore
 			return false;
 		}
 		_items[index] = shortcut;
-		Directory.CreateDirectory(Log.Directory);
+		Directory.CreateDirectory(DataFolder.Root);
 		File.WriteAllText(OverridePath, JsonSerializer.Serialize(_items, JsonOptions));
 		Log.Info($"Shortcut {index} set to '{shortcut.Label}' -> {shortcut.Target}");
 		return true;

@@ -71,7 +71,7 @@ public sealed class SetupForm : Form
 		try
 		{
 			// Same data folder as the display: both windows share one browser process
-			var environment = await CoreWebView2Environment.CreateAsync(null, Path.Combine(Log.Directory, "WebView2"));
+			var environment = await CoreWebView2Environment.CreateAsync(null, DataFolder.Ui);
 			await _webView.EnsureCoreWebView2Async(environment);
 		}
 		catch (Exception exception)

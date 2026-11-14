@@ -68,7 +68,7 @@ function Install-ArkaHyte {
 	New-StartMenuShortcut
 
 	Start-ScheduledTask -TaskName $launcherTaskName
-	Write-Host "Launcher started, logs in $(Join-Path $env:LOCALAPPDATA 'ArkaHyte')"
+	Write-Host "Launcher started, logs in $(Join-Path $env:LOCALAPPDATA 'ArkaHyte\logs')"
 }
 
 function Uninstall-ArkaHyte {

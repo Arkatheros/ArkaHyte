@@ -35,7 +35,7 @@ public sealed class SpeedTest
 	private const string CliDownloadUrl = "https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-win64.zip";
 	private const string CliArguments = "--format=jsonl --progress=yes --accept-license --accept-gdpr";
 
-	private static string CliPath => Path.Combine(Log.Directory, "tools", "speedtest.exe");
+	private static string CliPath => Path.Combine(DataFolder.Tools, "speedtest.exe");
 
 	public async Task RunAsync(Action<SpeedTestUpdate> report, CancellationToken token)
 	{

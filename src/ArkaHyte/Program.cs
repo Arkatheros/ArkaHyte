@@ -36,6 +36,8 @@ internal static class Program
 			.OnBeforeUninstallFastCallback(_ => Installation.OnUninstalling())
 			.Run();
 
+		// Files of earlier versions to their folders (logs, hwinfo) before anything reads or writes them
+		DataFolder.MoveLegacyFiles();
 		var settings = AppSettings.Load();
 		// Diagnostics: show a theme without changing the saved choice (captures, menu preview)
 		if (ArgumentValue(args, "--theme") is { } themeOverride)

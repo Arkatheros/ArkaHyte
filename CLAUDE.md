@@ -67,6 +67,10 @@ toucher le compteur CPU → `#cpuDetail` (fréquence, tension, PPT, cœurs actif
 `*Defaults` nommés comme HWiNFO ; fréquences par cœur `HwInfoReader.CoreClocks` ; charge par fil
 `SystemMetrics.ReadThreadLoads` / `NtQuerySystemInformation`), option `CpuDetails` (`saveMetric { cpuDetails }`) pour
 fréquence et tension à côté du compteur ;
+pastille audio de la lecture en cours → `#audioPanel` (`Audio/AudioService` : Core Audio par COM, `Native/CoreAudio.cs`,
+`IPolicyConfig` non documenté pour la sortie par défaut ; notifications `IMMNotificationClient` /
+`IAudioEndpointVolumeCallback`, appels hors thread UI, message `audio` regroupé sur 60 ms ; retour `audio`
+`{ action: volume | output | mic }`) ;
 toucher court sur une tuile température / consommation → `#history`, 30 min en tampon circulaire côté page,
 `HISTORY_METRICS`, courbe redessinée à chaque échantillon seulement panneau ouvert).
 Choix de capteurs et seuils écrits par `SensorSettings` (partagé avec l'assistant), appliqués à chaud
@@ -78,7 +82,7 @@ HWiNFO tourne en admin). Réglage par mesure dans `HKCU\Software\HWiNFO64\Sensor
 `VSBidx`, `Color`), lu au démarrage de HWiNFO et réécrit à sa sortie : modifié HWiNFO arrêté. Découverte : toutes
 les mesures possibles signalées avec `VSBidx` ≥ 100000 (Gadget numérote ses emplacements d'après `VSBidx`, trous
 compris) et une couleur unique, puis seules `Wanted` (noms anglais / français exacts) gardées ; échec = tout
-restauré. Ajouts suivis dans `hwinfo-added.json` (retirés s'ils ne sont plus voulus), emplacements de découverte
+restauré. Ajouts suivis dans `hwinfodded.json` (retirés s'ils ne sont plus voulus), emplacements de découverte
 effacés de `VSB` (HWiNFO laisse les anciennes valeurs). Lecteurs : parcourir les emplacements présents
 (`HwInfoReader.Slots`), jamais s'arrêter au premier trou.
 **Sources** (`Sensors/`) : HWiNFO Gadget via registre `HKCU\Software\HWiNFO64\VSB` (capteurs
@@ -137,7 +141,11 @@ sortante) ; sinon `DisplayForm.ReloadSettings` applique à chaud (capteurs, mat�
 (`monochromeIcon`) ; icônes intégrées = `BUILTIN_ICONS` (`console.js`, noms déjà enregistrés : ne pas renommer)
 + sélection Lucide générée dans `js/icons.js` (`LUCIDE_ICONS`, `LUCIDE_GROUPS`).
 
-**Données utilisateur** : `%LOCALAPPDATA%\ArkaHyte\` (logs `display.log`, `launcher.log`, shortcuts, tools).
+**Données utilisateur** : `%LOCALAPPDATA%\ArkaHyte\` (`DataFolder`) : réglages et shortcuts à la racine, `logs\`
+(`Log` : un fichier par jour `display-AAAA-MM-JJ.log`, 7 jours gardés, 10 Mo max par jour ; `launcher-*` du
+lanceur de dev), `hwinfo\` (`backup-*.reg` : la dernière seulement, `catalog.json`, `added.json`), `ui\` (profil
+WebView2, renommé depuis `WebView2\` quand aucun navigateur ne le tient), `tools\`. `DataFolder.MoveLegacyFiles`
+range les fichiers des versions précédentes au démarrage.
 
 **Installation et mises à jour (Velopack).** `VelopackApp.Build()…Run()` en tête de `Main` (hooks
 d'install / mise à jour / désinstallation → `Installation.cs`, 30 s max puis exit). Installé dans

@@ -72,7 +72,7 @@ internal static partial class HwInfoConfigurator
 	/// </summary>
 	private sealed record AddedEntry(string Key, string Entry, string Sensor, string Label, bool Existed, int? Color);
 
-	private static string AddedFile => Path.Combine(Log.Directory, "hwinfo-added.json");
+	private static string AddedFile => Path.Combine(DataFolder.HwInfo, "added.json");
 
 	public static int Run(string resultPath)
 	{
@@ -299,17 +299,27 @@ internal static partial class HwInfoConfigurator
 		return new System.Security.Principal.WindowsPrincipal(identity).IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
 	}
 
-	/// <summary>Registry copy of every HWiNFO setting, next to the logs, before anything changes.</summary>
+	/// <summary>Registry copy of every HWiNFO setting, in the hwinfo folder, before anything changes.</summary>
 	private static string? Backup()
 	{
-		var path = Path.Combine(Log.Directory, $"hwinfo-backup-{DateTime.Now:yyyyMMdd-HHmmss}.reg");
+		Directory.CreateDirectory(DataFolder.HwInfo);
+		var path = Path.Combine(DataFolder.HwInfo, $"backup-{DateTime.Now:yyyyMMdd-HHmmss}.reg");
 		using var process = Process.Start(new ProcessStartInfo("reg.exe", $"export \"HKCU\\{RootKey}\" \"{path}\" /y")
 		{
 			CreateNoWindow = true,
 			UseShellExecute = false
 		});
 		process?.WaitForExit(15000);
-		return File.Exists(path) ? path : null;
+		if (!File.Exists(path))
+		{
+			return null;
+		}
+		// Only the latest backup is kept: the settings just before the last change
+		foreach (var older in Directory.EnumerateFiles(DataFolder.HwInfo, "backup-*.reg").Where(p => p != path))
+		{
+			File.Delete(older);
+		}
+		return path;
 	}
 
 	private static void StopHwInfo()
@@ -475,7 +485,8 @@ internal static partial class HwInfoConfigurator
 	private static void SaveCatalog(IEnumerable<(string Sensor, string Label)> readings)
 	{
 		var list = readings.Select(r => new { sensor = r.Sensor, label = r.Label }).OrderBy(r => r.sensor).ThenBy(r => r.label);
-		File.WriteAllText(Path.Combine(Log.Directory, "hwinfo-catalog.json"),
+		Directory.CreateDirectory(DataFolder.HwInfo);
+		File.WriteAllText(Path.Combine(DataFolder.HwInfo, "catalog.json"),
 			JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));
 	}
 

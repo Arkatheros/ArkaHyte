@@ -45,8 +45,8 @@ Au premier lancement, une fenêtre s'ouvre sur l'écran principal (ensuite : men
 2. **HWiNFO** : vérifie qu'il tourne et transmet des valeurs à Gadget, guide sa configuration. Le bouton
    **Configurer HWiNFO automatiquement** coche lui-même dans HWiNFO les valeurs utiles (une demande
    d'administrateur, HWiNFO fermé puis relancé, une à deux minutes) ; réglages HWiNFO sauvegardés avant dans
-   `%LOCALAPPDATA%\ArkaHyte\hwinfo-backup-*.reg` (double-clic pour les restaurer), catalogue de toutes ses
-   mesures dans `hwinfo-catalog.json`.
+   `%LOCALAPPDATA%\ArkaHyte\hwinfoackup-*.reg` (seule la dernière est gardée ; double-clic pour la
+   restaurer), catalogue de toutes ses mesures dans `hwinfo\catalog.json`.
 3. **Capteurs** : une valeur HWiNFO par widget, avec suggestion quand le réglage ne trouve rien.
 4. **Matériel** : noms CPU / GPU et mémoire GPU, détectés depuis le registre.
 5. **Météo** : ville affichée sous l'heure.
@@ -87,6 +87,10 @@ long sur l'horloge l'affiche ou la masque. Réglage `Weather` de `appsettings.js
 (gratuit, sans compte ni clé, données sous licence CC BY 4.0).
 
 ### Réglages à l'écran
+
+**Audio** (en-tête de la lecture en cours) : une pastille (icône de la sortie, volume, micro barré en couleur
+d'alerte quand il est coupé, rappelé dans l'en-tête de la vue jeu) qui ouvre le panneau Audio : volume général au
+doigt, choix de la sortie par défaut parmi les périphériques actifs, micro coupé / actif. Core Audio de Windows, mis à jour par notifications (touches de volume, casque…).
 
 **Toucher le compteur CPU** : panneau du processeur (fréquence des cœurs, moyenne et maximum, horloge effective
 en secondaire, tension du cœur, limite de puissance
@@ -299,9 +303,12 @@ Clic droit sur l'emblème gris dans la zone de notification : **mode démo** (CP
 | `ArkaHyte.exe --list-apps out.json` | Liste les applications proposées par l'éditeur |
 | `ArkaHyte.exe --menu-preview out.png` | Rend le menu de l'icône de notification en image |
 | `ArkaHyte.exe --devtools` | Active F12 (outils de développement) |
-| `ArkaHyte.exe --memory-log` | Note la mémoire de l'hôte (tas .NET, mémoire privée, handles) toutes les 10 s dans `display.log` (sinon toutes les heures) |
+| `ArkaHyte.exe --memory-log` | Note la mémoire de l'hôte (tas .NET, mémoire privée, handles) toutes les 10 s dans le journal du jour (sinon toutes les heures) |
 
-Logs : `%LOCALAPPDATA%\ArkaHyte\` (`display.log`, `launcher.log`).
+Logs : `%LOCALAPPDATA%\ArkaHyte\logs\`, un fichier par jour (`display-AAAA-MM-JJ.log`, `launcher-…` pour le
+lanceur de dev), les 7 derniers jours gardés. Dossier de données : réglages et raccourcis à la racine, `logs\`,
+`hwinfo\` (sauvegarde, catalogue, ajouts), `ui\` (profil du navigateur WebView2, anciennement `WebView2\`),
+`tools\` ; les fichiers des versions précédentes y sont rangés au premier lancement.
 
 ### Mesurer la consommation
 

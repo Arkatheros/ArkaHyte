@@ -20,9 +20,13 @@ if (-not $ExePath) {
 	$ExePath = Join-Path $repoRoot 'bin\ArkaHyte\ArkaHyte.exe'
 }
 
-$logDir = Join-Path $env:LOCALAPPDATA 'ArkaHyte'
-$logFile = Join-Path $logDir 'launcher.log'
+# One file per day next to the display's logs, the last week kept (as the display does)
+$logDir = Join-Path $env:LOCALAPPDATA 'ArkaHyte\logs'
+$logFile = Join-Path $logDir ('launcher-{0:yyyy-MM-dd}.log' -f (Get-Date))
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+Get-ChildItem -Path $logDir -Filter 'launcher-*.log' -ErrorAction SilentlyContinue |
+	Where-Object { $_.LastWriteTime -lt (Get-Date).Date.AddDays(-6) } |
+	Remove-Item -ErrorAction SilentlyContinue
 
 function Write-Log([string]$message) {
 	$line = '{0:yyyy-MM-dd HH:mm:ss} {1}' -f (Get-Date), $message

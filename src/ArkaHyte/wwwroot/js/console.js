@@ -2205,6 +2205,178 @@
 		send({ type: 'saveMetric', cpuDetails: cpuDetailsShown });
 	});
 
+	// ---------- Audio: volume, default output, microphone ----------
+	// State pushed by the host on every change (Windows notifications, no polling). The volume follows the
+	// finger at once while dragging; the host's echoes are ignored until the drag ends.
+	const AUDIO_PANEL_AUTO_CLOSE_MS = 60000;
+	const AUDIO_SEND_MS = 60;
+	const OUTPUT_ICONS = { headset: '#i-headset', display: '#i-display', speaker: '#i-speaker' };
+	const audio = { state: null, open: false, closeTimer: 0, dragging: false, lastSent: 0, sendTimer: 0, pending: null };
+
+	function setIcon(element, symbol) {
+		const use = element.querySelector('use');
+		if (use.getAttribute('href') !== symbol) {
+			use.setAttribute('href', symbol);
+		}
+	}
+
+	function renderAudio(state) {
+		audio.state = state || null;
+		const known = state && (isNum(state.volume) || state.mic);
+		$('audioPill').hidden = !known;
+		if (!known) {
+			$('gameMic').hidden = true;
+			return;
+		}
+		const current = (state.outputs || []).find((output) => output.default);
+		setIcon($('audioPill').querySelector('.audio-pill-output'), OUTPUT_ICONS[current ? current.kind : 'speaker'] || OUTPUT_ICONS.speaker);
+		if (!audio.dragging) {
+			showVolume(state.volume);
+		}
+		const mic = state.mic;
+		const muted = !!(mic && mic.muted);
+		// A muted microphone turns the pill to the alert look, its crossed-out icon added
+		$('audioPill').classList.toggle('muted', muted);
+		// An SVG element has no hidden property: the attribute itself
+		$('audioPill').querySelector('.audio-pill-mic').toggleAttribute('hidden', !muted);
+		$('audioPill').setAttribute('aria-label', `Audio${current ? ` : ${current.name}` : ''}${muted ? ', micro coupé' : ''}`);
+		$('gameMic').hidden = !muted;
+		$('audioMicButton').classList.toggle('muted', muted);
+		setIcon($('audioMicButton'), muted ? '#i-mic-off' : '#i-mic');
+		text('audioMicState', mic ? (muted ? 'Micro coupé · toucher pour réactiver' : 'Micro actif · toucher pour couper') : 'Aucun micro');
+		text('audioMicName', mic ? mic.name : '\u00a0');
+		if (audio.open) {
+			renderOutputs();
+		}
+	}
+
+	function showVolume(volume) {
+		const value = isNum(volume) ? clamp(Math.round(volume), 0, 100) : null;
+		text('audioVolumeText', value === null ? '--' : `${value} %`);
+		text('audioVolumeValue', value === null ? '--' : String(value));
+		setStyle($('audioFill'), 'width', `${value || 0}%`);
+		setStyle($('audioKnob'), 'left', `${value || 0}%`);
+	}
+
+	function renderOutputs() {
+		const list = $('audioOutputs');
+		list.textContent = '';
+		const outputs = (audio.state && audio.state.outputs) || [];
+		if (!outputs.length) {
+			const none = document.createElement('div');
+			none.className = 'cpu-stat-sub';
+			none.textContent = 'Aucune sortie audio active';
+			list.appendChild(none);
+			return;
+		}
+		for (const output of outputs) {
+			const button = document.createElement('button');
+			button.type = 'button';
+			button.className = 'audio-chip audio-output' + (output.default ? ' current' : '');
+			button.innerHTML = `<svg><use href="${OUTPUT_ICONS[output.kind] || OUTPUT_ICONS.speaker}"/></svg><span></span>${output.default ? '<em>active</em>' : ''}`;
+			button.querySelector('span').textContent = output.name;
+			button.addEventListener('click', () => {
+				if (output.default) {
+					return;
+				}
+				send({ type: 'audio', action: 'output', id: output.id });
+				// Shown at once; the host confirms with the new state
+				audio.state.outputs.forEach((o) => {
+					o.default = o === output;
+				});
+				renderAudio(audio.state);
+			});
+			list.appendChild(button);
+		}
+	}
+
+	function armAudioClose() {
+		clearTimeout(audio.closeTimer);
+		audio.closeTimer = setTimeout(closeAudioPanel, AUDIO_PANEL_AUTO_CLOSE_MS);
+	}
+
+	function openAudioPanel() {
+		audio.open = true;
+		$('audioPanel').hidden = false;
+		renderOutputs();
+		armAudioClose();
+	}
+
+	function closeAudioPanel() {
+		clearTimeout(audio.closeTimer);
+		audio.open = false;
+		$('audioPanel').hidden = true;
+	}
+
+	function toggleMic() {
+		send({ type: 'audio', action: 'mic' });
+		if (audio.state && audio.state.mic) {
+			audio.state.mic.muted = !audio.state.mic.muted;
+			renderAudio(audio.state);
+		}
+	}
+
+	// Volume drag: the value follows the finger, sent at most every AUDIO_SEND_MS and once more at the end
+	function volumeAt(event) {
+		const box = $('audioTrack').getBoundingClientRect();
+		return clamp(Math.round(((event.clientX - box.left) / box.width) * 100), 0, 100);
+	}
+
+	function sendVolume(value, final) {
+		audio.pending = value;
+		const wait = AUDIO_SEND_MS - (performance.now() - audio.lastSent);
+		clearTimeout(audio.sendTimer);
+		const flush = () => {
+			audio.lastSent = performance.now();
+			send({ type: 'audio', action: 'volume', value: audio.pending });
+			if (audio.state) {
+				audio.state.volume = audio.pending;
+			}
+		};
+		if (final || wait <= 0) {
+			flush();
+		} else {
+			audio.sendTimer = setTimeout(flush, wait);
+		}
+	}
+
+	const volumeBox = $('audioVolume');
+	volumeBox.addEventListener('pointerdown', (event) => {
+		audio.dragging = true;
+		volumeBox.setPointerCapture(event.pointerId);
+		const value = volumeAt(event);
+		showVolume(value);
+		sendVolume(value, false);
+		armAudioClose();
+	});
+	volumeBox.addEventListener('pointermove', (event) => {
+		if (audio.dragging) {
+			const value = volumeAt(event);
+			showVolume(value);
+			sendVolume(value, false);
+		}
+	});
+	['pointerup', 'pointercancel'].forEach((name) => volumeBox.addEventListener(name, (event) => {
+		if (audio.dragging) {
+			audio.dragging = false;
+			sendVolume(volumeAt(event), true);
+		}
+	}));
+
+	$('audioPill').addEventListener('click', openAudioPanel);
+	$('audioMicButton').addEventListener('click', () => {
+		toggleMic();
+		armAudioClose();
+	});
+	$('audioPanelClose').addEventListener('click', closeAudioPanel);
+	$('audioPanel').addEventListener('click', (event) => {
+		if (event.target === $('audioPanel')) {
+			closeAudioPanel();
+		} else {
+			armAudioClose();
+		}
+	});
+
 	// ---------- Temperature / power history (short tap on a tile) ----------
 	// The last 30 minutes of each metric, one point per sample, kept in the page (a reload starts over).
 	// The chart is drawn when the panel opens and then once per sample while it stays open: nothing in
@@ -2486,6 +2658,8 @@
 			onHwInfoList(message);
 		} else if (message.type === 'weather') {
 			renderWeather(message.weather);
+		} else if (message.type === 'audio') {
+			renderAudio(message.audio);
 		} else if (message.type === 'speedtest') {
 			renderSpeedTest(message);
 		} else if (message.type === 'apps') {
@@ -3471,6 +3645,18 @@
 		renderWeather({ place: 'Lyon', temperature: 14.6, code: 2, isDay: true, min: 8, max: 16 });
 		// The update banner is part of the preview too
 		renderUpdate({ stage: 'available', version: '2.0.0' });
+		// Sample audio devices; the panel acts on this copy (no host)
+		if (!host) {
+			renderAudio({
+				volume: 42,
+				outputs: [
+					{ id: 'a', name: 'Casque Arctis Nova Pro', kind: 'headset', default: true },
+					{ id: 'b', name: 'Enceintes (Realtek USB Audio)', kind: 'speaker', default: false },
+					{ id: 'c', name: 'LG ULTRAGEAR (NVIDIA High Definition Audio)', kind: 'display', default: false }
+				],
+				mic: { name: 'Micro (Arctis Nova Pro)', muted: new URLSearchParams(location.search).get('mic') === 'off' }
+			});
+		}
 		// Half an hour of history, so the charts have something to show
 		const seeded = Date.now();
 		for (let i = HISTORY_SECONDS - 1; i > 0; i--) {
@@ -3581,6 +3767,10 @@
 	// "?view=game" starts on the game view, game or not (as a swipe would), for captures
 	if (new URLSearchParams(location.search).get('view') === 'game') {
 		setTimeout(() => showView('game'), 1200);
+	}
+	// "?audio=panel" opens the Audio panel at load, for captures
+	if (new URLSearchParams(location.search).get('audio') === 'panel') {
+		setTimeout(openAudioPanel, 2500);
 	}
 	// "?cpu=detail" opens the processor detail panel at load, for captures
 	if (new URLSearchParams(location.search).get('cpu') === 'detail') {
