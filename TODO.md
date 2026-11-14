@@ -16,6 +16,14 @@ du non fait.
 
 # Liste des tâches
 
+ - [ ] ajoute d'une gestion de theme plus pousser, par exemple pouvoir choisir le fond d'ecran,
+     - gestion d'un rognage au ratio de l'applis via un rectangle afin de pouvoir utiliser n'immporte quel photos.
+     - gestion d'utilisation d'une video ? image animé ?
+     - gestion d'un choix couleur via palette predefini, pour eviter de devoir choisir tout les couleur une a une
+     - gestion du positionnement de chaque widget
+ - [ ] intégration de home assistant dans un page, via api
+ 
+
 # En attente — uniquement sur demande explicite du propriétaire
 
 Hors file d'attente : « next » ne les prend jamais.

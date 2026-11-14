@@ -178,7 +178,10 @@ public static class SensorSettings
 		}
 	}
 
-	/// <summary>Writes the electricity cost settings: energy { price?, otherWatts?, efficiency?, show? }.</summary>
+	/// <summary>
+	/// Writes the electricity cost settings: energy { price?, otherWatts?, efficiency?, show?, cpuPercent?,
+	/// gpuPercent?, components?: { motherboard?, memory?, … } }. Detailed parts also rewrite OtherWatts (their sum).
+	/// </summary>
 	public static void ApplyEnergy(JsonObject root, JsonElement message)
 	{
 		if (!message.TryGetProperty("energy", out var energy) || energy.ValueKind != JsonValueKind.Object)
@@ -205,6 +208,31 @@ public static class SensorSettings
 		if (energy.TryGetProperty("show", out var show) && show.ValueKind is JsonValueKind.True or JsonValueKind.False)
 		{
 			node["Show"] = show.GetBoolean();
+		}
+		foreach (var (key, name) in new[] { ("cpuPercent", "CpuPercent"), ("gpuPercent", "GpuPercent") })
+		{
+			if (energy.TryGetProperty(key, out var correction) && correction.TryGetInt32(out var value))
+			{
+				node[name] = Math.Clamp(value, EnergySettings.MinCorrection, EnergySettings.MaxCorrection);
+			}
+		}
+		if (energy.TryGetProperty("components", out var components) && components.ValueKind == JsonValueKind.Object)
+		{
+			if (node["Components"] is not JsonObject parts)
+			{
+				parts = new JsonObject();
+				node["Components"] = parts;
+			}
+			foreach (var name in EnergyComponents.Names)
+			{
+				if (components.TryGetProperty(JsonNamingPolicy.CamelCase.ConvertName(name), out var part) && part.TryGetInt32(out var partWatts))
+				{
+					parts[name] = Math.Clamp(partWatts, 0, EnergyComponents.Max);
+				}
+			}
+			// Kept in step for older versions, which only know the flat allowance
+			// (parts left out keep their default, as when the settings are read)
+			node["OtherWatts"] = (parts.Deserialize<EnergyComponents>() ?? new EnergyComponents()).Clamped().Sum();
 		}
 	}
 

@@ -1,5 +1,5 @@
 /* Setup wizard: case display, HWiNFO check, sensor mapping, hardware captions.
-   Host messages: state (once), hwinfo (every 2 s), saveFailed. Without a WebView2 host the page
+   Host messages: state (once), hwinfo (every 2 s), saveFailed, configExported / configFailed. Without a WebView2 host the page
    runs in design mode with sample data. */
 (() => {
 	'use strict';
@@ -101,6 +101,15 @@
 		status.classList.toggle('bad', Boolean(bad));
 	}
 	$('skip').addEventListener('click', () => send({ type: 'skip' }));
+	// The host shows Windows' file dialogs; an import restarts the display, which closes this window
+	$('exportConfig').addEventListener('click', () => {
+		showFootStatus('');
+		send({ type: 'exportConfig' });
+	});
+	$('importConfig').addEventListener('click', () => {
+		showFootStatus('');
+		send({ type: 'importConfig' });
+	});
 	$('identify').addEventListener('click', () => send({ type: 'identify' }));
 	$('startHwInfo').addEventListener('click', () => send({ type: 'startHwInfo' }));
 	$('configureHwInfo').addEventListener('click', () => {
@@ -559,7 +568,7 @@
 		add('ok', 'Changement de vue : <b>' + escapeHtml(transition.options[transition.selectedIndex].text.split(' :')[0]) + '</b>');
 		add('ok', 'Jeux ajoutés : <b>' + (extraGames.length ? extraGames.map(g => escapeHtml(g.name || g.exe)).join(', ') : 'aucun') + '</b>');
 		add('ok', $('energyShow').checked
-			? 'Énergie : <b>' + escapeHtml(formatPrice($('energyPrice').value)) + ' €/kWh</b>, reste du PC ' + escapeHtml($('energyOther').value || '?') + ' W, alimentation ' + escapeHtml($('energyEfficiency').value || '?') + ' %'
+			? 'Énergie : <b>' + escapeHtml(formatPrice($('energyPrice').value)) + ' €/kWh</b>, reste du PC ' + energyPartsTotal() + ' W, alimentation ' + escapeHtml($('energyEfficiency').value || '?') + ' %'
 			: 'Énergie : <b>coût non affiché</b> (le compteur tourne quand même)');
 		const ready = customActions.filter(a => a.name.trim() && a.target.trim());
 		add('ok', 'Raccourcis : <b>' + (ready.length ? ready.map(a => escapeHtml(a.name.trim())).join(', ') : 'aucune action personnelle') + '</b>');
@@ -653,17 +662,47 @@
 			}
 		};
 		read('energyPrice', 'price', (v) => Number(v.replace(',', '.')));
-		read('energyOther', 'otherWatts', (v) => Math.round(Number(v)));
 		read('energyEfficiency', 'efficiency', (v) => Math.round(Number(v)));
+		read('energyCpuPercent', 'cpuPercent', (v) => Math.round(Number(v)));
+		read('energyGpuPercent', 'gpuPercent', (v) => Math.round(Number(v)));
+		// Every part is sent, an empty or invalid one as 0: the total shown is the one saved
+		energy.components = {};
+		energyParts().forEach((input) => {
+			energy.components[input.dataset.part] = partWatts(input);
+		});
 		return energy;
+	}
+
+	// Parts of the rest of the PC; the defaults add up to the former flat 40 W
+	const ENERGY_PART_DEFAULTS = { motherboard: 15, memory: 6, storage: 5, fans: 6, pump: 4, lighting: 4, caseDisplay: 0, other: 0 };
+	const energyParts = () => document.querySelectorAll('.energy-parts input[data-part]');
+	const partWatts = (input) => {
+		const value = Math.round(Number(input.value));
+		return input.value.trim() !== '' && input.checkValidity() && Number.isFinite(value) ? value : 0;
+	};
+	const energyPartsTotal = () => Array.from(energyParts()).reduce((sum, input) => sum + partWatts(input), 0);
+
+	function showEnergyTotal() {
+		$('energyOtherTotal').textContent = energyPartsTotal() + ' W';
 	}
 
 	function showEnergy(energy) {
 		$('energyShow').checked = energy.show !== false;
 		$('energyPrice').value = energy.pricePerKwh;
-		$('energyOther').value = energy.otherWatts;
 		$('energyEfficiency').value = energy.psuEfficiency;
+		$('energyCpuPercent').value = energy.cpuPercent ?? 100;
+		$('energyGpuPercent').value = energy.gpuPercent ?? 100;
+		// Not detailed yet: the defaults when the allowance is still the default one, otherwise all of it
+		// under "Autre" so the total does not change
+		const defaultsTotal = Object.values(ENERGY_PART_DEFAULTS).reduce((sum, watts) => sum + watts, 0);
+		const parts = energy.components
+			|| (energy.otherWatts === defaultsTotal ? ENERGY_PART_DEFAULTS : { ...Object.fromEntries(Object.keys(ENERGY_PART_DEFAULTS).map((key) => [key, 0])), other: Math.min(energy.otherWatts, 300) });
+		energyParts().forEach((input) => {
+			input.value = parts[input.dataset.part] ?? 0;
+		});
+		showEnergyTotal();
 	}
+	energyParts().forEach((input) => input.addEventListener('input', showEnergyTotal));
 
 	const formatPrice = (value) => String(Number(String(value).replace(',', '.'))).replace('.', ',');
 
@@ -912,6 +951,12 @@
 			case 'saved':
 				$('next').disabled = false;
 				showFootStatus('Réglages enregistrés et appliqués');
+				break;
+			case 'configExported':
+				showFootStatus('Configuration exportée : ' + message.name);
+				break;
+			case 'configFailed':
+				showFootStatus(message.message, true);
 				break;
 		}
 	}

@@ -697,7 +697,12 @@
 		speedTest.running = running;
 		speedTest.phase = update.phase;
 		text('stPhase', speedTestTitle(update));
-		text('stAction', running ? 'Annuler' : 'Fermer');
+		text('stActionText', running ? 'Annuler' : 'Fermer');
+		// SVG elements have no hidden property: the attribute itself is toggled
+		if ($('stActionStop').hasAttribute('hidden') === running) {
+			$('stActionStop').toggleAttribute('hidden', !running);
+			$('stActionClose').toggleAttribute('hidden', running);
+		}
 		$('speedtest').classList.toggle('failed', update.phase === 'error');
 
 		if (isNum(update.pingMs)) text('stPing', `${nf1.format(update.pingMs)} ms`);
@@ -2839,10 +2844,18 @@
 	let energyData = null;
 	// Days before today, asked for when the panel opens
 	let energyHistory = null;
-	const energyView = { open: false, closeTimer: 0, bars: [], days: [] };
+	const energyView = { open: false, closeTimer: 0, resetTimer: 0, range: '', bars: [], days: [] };
 	const MONTH_NAMES = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 	const DAY_LETTERS = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
-	const ENERGY_DAYS = 14;
+	const MONTH_LETTERS = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
+	// Bars of each range: days (today last) or months (this month last)
+	const ENERGY_RANGES = {
+		week: { count: 7, label: '7 derniers jours' },
+		month: { count: 30, label: '30 derniers jours' },
+		year: { count: 12, label: '12 derniers mois', months: true }
+	};
+	const ENERGY_RANGE_KEY = 'arkahyte.energyRange';
+	const RESET_CONFIRM_MS = 3000;
 	const decimals = [0, 1, 2, 4].reduce((formats, digits) => {
 		formats[digits] = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: digits, maximumFractionDigits: digits });
 		return formats;
@@ -2889,12 +2902,32 @@
 		}
 	}
 
-	// Bars and day letters are built once; afterwards only heights and letters change
-	function buildEnergyBars() {
-		for (let i = 0; i < ENERGY_DAYS; i++) {
+	// Bars and their letters are built when the range changes; afterwards only heights and letters change
+	function setEnergyRange(range) {
+		if (!ENERGY_RANGES[range] || range === energyView.range) {
+			return;
+		}
+		energyView.range = range;
+		try {
+			localStorage.setItem(ENERGY_RANGE_KEY, range);
+		} catch {
+			// Storage unavailable: the range is only kept until the page reloads
+		}
+		const { count, label } = ENERGY_RANGES[range];
+		$('energy').dataset.range = range;
+		text('enBarsLabel', label);
+		document.querySelectorAll('.en-range button').forEach((button) => {
+			button.setAttribute('aria-checked', String(button.dataset.range === range));
+		});
+		energyView.bars = [];
+		energyView.days = [];
+		$('enBars').replaceChildren();
+		$('enDays').replaceChildren();
+		[$('enBars'), $('enDays')].forEach((grid) => grid.style.setProperty('--en-count', count));
+		for (let i = 0; i < count; i++) {
 			const bar = document.createElement('i');
 			const day = document.createElement('span');
-			if (i === ENERGY_DAYS - 1) {
+			if (i === count - 1) {
 				bar.className = 'today';
 			}
 			$('enBars').append(bar);
@@ -2903,7 +2936,45 @@
 			energyView.days.push(day);
 		}
 	}
-	buildEnergyBars();
+	setEnergyRange((() => {
+		try {
+			return localStorage.getItem(ENERGY_RANGE_KEY);
+		} catch {
+			return null;
+		}
+	})() || 'week');
+	if (!energyView.range) {
+		setEnergyRange('week');
+	}
+
+	// kWh of each bar of the current range, oldest first, with the letter under it
+	function energyBars(past, now, today) {
+		const { count, months } = ENERGY_RANGES[energyView.range];
+		const byDate = new Map((past ? past.days : []).map((day) => [day.date, day.kwh]));
+		if (months) {
+			const totals = new Map();
+			byDate.forEach((kwh, date) => {
+				const month = date.slice(0, 7);
+				totals.set(month, (totals.get(month) || 0) + kwh);
+			});
+			return Array.from({ length: count }, (_, i) => {
+				const date = new Date(now.getFullYear(), now.getMonth() - (count - 1 - i), 1);
+				const key = isoDay(date).slice(0, 7);
+				const kwh = (totals.get(key) || 0) + (i === count - 1 ? today : 0);
+				return { kwh, letter: MONTH_LETTERS[date.getMonth()] };
+			});
+		}
+		return Array.from({ length: count }, (_, i) => {
+			const back = count - 1 - i;
+			const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - back);
+			const kwh = back === 0 ? today : byDate.get(isoDay(date)) || 0;
+			// A month of days: the date every 5 days counted back from today, the rest left blank
+			const letter = energyView.range === 'month'
+				? (back % 5 === 0 ? String(date.getDate()) : '')
+				: DAY_LETTERS[date.getDay()];
+			return { kwh, letter };
+		});
+	}
 
 	function renderEnergyPanel() {
 		const energy = energyData;
@@ -2935,18 +3006,12 @@
 		const monthDays = past ? past.monthDays + 1 : 0;
 		cell('enMonth', month, isNum(month) ? `${formatKwh(month)} kWh · ${monthDays} jour${monthDays > 1 ? 's' : ''}` : '');
 
-		// Oldest first, today last (live)
-		const days = (past ? past.days : []).slice(-(ENERGY_DAYS - 1));
-		while (days.length < ENERGY_DAYS - 1) {
-			days.unshift({ date: null, kwh: 0 });
-		}
-		days.push({ date: isoDay(now), kwh: today });
-		const top = Math.max(...days.map((day) => day.kwh), 0.001);
-		days.forEach((day, i) => {
-			setStyle(energyView.bars[i], 'height', `${((day.kwh / top) * 100).toFixed(1)}%`);
-			const date = new Date(now);
-			date.setDate(now.getDate() - (ENERGY_DAYS - 1 - i));
-			setText(energyView.days[i], DAY_LETTERS[date.getDay()]);
+		// Oldest first, today (or this month) last, live
+		const bars = energyBars(past, now, today);
+		const top = Math.max(...bars.map((bar) => bar.kwh), 0.001);
+		bars.forEach((bar, i) => {
+			setStyle(energyView.bars[i], 'height', `${((bar.kwh / top) * 100).toFixed(1)}%`);
+			setText(energyView.days[i], bar.letter);
 		});
 		text('enBarsMax', `max ${formatEuro(energyCost(top))} €`);
 
@@ -2959,7 +3024,15 @@
 		text('enCpuW', watts(energy.cpuW));
 		text('enRestW', watts(energy.otherW));
 		text('enLossW', watts(energy.lossW));
-		$('enSettings').innerHTML = `Prix <b>${decimals[4].format(energyConfig.pricePerKwh)} €/kWh</b> · reste du PC <b>${energyConfig.otherWatts} W</b> · alimentation <b>${energyConfig.psuEfficiency} %</b>`;
+		// Corrections of the HWiNFO readings shown only when set
+		const corrections = [['CPU', energyConfig.cpuPercent], ['GPU', energyConfig.gpuPercent]]
+			.filter(([, percent]) => isNum(percent) && percent !== 100)
+			.map(([name, percent]) => ` · ${name} <b>${percent} %</b>`)
+			.join('');
+		const settingsHtml = `Prix <b>${decimals[4].format(energyConfig.pricePerKwh)} €/kWh</b> · reste du PC <b>${energyConfig.otherWatts} W</b> · alimentation <b>${energyConfig.psuEfficiency} %</b>${corrections}`;
+		if ($('enSettings').innerHTML !== settingsHtml) {
+			$('enSettings').innerHTML = settingsHtml;
+		}
 	}
 
 	function armEnergyClose() {
@@ -2982,19 +3055,50 @@
 	function closeEnergyPanel() {
 		clearTimeout(energyView.closeTimer);
 		energyView.open = false;
+		disarmEnergyReset();
 		$('energy').hidden = true;
 	}
 
-	// Design mode: two weeks of plausible days
+	function disarmEnergyReset() {
+		clearTimeout(energyView.resetTimer);
+		energyView.resetTimer = 0;
+		$('enReset').classList.remove('confirm');
+		text('enResetText', 'Réinitialiser');
+	}
+
+	// Erases every counted day: a first touch asks, a second within 3 s confirms
+	function resetEnergy() {
+		armEnergyClose();
+		if (!energyView.resetTimer) {
+			$('enReset').classList.add('confirm');
+			text('enResetText', 'Confirmer ?');
+			energyView.resetTimer = setTimeout(disarmEnergyReset, RESET_CONFIRM_MS);
+			return;
+		}
+		disarmEnergyReset();
+		if (host) {
+			host.postMessage({ type: 'energyReset' });
+		} else {
+			energyHistory = { type: 'energy', days: [], yesterdayKwh: null, weekKwh: 0, monthKwh: 0, monthDays: 0 };
+		}
+		// Today restarts from zero at once; the next snapshot confirms it
+		if (energyData) {
+			energyData = { ...energyData, todayKwh: 0, todaySeconds: 0, session: energyData.session && energyData.session.active ? { ...energyData.session, kwh: 0, seconds: 0 } : null };
+			renderEnergy(energyData);
+		}
+		renderEnergyPanel();
+		showToast('Historique de consommation réinitialisé');
+	}
+
+	// Design mode: a year of plausible days
 	function designEnergyHistory() {
-		const days = [2.1, 2.75, 1.9, 3.05, 3.55, 1.65, 1.45, 2.4, 2.6, 3.3, 2.2, 1.95, 2.61];
 		const now = new Date();
 		return {
 			type: 'energy',
-			days: days.map((kwh, i) => {
-				const date = new Date(now);
-				date.setDate(now.getDate() - (days.length - i));
-				return { date: isoDay(date), kwh };
+			days: Array.from({ length: 365 }, (_, i) => {
+				const back = 365 - i;
+				const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - back);
+				return { date: isoDay(date), kwh: 2.4 + Math.sin(back * 1.7) * 0.8 + Math.cos(back / 58) * 0.6 };
 			}),
 			yesterdayKwh: 2.61,
 			weekKwh: 14.5,
@@ -3011,6 +3115,14 @@
 			closeEnergyPanel();
 		}
 	});
+	document.querySelectorAll('.en-range button').forEach((button) => {
+		button.addEventListener('click', () => {
+			setEnergyRange(button.dataset.range);
+			renderEnergyPanel();
+			armEnergyClose();
+		});
+	});
+	$('enReset').addEventListener('click', resetEnergy);
 	$('enConfigure').addEventListener('click', () => {
 		send({ type: 'openSettings', step: 'energy' });
 		closeEnergyPanel();
@@ -4217,8 +4329,9 @@
 	if (new URLSearchParams(location.search).get('audio') === 'panel') {
 		setTimeout(openAudioPanel, 2500);
 	}
-	// "?energy=panel" opens the electricity cost panel at load, for captures
+	// "?energy=panel[&range=week|month|year]" opens the electricity cost panel at load, for captures
 	if (new URLSearchParams(location.search).get('energy') === 'panel') {
+		setEnergyRange(new URLSearchParams(location.search).get('range'));
 		setTimeout(openEnergyPanel, 2500);
 	}
 	// "?cpu=detail" opens the processor detail panel at load, for captures

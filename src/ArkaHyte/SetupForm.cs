@@ -23,6 +23,8 @@ public sealed class SetupForm : Form
 	private AppSettings _settings;
 	private readonly int _startStep;
 	private readonly string? _previewPath;
+	// The display's meter: exported with the rest, replaced in memory on import
+	private readonly EnergyMeter? _energy;
 	private readonly WebView2 _webView;
 	private readonly HwInfoReader _hwInfo = new();
 	private readonly System.Windows.Forms.Timer _poll = new() { Interval = 2000 };
@@ -41,11 +43,12 @@ public sealed class SetupForm : Form
 	public event Action<bool>? Saved;
 
 	/// <param name="previewPath">Diagnostics: capture the page to this PNG and quit, never saving anything.</param>
-	public SetupForm(AppSettings settings, int startStep = 0, string? previewPath = null)
+	public SetupForm(AppSettings settings, int startStep = 0, string? previewPath = null, EnergyMeter? energy = null)
 	{
 		_settings = settings;
 		_startStep = startStep;
 		_previewPath = previewPath;
+		_energy = energy;
 
 		// Once set up, the same pages are the settings: free navigation, saved without restarting
 		Text = settings.SetupCompleted ? $"{TrayIcon.AppName} · Paramètres" : $"{TrayIcon.AppName} · Configuration";
@@ -157,7 +160,95 @@ public sealed class SetupForm : Form
 			case "pickScript":
 				PickScript(ReadId(root));
 				break;
+			case "exportConfig":
+				ExportConfig();
+				break;
+			case "importConfig":
+				ImportConfig();
+				break;
 		}
+	}
+
+	// ---------- Export / import of the whole configuration (reinstall) ----------
+
+	private void ExportConfig()
+	{
+		if (_previewPath is not null)
+		{
+			return;
+		}
+		using var dialog = new SaveFileDialog
+		{
+			Title = "Exporter la configuration",
+			Filter = "Configuration Arka Hyte (*.json)|*.json",
+			FileName = ConfigBackup.DefaultFileName,
+			InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+			OverwritePrompt = true
+		};
+		if (dialog.ShowDialog(this) != DialogResult.OK)
+		{
+			return;
+		}
+		try
+		{
+			ConfigBackup.Export(dialog.FileName, _energy);
+			Post(new { type = "configExported", name = Path.GetFileName(dialog.FileName) });
+		}
+		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+		{
+			Log.Error("Configuration export failed", exception);
+			Post(new { type = "configFailed", message = "Export impossible : voir le journal." });
+		}
+	}
+
+	/// <summary>Replaces the configuration with an export, after a confirmation, then restarts the display.</summary>
+	private void ImportConfig()
+	{
+		if (_previewPath is not null)
+		{
+			return;
+		}
+		using var dialog = new OpenFileDialog
+		{
+			Title = "Importer une configuration",
+			Filter = "Configuration Arka Hyte (*.json)|*.json",
+			InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+			CheckFileExists = true
+		};
+		if (dialog.ShowDialog(this) != DialogResult.OK)
+		{
+			return;
+		}
+		if (ConfigBackup.Validate(dialog.FileName, out var backup) is { } problem)
+		{
+			Post(new { type = "configFailed", message = problem });
+			return;
+		}
+		var exported = backup!["exportedAt"]?.GetValueKind() == JsonValueKind.String && DateTimeOffset.TryParse(backup["exportedAt"]!.GetValue<string>(), out var at)
+			? $" du {at.LocalDateTime:dd/MM/yyyy à HH:mm}"
+			: string.Empty;
+		var answer = MessageBox.Show(this,
+			$"Remplacer la configuration actuelle par celle{exported} ?\n\n"
+			+ "Réglages, raccourcis du dock et historique de consommation sont remplacés ; l'affichage redémarre. "
+			+ "Les fichiers actuels sont gardés dans le dossier de données (backup).",
+			"Importer une configuration", MessageBoxButtons.OKCancel, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
+		if (answer != DialogResult.OK)
+		{
+			return;
+		}
+		try
+		{
+			ConfigBackup.Import(backup, dialog.FileName, _energy);
+		}
+		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException)
+		{
+			Log.Error("Configuration import failed", exception);
+			Post(new { type = "configFailed", message = "Import impossible : voir le journal." });
+			return;
+		}
+		// Everything may have changed (case screen included): the display starts again on the new files
+		Close();
+		Saved?.Invoke(true);
 	}
 
 	// ---------- State sent to the page ----------

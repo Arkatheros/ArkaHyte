@@ -1878,6 +1878,7 @@ body {
 	left: 526px;
 	padding: 0;
 	border: 0;
+	outline: none;
 	background: none;
 	color: var(--bone);
 }
@@ -2179,11 +2180,27 @@ body {
 	justify-content: space-between;
 	align-items: baseline;
 }
+.history-range.en-range {
+	grid-template-columns: repeat(3, 1fr);
+}
+.history-range.en-range button {
+	height: 52px;
+	font-size: 16px;
+}
+/* Column count set by console.js with the range (7 days, 30 days, 12 months) */
 .en-bars,
 .en-days {
 	display: grid;
-	grid-template-columns: repeat(14, 1fr);
+	grid-template-columns: repeat(var(--en-count, 7), 1fr);
 	gap: 8px;
+}
+.energy[data-range="month"] .en-bars,
+.energy[data-range="month"] .en-days {
+	gap: 3px;
+}
+.energy[data-range="month"] .en-days {
+	overflow: visible;
+	white-space: nowrap;
 }
 .en-bars {
 	height: 170px;
@@ -2262,6 +2279,17 @@ body {
 }
 .en-foot .action-pill {
 	flex: none;
+	min-width: 0;
+}
+/* Reset: a first touch asks, a second within 3 s confirms */
+.en-foot .action-pill.confirm {
+	border-color: var(--ember);
+	color: var(--ember);
+	box-shadow: 0 0 18px rgba(var(--ember-rgb), 0.6);
+}
+.en-foot .action-pill.confirm svg {
+	stroke: var(--ember);
+	filter: drop-shadow(0 0 4px var(--ember));
 }
 
 /* ---------- Temperature / power history (short tap on a tile; same frame as the editor) ---------- */

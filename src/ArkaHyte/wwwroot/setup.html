@@ -197,15 +197,52 @@
 				<div class="energy-fields">
 					<label class="field"><span class="hint">Prix du kWh (TTC)</span>
 						<span class="unit-input"><input type="number" id="energyPrice" min="0" max="5" step="0.0001"><em>€</em></span></label>
-					<label class="field"><span class="hint">Reste du PC</span>
-						<span class="unit-input"><input type="number" id="energyOther" min="0" max="500" step="5"><em>W</em></span></label>
 					<label class="field"><span class="hint">Rendement de l'alimentation</span>
 						<span class="unit-input"><input type="number" id="energyEfficiency" min="50" max="100" step="1"><em>%</em></span></label>
 				</div>
-				<p class="hint">Le prix est celui de votre contrat, abonnement non compris. Le reste du PC couvre ce
-					que HWiNFO ne mesure pas : carte mère, mémoire, disques, ventilateurs, pompe (40 W par défaut).
-					Une alimentation 80 Plus Gold a un rendement d'environ 90 % à mi-charge. Le compteur ne tient pas
-					compte des écrans. Changer le prix recalcule aussi les jours passés.</p>
+				<p class="hint">Le prix est celui de votre contrat, abonnement non compris ; le changer recalcule aussi les
+					jours passés. Une alimentation 80 Plus Gold a un rendement d'environ 90 % à mi-charge, 92 % en Platinum.</p>
+
+				<h2>Processeur et carte graphique</h2>
+				<div class="energy-fields">
+					<label class="field"><span class="hint">Correction du processeur</span>
+						<span class="unit-input"><input type="number" id="energyCpuPercent" min="50" max="150" step="1"><em>%</em></span></label>
+					<label class="field"><span class="hint">Correction de la carte graphique</span>
+						<span class="unit-input"><input type="number" id="energyGpuPercent" min="50" max="150" step="1"><em>%</em></span></label>
+				</div>
+				<p class="hint">Puissances lues dans HWiNFO, multipliées par ces pourcentages (100 % : telles quelles).
+					La puissance du processeur est mesurée avant les pertes de ses régulateurs sur la carte mère :
+					110 % les compte. Celle de la carte graphique (puissance totale de la carte) est en général juste.</p>
+
+				<h2>Reste du PC <span class="energy-total" id="energyOtherTotal"></span></h2>
+				<div class="energy-fields energy-parts">
+					<label class="field"><span class="hint">Carte mère</span>
+						<span class="unit-input"><input type="number" data-part="motherboard" min="0" max="300" step="1"><em>W</em></span>
+						<small>10 à 25 W</small></label>
+					<label class="field"><span class="hint">Mémoire</span>
+						<span class="unit-input"><input type="number" data-part="memory" min="0" max="300" step="1"><em>W</em></span>
+						<small>3 W par barrette DDR5</small></label>
+					<label class="field"><span class="hint">Stockage</span>
+						<span class="unit-input"><input type="number" data-part="storage" min="0" max="300" step="1"><em>W</em></span>
+						<small>SSD 2 à 5 W, disque dur 6 W</small></label>
+					<label class="field"><span class="hint">Ventilateurs</span>
+						<span class="unit-input"><input type="number" data-part="fans" min="0" max="300" step="1"><em>W</em></span>
+						<small>1 à 3 W chacun</small></label>
+					<label class="field"><span class="hint">Pompe / AIO</span>
+						<span class="unit-input"><input type="number" data-part="pump" min="0" max="300" step="1"><em>W</em></span>
+						<small>3 à 6 W</small></label>
+					<label class="field"><span class="hint">Éclairage RGB</span>
+						<span class="unit-input"><input type="number" data-part="lighting" min="0" max="300" step="1"><em>W</em></span>
+						<small>0,5 W par ventilateur RGB, hubs</small></label>
+					<label class="field"><span class="hint">Écran du boîtier</span>
+						<span class="unit-input"><input type="number" data-part="caseDisplay" min="0" max="300" step="1"><em>W</em></span>
+						<small>s'il est alimenté par le PC</small></label>
+					<label class="field"><span class="hint">Autre</span>
+						<span class="unit-input"><input type="number" data-part="other" min="0" max="300" step="1"><em>W</em></span>
+						<small>cartes, USB, périphériques</small></label>
+				</div>
+				<p class="hint">Ce que HWiNFO ne mesure pas, à son régime habituel. Les écrans branchés sur le secteur
+					ne sont pas comptés.</p>
 			</section>
 
 			<!-- Summary -->
@@ -219,7 +256,12 @@
 		</main>
 
 		<footer class="foot">
-			<button type="button" class="link" id="skip">Passer l'assistant</button>
+			<!-- Whole configuration in one file, for a reinstall: export once set up, import any time -->
+			<div class="foot-links">
+				<button type="button" class="link" id="skip">Passer l'assistant</button>
+				<button type="button" class="link" id="importConfig">Importer une configuration</button>
+				<button type="button" class="link" id="exportConfig">Exporter la configuration</button>
+			</div>
 			<span class="foot-status" id="footStatus"></span>
 			<div class="foot-actions">
 				<button type="button" class="ghost" id="back">Précédent</button>

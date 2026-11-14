@@ -14,7 +14,8 @@ public sealed class EnergyMeter
 	// A longer gap between two samples is sleep, hibernation or a stall: not counted
 	private const double MaxStepSeconds = 5;
 	private const int KeepDays = 400;
-	private const int HistoryDays = 14;
+	// Longest range of the detail panel: a year of days, today included
+	private const int HistoryDays = 366;
 	private static readonly TimeSpan SaveEvery = TimeSpan.FromMinutes(1);
 	private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true };
 
@@ -43,6 +44,10 @@ public sealed class EnergyMeter
 		{
 			seconds = 0;
 		}
+
+		// HWiNFO readings brought to what the parts really draw (e.g. CPU package power before the VRM losses)
+		cpuWatts *= settings.CpuPercent / 100.0;
+		gpuWatts *= settings.GpuPercent / 100.0;
 
 		// Without HWiNFO there is nothing to estimate from: the allowance alone would be a made-up figure
 		double? total = null;
@@ -114,6 +119,26 @@ public sealed class EnergyMeter
 		}
 	}
 
+	/// <summary>Forgets every counted day and the game session totals (a running game keeps counting from zero).</summary>
+	public void Reset()
+	{
+		lock (_lock)
+		{
+			_days.Clear();
+			if (_session is { Active: true } session)
+			{
+				session.Kwh = 0;
+				session.Seconds = 0;
+			}
+			else
+			{
+				_session = null;
+			}
+			SaveLocked();
+		}
+		Log.Info("Energy history reset");
+	}
+
 	public void Save()
 	{
 		lock (_lock)
@@ -158,32 +183,48 @@ public sealed class EnergyMeter
 		return day;
 	}
 
+	/// <summary>Takes the days and session of an imported energy.json in place of the counted ones, and saves them.</summary>
+	public void Replace(string json)
+	{
+		var file = JsonSerializer.Deserialize<EnergyFile>(json, JsonOptions);
+		lock (_lock)
+		{
+			_days.Clear();
+			_session = null;
+			Take(file);
+			SaveLocked();
+		}
+	}
+
 	private void Load()
 	{
 		try
 		{
-			if (!File.Exists(FilePath))
+			if (File.Exists(FilePath))
 			{
-				return;
-			}
-			var file = JsonSerializer.Deserialize<EnergyFile>(File.ReadAllText(FilePath), JsonOptions);
-			foreach (var (key, day) in file?.Days ?? [])
-			{
-				if (DateOnly.TryParseExact(key, "yyyy-MM-dd", out var date) && day is not null)
-				{
-					_days[date] = day;
-				}
-			}
-			// A game still running when the app stopped: its session is over for the meter
-			if (file?.Session is { } session)
-			{
-				session.Active = false;
-				_session = session;
+				Take(JsonSerializer.Deserialize<EnergyFile>(File.ReadAllText(FilePath), JsonOptions));
 			}
 		}
 		catch (Exception exception) when (exception is IOException or JsonException or UnauthorizedAccessException)
 		{
 			Log.Error("Ignoring unreadable energy.json", exception);
+		}
+	}
+
+	private void Take(EnergyFile? file)
+	{
+		foreach (var (key, day) in file?.Days ?? [])
+		{
+			if (DateOnly.TryParseExact(key, "yyyy-MM-dd", out var date) && day is not null)
+			{
+				_days[date] = day;
+			}
+		}
+		// A game still running when the file was written: its session is over for the meter
+		if (file?.Session is { } session)
+		{
+			session.Active = false;
+			_session = session;
 		}
 	}
 

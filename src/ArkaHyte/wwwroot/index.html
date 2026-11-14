@@ -313,7 +313,11 @@
 						<svg viewBox="0 0 24 24"><path d="M4 18a8 8 0 1 1 16 0"/><path d="m12 18 4-6"/><path d="M6.6 13.6h.01M8.6 9.6h.01M12 8h.01M15.4 9.6h.01"/></svg>
 						<span>Test débit</span>
 					</button>
-					<button type="button" class="net-test" id="stAction" hidden>Annuler</button>
+					<!-- Cancels the running test, then closes its view: icon and text follow (console.js) -->
+					<button type="button" class="action-pill net-test" id="stAction" hidden>
+						<svg viewBox="0 0 24 24"><g id="stActionStop"><circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/></g><path id="stActionClose" d="M6 6l12 12M18 6 6 18" hidden/></svg>
+						<span id="stActionText">Annuler</span>
+					</button>
 					<span class="chip" id="netChip">--</span>
 				</div>
 			</div>
@@ -554,7 +558,12 @@
 					<div class="en-cell"><span class="label">7 derniers jours</span><span class="en-value"><span id="enWeek">--</span><small>€</small></span><span class="data" id="enWeekInfo"></span></div>
 					<div class="en-cell"><span class="label" id="enMonthLabel">Ce mois</span><span class="en-value"><span id="enMonth">--</span><small>€</small></span><span class="data" id="enMonthInfo"></span></div>
 				</div>
-				<div class="en-bars-head"><span class="label">14 derniers jours</span><span class="data" id="enBarsMax"></span></div>
+				<div class="history-range en-range" role="radiogroup" aria-label="Période">
+					<button type="button" role="radio" data-range="week">1 semaine</button>
+					<button type="button" role="radio" data-range="month">1 mois</button>
+					<button type="button" role="radio" data-range="year">1 an</button>
+				</div>
+				<div class="en-bars-head"><span class="label" id="enBarsLabel">7 derniers jours</span><span class="data" id="enBarsMax"></span></div>
 				<div class="en-bars" id="enBars"></div>
 				<div class="en-days" id="enDays"></div>
 				<div class="en-power">
@@ -564,6 +573,7 @@
 				</div>
 				<div class="en-foot">
 					<span id="enSettings"></span>
+					<button type="button" class="action-pill" id="enReset"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span id="enResetText">Réinitialiser</span></button>
 					<button type="button" class="action-pill" id="enConfigure"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Régler</span></button>
 				</div>
 			</div>

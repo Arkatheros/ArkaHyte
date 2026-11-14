@@ -138,18 +138,53 @@ public sealed record CustomAction(string Id, string Name, string Kind, string Ta
 
 /// <summary>
 /// Electricity cost (EnergyMeter): price per kWh, a flat allowance for what HWiNFO does not measure
-/// (motherboard, memory, drives, fans, pump) and the power supply efficiency, in percent.
+/// (motherboard, memory, drives, fans, pump), the power supply efficiency, in percent, and a correction
+/// of the CPU and GPU power read in HWiNFO, in percent. With <see cref="Components"/>, the allowance is
+/// their sum (<see cref="OtherWatts"/> is still written, for older versions).
 /// </summary>
 public sealed record EnergySettings(
 	double PricePerKwh = 0.1952,
 	int OtherWatts = 40,
 	int PsuEfficiency = 90,
-	bool Show = true)
+	bool Show = true,
+	int CpuPercent = 100,
+	int GpuPercent = 100,
+	EnergyComponents? Components = null)
 {
 	public const double MaxPrice = 5;
 	public const int MaxOtherWatts = 500;
 	public const int MinEfficiency = 50;
 	public const int MaxEfficiency = 100;
+	public const int MinCorrection = 50;
+	public const int MaxCorrection = 150;
+}
+
+/// <summary>Watts of each part HWiNFO does not measure; the defaults add up to the former 40 W allowance.</summary>
+public sealed record EnergyComponents(
+	int Motherboard = 15,
+	int Memory = 6,
+	int Storage = 5,
+	int Fans = 6,
+	int Pump = 4,
+	int Lighting = 4,
+	int CaseDisplay = 0,
+	int Other = 0)
+{
+	public const int Max = 300;
+
+	public static readonly string[] Names = [nameof(Motherboard), nameof(Memory), nameof(Storage), nameof(Fans), nameof(Pump), nameof(Lighting), nameof(CaseDisplay), nameof(Other)];
+
+	public EnergyComponents Clamped() => new(
+		Math.Clamp(Motherboard, 0, Max),
+		Math.Clamp(Memory, 0, Max),
+		Math.Clamp(Storage, 0, Max),
+		Math.Clamp(Fans, 0, Max),
+		Math.Clamp(Pump, 0, Max),
+		Math.Clamp(Lighting, 0, Max),
+		Math.Clamp(CaseDisplay, 0, Max),
+		Math.Clamp(Other, 0, Max));
+
+	public int Sum() => Motherboard + Memory + Storage + Fans + Pump + Lighting + CaseDisplay + Other;
 }
 
 public sealed record AppSettings(
@@ -177,8 +212,12 @@ public sealed record AppSettings(
 		? energy with
 		{
 			PricePerKwh = Math.Clamp(energy.PricePerKwh, 0, EnergySettings.MaxPrice),
-			OtherWatts = Math.Clamp(energy.OtherWatts, 0, EnergySettings.MaxOtherWatts),
-			PsuEfficiency = Math.Clamp(energy.PsuEfficiency, EnergySettings.MinEfficiency, EnergySettings.MaxEfficiency)
+			// The parts, when detailed, are the allowance
+			OtherWatts = energy.Components?.Clamped().Sum() ?? Math.Clamp(energy.OtherWatts, 0, EnergySettings.MaxOtherWatts),
+			PsuEfficiency = Math.Clamp(energy.PsuEfficiency, EnergySettings.MinEfficiency, EnergySettings.MaxEfficiency),
+			CpuPercent = Math.Clamp(energy.CpuPercent, EnergySettings.MinCorrection, EnergySettings.MaxCorrection),
+			GpuPercent = Math.Clamp(energy.GpuPercent, EnergySettings.MinCorrection, EnergySettings.MaxCorrection),
+			Components = energy.Components?.Clamped()
 		}
 		: new EnergySettings();
 
@@ -201,7 +240,7 @@ public sealed record AppSettings(
 	/// <summary>The user copy when there is one, otherwise the file shipped next to the executable.</summary>
 	public static AppSettings Load() => Load(CurrentFilePath);
 
-	private static string CurrentFilePath =>
+	internal static string CurrentFilePath =>
 		File.Exists(UserFilePath) ? UserFilePath : Path.Combine(AppContext.BaseDirectory, FileName);
 
 	/// <summary>

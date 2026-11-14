@@ -121,11 +121,13 @@ online/no-internet/offline), SMTC pour la lecture en cours (`MediaMonitor`), API
 Météo : `WeatherService` (Open-Meteo, HTTP toutes les 15 min, ville géocodée dans l'assistant) → message
 `weather` ; activée / désactivée par appui long sur l'horloge (`saveMetric` `{ weather }`).
 Coût électrique : `EnergyMeter` (dans `SensorHub`, y compris en pause : seule la lecture HWiNFO tourne alors)
-intègre (CPU + GPU + `Energy.OtherWatts`) ÷ `PsuEfficiency` en kWh par jour (`energy.json`, écart > 5 s entre
+intègre (CPU × `CpuPercent` + GPU × `GpuPercent` + `Energy.OtherWatts`, somme de `Energy.Components` quand détaillé,
+toujours réécrit pour les anciennes versions) ÷ `PsuEfficiency` en kWh par jour (`energy.json`, écart > 5 s entre
 échantillons ignoré = veille) et par session de jeu (`Snapshot.Game`) → `Snapshot.Energy` ; le coût est calculé
 côté page au prix courant. Bloc `#energyCorner` (`.energy-side`) à droite du cadran CPU, `.frame.energy-on` range alors
 fréquence et tension à gauche ; panneau `#energy` (toucher sur `#energyCorner` ou `#gameEnergy`), jours passés
-demandés à l'ouverture (`energyHistory` → `energy`), « Régler » → `openSettings { step: 'energy' }`.
+demandés à l'ouverture (`energyHistory` → `energy`, 365 jours ; barres semaine / mois / an côté page),
+« Réinitialiser » confirmé par un second toucher (`energyReset` → `EnergyMeter.Reset`), « Régler » → `openSettings { step: 'energy' }`.
 `SpeedTest` pilote le CLI Ookla (`--format=jsonl --progress=yes`), téléchargé au premier usage dans
 `%LOCALAPPDATA%\ArkaHyte\tools` (licence : ne pas l'inclure au dépôt). Cloudflare abandonné (blocage IP).
 
@@ -157,7 +159,10 @@ sortante) ; sinon `DisplayForm.ReloadSettings` applique à chaud (capteurs, mat�
 (`Log` : un fichier par jour `display-AAAA-MM-JJ.log`, 7 jours gardés, 10 Mo max par jour ; `launcher-*` du
 lanceur de dev), `hwinfo\` (`backup-*.reg` : la dernière seulement, `catalog.json`, `added.json`), `ui\` (profil
 WebView2, renommé depuis `WebView2\` quand aucun navigateur ne le tient), `tools\`. `DataFolder.MoveLegacyFiles`
-range les fichiers des versions précédentes au démarrage.
+range les fichiers des versions précédentes au démarrage. Export / import (`ConfigBackup`, liens du pied de
+l'assistant, messages `exportConfig` / `importConfig`) : un seul JSON (`format` `ArkaHyte.Config`) avec appsettings,
+shortcuts et energy ; l'import copie d'abord les fichiers remplacés dans `backup\before-import-*`, passe l'historique
+par `EnergyMeter.Replace` (sinon réécrit à l'arrêt) puis redémarre l'affichage. Fichiers HWiNFO exclus (propres à Windows).
 
 **Installation et mises à jour (Velopack).** `VelopackApp.Build()…Run()` en tête de `Main` (hooks
 d'install / mise à jour / désinstallation → `Installation.cs`, 30 s max puis exit). Installé dans

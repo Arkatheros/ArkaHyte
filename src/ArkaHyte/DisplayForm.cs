@@ -152,7 +152,7 @@ public sealed class DisplayForm : Form
 			_setup.Activate();
 			return;
 		}
-		_setup = new SetupForm(_settings, step);
+		_setup = new SetupForm(_settings, step, energy: _hub.Energy);
 		_setup.Saved += restart =>
 		{
 			if (restart)
@@ -492,6 +492,10 @@ public sealed class DisplayForm : Form
 				OpenSetup(ReadString(root, "step") == "energy" ? SetupForm.EnergyStep : SetupForm.ShortcutsStep);
 				break;
 			case "energyHistory":
+				Post(_hub.Energy.History());
+				break;
+			case "energyReset":
+				_hub.Energy.Reset();
 				Post(_hub.Energy.History());
 				break;
 			case "audio" when action is not null:
