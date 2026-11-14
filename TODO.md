@@ -15,7 +15,7 @@ du non fait.
 ---
 
 # Liste des tâches
-
+ - [ ] ajouter un icone devant importer et exporter qui les distingue
  - [ ] ajoute d'une gestion de theme plus pousser, par exemple pouvoir choisir le fond d'ecran,
      - gestion d'un rognage au ratio de l'applis via un rectangle afin de pouvoir utiliser n'immporte quel photos.
      - gestion d'utilisation d'une video ? image animé ?
