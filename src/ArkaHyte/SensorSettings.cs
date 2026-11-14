@@ -133,8 +133,17 @@ public static class SensorSettings
 		}
 	}
 
+	/// <summary>Writes the display options set on the case screen: cpuDetails (bool).</summary>
+	public static void ApplyDisplay(JsonObject root, JsonElement message)
+	{
+		if (message.TryGetProperty("cpuDetails", out var cpuDetails) && cpuDetails.ValueKind is JsonValueKind.True or JsonValueKind.False)
+		{
+			root["CpuDetails"] = cpuDetails.GetBoolean();
+		}
+	}
+
 	/// <summary>
-	/// Writes the game view settings: gameView { autoNormal?, delaySec?, transition?, detectEngines?,
+	/// Writes the game view settings: gameView { autoGame?, autoNormal?, delaySec?, transition?, detectEngines?,
 	/// extraGames?: [{ exe, name }] }.
 	/// </summary>
 	public static void ApplyGameView(JsonObject root, JsonElement message)
@@ -147,6 +156,10 @@ public static class SensorSettings
 		{
 			node = new JsonObject();
 			root["GameView"] = node;
+		}
+		if (gameView.TryGetProperty("autoGame", out var autoGame) && autoGame.ValueKind is JsonValueKind.True or JsonValueKind.False)
+		{
+			node["AutoGame"] = autoGame.GetBoolean();
 		}
 		if (gameView.TryGetProperty("autoNormal", out var autoNormal) && autoNormal.ValueKind is JsonValueKind.True or JsonValueKind.False)
 		{

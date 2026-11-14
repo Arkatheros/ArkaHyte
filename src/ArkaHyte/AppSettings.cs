@@ -28,7 +28,22 @@ public sealed record HwInfoSettings(
 	SensorSelector? GpuFps = null,
 	// Optional PresentMon values of the game view; computed from the framerate when not chosen
 	SensorSelector? GpuFpsLow = null,
-	SensorSelector? GpuFrameTime = null);
+	SensorSelector? GpuFrameTime = null,
+	// Processor details (side readouts, detail panel); HWiNFO's own names when left out (CpuDetailDefaults)
+	SensorSelector? CpuClock = null,
+	SensorSelector? CpuVoltage = null,
+	SensorSelector? CpuPptLimit = null,
+	SensorSelector? CpuActiveCores = null)
+{
+	/// <summary>Readings looked for when the settings name none: HWiNFO in English, then in French.</summary>
+	public static readonly SensorSelector[] CpuClockDefaults =
+		[new("CPU [#*", "Average Effective Clock"), new("CPU [#*", "Horloge efficace moyenne")];
+	public static readonly SensorSelector[] CpuVoltageDefaults =
+		[new("CPU [#*", "CPU Core Voltage (SVI3 TFN)"), new("CPU [#*", "CPU VDDCR_VDD Voltage (SVI3 TFN)"), new("CPU [#*", "CPU VDDCR_VDD Tension (SVI3 TFN)")];
+	public static readonly SensorSelector[] CpuPptLimitDefaults = [new("CPU [#*", "CPU PPT Limit")];
+	public static readonly SensorSelector[] CpuActiveCoresDefaults =
+		[new("CPU [#*", "Average Active Core Count"), new("CPU [#*", "Nombre moyen de cœurs actifs")];
+}
 
 /// <summary>Display themes: colours, hilt, background and particles (console.css, console.js).</summary>
 public static class Themes
@@ -72,13 +87,15 @@ public sealed record ThresholdSettings(
 public sealed record WeatherSettings(bool Enabled = false, string Place = "", double? Latitude = null, double? Longitude = null);
 
 /// <summary>
-/// Game view: back to the normal view once the game has been in the background (another window has the
-/// focus) for AutoNormalDelaySec, back to the game view when it returns to the foreground.
+/// Game view: shown by itself when a game starts (AutoGame; otherwise only by a swipe), back to the normal
+/// view once the game has been in the background (another window has the focus) for AutoNormalDelaySec,
+/// back to the game view when it returns to the foreground.
 /// Transition: animation between the two views, one of <see cref="Transitions"/>.
 /// Games are those Windows recognises (Game Bar list), plus ExtraGames (added by hand, matched by
 /// executable name) and, with DetectEngines, any Unreal Engine or Unity game window.
 /// </summary>
 public sealed record GameViewSettings(
+	bool AutoGame = true,
 	bool AutoNormal = true,
 	int AutoNormalDelaySec = 20,
 	string Transition = "morph",
@@ -120,7 +137,9 @@ public sealed record AppSettings(
 	string Theme = Themes.Sith,
 	ThresholdSettings? Thresholds = null,
 	WeatherSettings? Weather = null,
-	GameViewSettings? GameView = null)
+	GameViewSettings? GameView = null,
+	// Clock and voltage next to the CPU dial (toggled from the processor detail panel)
+	bool CpuDetails = true)
 {
 	public GameViewSettings EffectiveGameView => GameView ?? new GameViewSettings();
 

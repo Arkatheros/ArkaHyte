@@ -58,11 +58,13 @@ public sealed partial class HwInfoReader : IDisposable
 		var entries = new List<Entry>();
 		if (key is not null)
 		{
-			for (var i = 0; ; i++)
+			// Slots follow each entry's rank in HWiNFO's settings: gaps are possible (an entry whose sensor is
+			// absent, ranks set by hand), so every slot present is read, in order
+			foreach (var i in Slots(key))
 			{
 				if (key.GetValue($"Label{i}") is not string label)
 				{
-					break;
+					continue;
 				}
 				var sensor = key.GetValue($"Sensor{i}") as string ?? string.Empty;
 				if (TryParse(key.GetValue($"ValueRaw{i}") as string, out var value))
@@ -74,6 +76,14 @@ public sealed partial class HwInfoReader : IDisposable
 		}
 		return entries;
 	}
+
+	/// <summary>Numbers of the Gadget slots present ("Label12" → 12), in ascending order.</summary>
+	public static IEnumerable<int> Slots(RegistryKey key) =>
+		key.GetValueNames()
+			.Where(name => name.StartsWith("Label", StringComparison.Ordinal))
+			.Select(name => int.TryParse(name.AsSpan(5), NumberStyles.None, CultureInfo.InvariantCulture, out var slot) ? slot : -1)
+			.Where(slot => slot >= 0)
+			.Order();
 
 	public void Dispose()
 	{
@@ -94,6 +104,43 @@ public sealed partial class HwInfoReader : IDisposable
 		[System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)] bool asynchronous);
 
 	public double? Get(SensorSelector? selector) => IndexOf(selector) is var index and >= 0 ? _entries[index].Value : null;
+
+	/// <summary>The configured reading, or the first default HWiNFO reports.</summary>
+	public double? Get(SensorSelector? selector, SensorSelector[] defaults)
+	{
+		if (selector is not null)
+		{
+			return Get(selector);
+		}
+		foreach (var fallback in defaults)
+		{
+			if (Get(fallback) is { } value)
+			{
+				return value;
+			}
+		}
+		return null;
+	}
+
+	/// <summary>
+	/// Clock of each core of the processor sensor ("Core 3 Clock (perf #2)", "Core 3 Horloge (perf #2)"),
+	/// in core order; effective clocks and ratios excluded.
+	/// </summary>
+	public IReadOnlyList<double> CoreClocks()
+	{
+		var clocks = new SortedList<int, double>();
+		foreach (var entry in _entries)
+		{
+			if (CoreClockLabel().Match(entry.Label) is { Success: true } match && entry.Sensor.StartsWith("CPU [#", StringComparison.Ordinal))
+			{
+				clocks.TryAdd(int.Parse(match.Groups[1].ValueSpan, CultureInfo.InvariantCulture), entry.Value);
+			}
+		}
+		return [.. clocks.Values];
+	}
+
+	[GeneratedRegex(@"^Core (\d+) (Clock|Horloge) \(perf", RegexOptions.IgnoreCase)]
+	private static partial Regex CoreClockLabel();
 
 	/// <summary>Position in <see cref="Entries"/> of the first entry the selector matches, or -1.</summary>
 	public int IndexOf(SensorSelector? selector)

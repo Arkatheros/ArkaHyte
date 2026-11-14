@@ -103,6 +103,42 @@
 	$('skip').addEventListener('click', () => send({ type: 'skip' }));
 	$('identify').addEventListener('click', () => send({ type: 'identify' }));
 	$('startHwInfo').addEventListener('click', () => send({ type: 'startHwInfo' }));
+	$('configureHwInfo').addEventListener('click', () => {
+		$('configureHwInfo').disabled = true;
+		showConfigureStatus('Configuration en cours : HWiNFO va se fermer puis se relancer…', '');
+		send({ type: 'configureHwInfo' });
+		if (!host) {
+			setTimeout(() => onHwInfoConfigured({ result: { ok: true, added: ['CPU [#0]: AMD Ryzen 7 9800X3D | Average Effective Clock'], discovered: 412 } }), 1500);
+		}
+	});
+
+	function showConfigureStatus(text, level) {
+		const status = $('configureStatus');
+		status.hidden = false;
+		status.className = 'status ' + level;
+		status.textContent = text;
+	}
+
+	const CONFIGURE_ERRORS = {
+		declined: 'Autorisation refusée : HWiNFO n’a pas été modifié.',
+		notInstalled: 'HWiNFO est introuvable sur ce PC.',
+		gadgetOff: 'Gadget n’est pas activé dans HWiNFO (étape 2).',
+		noReadings: 'HWiNFO n’a rien transmis à Gadget pendant la découverte : rien n’a été changé. Vérifiez qu’il démarre bien, Gadget activé (étape 2).',
+		failed: 'La configuration a échoué : voir le journal (menu de l’icône › Ouvrir le dossier des journaux).'
+	};
+
+	function onHwInfoConfigured(message) {
+		$('configureHwInfo').disabled = false;
+		const result = message.result || { ok: false, error: message.error };
+		if (!result.ok) {
+			showConfigureStatus(CONFIGURE_ERRORS[result.error] || CONFIGURE_ERRORS.failed, 'bad');
+			return;
+		}
+		const added = result.added || [];
+		showConfigureStatus(added.length
+			? added.length + ' valeur' + (added.length > 1 ? 's' : '') + ' ajoutée' + (added.length > 1 ? 's' : '') + ' à Gadget (' + result.discovered + ' disponibles dans HWiNFO).'
+			: 'Rien à ajouter : les valeurs utiles étaient déjà transmises à Gadget.', '');
+	}
 	$('downloadHwInfo').addEventListener('click', () => send({ type: 'openHwInfoSite' }));
 	$('useDetected').addEventListener('click', () => fillHardware(model.state.detected));
 
@@ -514,9 +550,11 @@
 		}
 		const hardware = readHardware();
 		const delay = $('gameAutoDelay');
-		add('ok', $('gameAutoNormal').checked
-			? 'Vue jeu : retour à la vue normale <b>' + escapeHtml(delay.options[delay.selectedIndex].text) + '</b> après le passage du jeu en arrière-plan'
-			: 'Vue jeu : <b>gardée</b> quand le jeu passe en arrière-plan');
+		add('ok', !$('gameAutoGame').checked
+			? 'Vue jeu : <b>seulement au balayage</b>, jamais automatique'
+			: $('gameAutoNormal').checked
+				? 'Vue jeu : automatique, retour à la vue normale <b>' + escapeHtml(delay.options[delay.selectedIndex].text) + '</b> après le passage du jeu en arrière-plan'
+				: 'Vue jeu : automatique, <b>gardée</b> quand le jeu passe en arrière-plan');
 		const transition = $('gameTransition');
 		add('ok', 'Changement de vue : <b>' + escapeHtml(transition.options[transition.selectedIndex].text.split(' :')[0]) + '</b>');
 		add('ok', 'Jeux ajoutés : <b>' + (extraGames.length ? extraGames.map(g => escapeHtml(g.name || g.exe)).join(', ') : 'aucun') + '</b>');
@@ -538,6 +576,7 @@
 		const message = { type: 'save', hardware: readHardware() };
 		message.weather = { enabled: $('weatherEnabled').checked };
 		message.gameView = {
+			autoGame: $('gameAutoGame').checked,
 			autoNormal: $('gameAutoNormal').checked,
 			delaySec: Number($('gameAutoDelay').value),
 			transition: $('gameTransition').value,
@@ -604,11 +643,12 @@
 			select.add(option, after || null);
 		}
 		select.value = seconds;
+		$('gameAutoGame').checked = gameView.autoGame !== false;
 		$('gameAutoNormal').checked = Boolean(gameView.autoNormal);
 		$('gameTransition').value = gameView.transition || 'morph';
 		extraGames = (gameView.extraGames || []).map(game => ({ exe: game.exe, name: game.name || '' }));
 		renderExtraGames();
-		select.disabled = !gameView.autoNormal;
+		updateAutoControls();
 	}
 
 	// Games added by hand ({ exe, name }) and the applications open now, to pick one from
@@ -651,9 +691,14 @@
 	});
 	$('processRefresh').addEventListener('click', () => send({ type: 'listProcesses' }));
 
-	$('gameAutoNormal').addEventListener('change', () => {
-		$('gameAutoDelay').disabled = !$('gameAutoNormal').checked;
-	});
+	// The automatic return only means something when the game view comes by itself
+	function updateAutoControls() {
+		const auto = $('gameAutoGame').checked;
+		$('gameAutoNormal').disabled = !auto;
+		$('gameAutoDelay').disabled = !auto || !$('gameAutoNormal').checked;
+	}
+	$('gameAutoGame').addEventListener('change', updateAutoControls);
+	$('gameAutoNormal').addEventListener('change', updateAutoControls);
 
 	// ---------- Host messages ----------
 
@@ -710,6 +755,9 @@
 			case 'places':
 				onPlaces(message);
 				break;
+			case 'hwinfoConfigured':
+				onHwInfoConfigured(message);
+				break;
 			case 'saveFailed':
 				$('saveError').hidden = false;
 				$('next').disabled = false;
@@ -751,7 +799,7 @@
 			type: 'state',
 			// "?mode=settings" previews the settings window instead of the first-run wizard
 			completed: new URLSearchParams(location.search).get('mode') === 'settings',
-			gameView: { autoNormal: true, autoNormalDelaySec: 20, transition: 'morph', detectEngines: true, extraGames: [{ exe: 'TFTClient-Win64-Shipping.exe', name: 'TFT' }] },
+			gameView: { autoGame: new URLSearchParams(location.search).get('autoGame') !== 'off', autoNormal: true, autoNormalDelaySec: 20, transition: 'morph', detectEngines: true, extraGames: [{ exe: 'TFTClient-Win64-Shipping.exe', name: 'TFT' }] },
 			caseSize: { width: 682, height: 2560 },
 			screens: [
 				{ number: 1, name: 'DISPLAY1', x: -682, y: 1440, width: 682, height: 2560, primary: false },

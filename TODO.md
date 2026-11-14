@@ -15,10 +15,6 @@ du non fait.
 ---
 
 # Liste des tâches
-- [ ] Refroidissement : température du liquide de l'AIO TITAN 360, vitesse de la pompe et des ventilateurs RX,
-  lus par HWiNFO (capteurs du hub iCUE LINK, sans le SDK iCUE)
-  - Vérifier d'abord que HWiNFO les expose (`--dump`), puis nouvelles entrées `HwInfo` + étape de l'assistant
-  - Jauge « liquide » dans le style des autres, seuils réglables par appui long
 - [ ] Audio au toucher : volume général et par application, bouton micro coupé / actif avec voyant bien visible,
   bascule de la sortie par défaut (casque ↔ enceintes)
   - API Core Audio (`IMMDeviceEnumerator`, `IAudioEndpointVolume`, sessions audio) dans l'hôte : pas de shell
@@ -34,3 +30,16 @@ du non fait.
 - [ ] Coût électrique du PC : compteur kWh et € (jour, session de jeu) à partir des puissances CPU + GPU (+ forfait
   pour le reste, réglable), prix du kWh dans les réglages
   - Cumul côté C# (persisté dans `%LOCALAPPDATA%\ArkaHyte` pour survivre au redémarrage), remise à zéro quotidienne
+
+# En attente — uniquement sur demande explicite du propriétaire
+
+Hors file d'attente : « next » ne les prend jamais.
+
+- [ ] Redémarrage automatique d'iCUE quand il dérive (à faire seulement si le problème revient et qu'il le demande)
+  - Constat du 2026-11-14 : après des heures, la charge totale montait à ~22 % (dont ~12 % dus à iCUE, surtout en
+    temps noyau imputé au processus « System ») ; iCUE relancé, retour à ~10 %. Arka Hyte n'y est pour rien (+1 à 3 %)
+  - La surcharge n'apparaît pas sur `iCUE.exe` : la détecter par la charge noyau totale sur plusieurs minutes, ou
+    redémarrer à intervalle fixe
+  - Fermer iCUE proprement : forcer l'arrêt d'`iCUE.exe` et d'`iCUEDevicePluginHost` laisse les services Corsair
+    incohérents (plugins qui ne s'installent plus, assistant du hub bloqué) ; leur redémarrage demande l'admin
+  - Le tapis, le support casque et le hub LINK n'ont pas de mode mémoire : iCUE doit rester lancé

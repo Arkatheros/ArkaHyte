@@ -50,13 +50,30 @@
 					<div class="check" id="checkRunning"><span class="mark"></span><span class="check-text"></span></div>
 					<div class="check" id="checkGadget"><span class="mark"></span><span class="check-text"></span></div>
 				</div>
+				<div class="row">
+					<button type="button" class="ghost" id="startHwInfo" hidden>Lancer HWiNFO</button>
+					<button type="button" class="ghost" id="downloadHwInfo">Télécharger HWiNFO</button>
+					<span class="hint">Cette page se met à jour toute seule.</span>
+				</div>
+
+				<h2>Configuration automatique</h2>
+				<p class="hint">Arka Hyte coche lui-même dans HWiNFO les valeurs qu'il utilise (et celles des prochains
+					widgets). HWiNFO est fermé puis relancé, Windows demande une autorisation d'administrateur ; vos
+					réglages HWiNFO sont sauvegardés avant. Compter une à deux minutes. Il faut seulement que HWiNFO soit
+					installé et que <strong>Enable reporting to Gadget</strong> soit coché (étape 2 ci-dessous).</p>
+				<div class="row">
+					<button type="button" class="ghost" id="configureHwInfo">Configurer HWiNFO automatiquement</button>
+				</div>
+				<p class="status" id="configureStatus" hidden></p>
+
+				<h2>Configuration manuelle</h2>
 				<ol class="guide">
 					<li>Installez HWiNFO puis lancez-le en mode <strong>Capteurs seulement</strong> (<em>Sensors-only</em>).</li>
 					<li>Dans la fenêtre des capteurs, ouvrez les <strong>paramètres</strong> (roue dentée), onglet
 						<strong>HWiNFO Gadget</strong>, et cochez <strong>Enable reporting to Gadget</strong>.</li>
 					<li>Dans la même liste, sélectionnez chaque valeur utile (température et consommation du CPU,
-						température, consommation, charge et mémoire du GPU) et cochez
-						<strong>Report value in Gadget</strong>.</li>
+						horloge efficace moyenne et tension VDDCR_VDD du CPU, température, consommation, charge et mémoire
+						du GPU) et cochez <strong>Report value in Gadget</strong>.</li>
 					<li>Facultatif, pour la <strong>température des disques</strong> : dans le capteur
 						<strong>S.M.A.R.T.</strong> de chaque disque, cochez <strong>Drive Temperature</strong>
 						(<em>Température du disque</em>).</li>
@@ -66,11 +83,6 @@
 					<li>Pour qu'il démarre avec Windows : paramètres généraux de HWiNFO, cochez <strong>Auto Start</strong>
 						et <strong>Minimize Sensors on Startup</strong>.</li>
 				</ol>
-				<div class="row">
-					<button type="button" class="ghost" id="startHwInfo" hidden>Lancer HWiNFO</button>
-					<button type="button" class="ghost" id="downloadHwInfo">Télécharger HWiNFO</button>
-					<span class="hint">Cette page se met à jour toute seule.</span>
-				</div>
 			</section>
 
 			<!-- Sensors -->
@@ -120,9 +132,10 @@
 			<!-- Game view -->
 			<section class="page" data-page="5">
 				<h1>Vue jeu</h1>
-				<p class="lead">Pendant une partie, l'écran du boîtier passe en vue jeu (FPS, carte graphique,
-					processeur). Quand le jeu passe en arrière-plan (Alt+Tab, bureau), l'écran peut revenir seul
-					à la vue normale.</p>
+				<p class="lead">Pendant une partie, l'écran du boîtier peut passer seul en vue jeu (FPS, carte graphique,
+					processeur), puis revenir à la vue normale quand le jeu passe en arrière-plan (Alt+Tab, bureau).
+					Un balayage sur l'écran change de vue à tout moment.</p>
+				<label class="switch"><input type="checkbox" id="gameAutoGame"><span>Passer automatiquement en vue jeu quand un jeu démarre</span></label>
 				<label class="switch"><input type="checkbox" id="gameAutoNormal"><span>Revenir à la vue normale quand le jeu est en arrière-plan</span></label>
 				<div class="row">
 					<label class="hint" for="gameAutoDelay">Après</label>

@@ -24,6 +24,7 @@ internal static class Program
 	///   ArkaHyte.exe --speedtest out.txt  run a real speed test and write every update
 	///   ArkaHyte.exe --list-apps out.json list the applications offered by the shortcut editor and exit
 	///   ArkaHyte.exe --dump out.json      sample every sensor once, write the result and exit
+	///   ArkaHyte.exe --configure-hwinfo result.json  (elevated) report the useful HWiNFO readings to Gadget
 	/// </summary>
 	[STAThread]
 	private static int Main(string[] args)
@@ -40,6 +41,12 @@ internal static class Program
 		if (ArgumentValue(args, "--theme") is { } themeOverride)
 		{
 			settings = settings with { Theme = Themes.Normalize(themeOverride) };
+		}
+		var hwInfoResultPath = ArgumentValue(args, HwInfoConfigurator.Argument);
+		if (hwInfoResultPath is not null)
+		{
+			// Started elevated by the settings window: HWiNFO runs elevated
+			return HwInfoConfigurator.Run(hwInfoResultPath);
 		}
 		var dumpPath = ArgumentValue(args, "--dump");
 		if (dumpPath is not null)

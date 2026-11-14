@@ -16,6 +16,8 @@
 	const nf0Format = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
 	const nf0 = (value) => nf0Format.format(value);
 	const nf1 = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+	const nf2 = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+	const nf3 = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 	const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
 	const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 
@@ -1643,7 +1645,7 @@
 	let gameSession = null;
 	let gameView = false;
 	// Settings (setup wizard): back to the normal view while the game stays in the background
-	let gameViewConfig = { autoNormal: true, autoNormalDelaySec: 20, transition: 'morph' };
+	let gameViewConfig = { autoGame: true, autoNormal: true, autoNormalDelaySec: 20, transition: 'morph' };
 	const dial = { max: 0, ticks: [], blade: null, core: null, low: null };
 	// dirty: the curve changed while the game view was hidden
 	const graph = { area: null, line: null, visible: false, frozen: false, dirty: false, bottom: 0, top: 0, shift: -1 };
@@ -1846,6 +1848,9 @@
 		pageDots.forEach((dot) => dot.setAttribute('aria-current', String(dot.dataset.view === (showGame ? 'game' : 'normal'))));
 		if (showGame !== gameView) {
 			gameView = showGame;
+			if (!showGame) {
+				CPU_SIDE_GLIDES.forEach(redrawGlide);
+			}
 			if (showGame && !inGame) {
 				renderNoGame();
 			} else if (showGame) {
@@ -1925,8 +1930,10 @@
 		if (game) {
 			if (!gameSession) {
 				gameSession = startGameSession();
-				// A game that starts takes the screen, whatever was swiped before
-				viewChoice = null;
+				// A game that starts takes the screen, whatever was swiped before (unless it never does by itself)
+				if (gameViewConfig.autoGame !== false) {
+					viewChoice = null;
+				}
 			}
 			gameSession.lastSeen = now;
 			gameSession.name = game.name || '';
@@ -1941,12 +1948,12 @@
 			viewChoice = null;
 			GAME_GLIDES.forEach(forgetGlide);
 		}
-		// Automatic choice (a swipe overrides it): the normal view once the game has stayed long enough in
-		// the background, the game view as soon as it is back in front
+		// Automatic choice (a swipe overrides it): the game view while the game is in front, the normal view
+		// once it has stayed long enough in the background; always the normal view when AutoGame is off
 		if (gameSession) {
 			const away = gameViewConfig.autoNormal && gameSession.backgroundSince > 0
 				&& now - gameSession.backgroundSince >= gameViewConfig.autoNormalDelaySec * 1000;
-			gameSession.view = away ? 'normal' : 'game';
+			gameSession.view = gameViewConfig.autoGame !== false && !away ? 'game' : 'normal';
 		}
 		applyView();
 		if (!gameSession) {
@@ -2045,6 +2052,158 @@
 		}
 	}, true);
 	pageDots.forEach((dot) => dot.addEventListener('click', () => showView(dot.dataset.view)));
+
+	// ---------- Processor details: clock and voltage beside the dial, detail panel on a tap ----------
+	// Side readouts glide like every number and draw nothing while hidden (game view, option off); the
+	// panel's values are only drawn while it is open, caught up at once when it opens.
+	const CPU_DETAIL_AUTO_CLOSE_MS = 60000;
+	const cpuDetail = { open: false, closeTimer: 0, layout: '', cores: 0, threads: 0 };
+	let cpuDetailsShown = true;
+	const CPU_SIDE_HIDDEN = () => !cpuDetailsShown || gameView;
+	const CPU_PANEL_HIDDEN = () => !cpuDetail.open;
+	const CPU_SIDE_GLIDES = ['cpuSideClock', 'cpuSideMax', 'cpuSideVolt'];
+	const CPU_PANEL_GLIDES = ['cpuDetailClock', 'cpuDetailFastest', 'cpuDetailEffective', 'cpuDetailVolt', 'cpuDetailPpt', 'cpuDetailActive'];
+	const ghz = (mhz) => nf2.format(mhz / 1000);
+
+	function renderCpuDetails(cpu) {
+		const clocks = Array.isArray(cpu.coreClocksMhz) ? cpu.coreClocksMhz : [];
+		const loads = Array.isArray(cpu.threadLoads) ? cpu.threadLoads : [];
+		const fastest = clocks.length ? Math.max(...clocks) : null;
+		// Running clock of the cores (what Task Manager shows); the effective clock counts the time the cores
+		// sleep, far lower at rest, and only stands in when HWiNFO reports no core clocks
+		const running = clocks.length ? clocks.reduce((sum, mhz) => sum + mhz, 0) / clocks.length : cpu.clockMhz;
+		const side = { ...NUMBER, hidden: CPU_SIDE_HIDDEN };
+		glide('cpuSideClock', running, (mhz) => text('cpuSideClock', orDash(mhz, ghz)), side);
+		glide('cpuSideMax', fastest, (mhz) => text('cpuSideMax', isNum(mhz) ? `max ${ghz(mhz)}` : '\u00a0'), side);
+		glide('cpuSideVolt', cpu.voltage, (volts) => text('cpuSideVolt', orDash(volts, (v) => nf2.format(v))), side);
+
+		const panel = { ...NUMBER, hidden: CPU_PANEL_HIDDEN };
+		glide('cpuDetailClock', running, (mhz) => text('cpuDetailClock', orDash(mhz, ghz)), panel);
+		glide('cpuDetailFastest', fastest, (mhz) => text('cpuDetailFastest', isNum(mhz) ? `max ${ghz(mhz)} GHz` : '\u00a0'), panel);
+		glide('cpuDetailEffective', clocks.length ? cpu.clockMhz : null, (mhz) => text('cpuDetailEffective', isNum(mhz) ? `effective ${ghz(mhz)} GHz (sommeil compris)` : '\u00a0'), panel);
+		glide('cpuDetailVolt', cpu.voltage, (volts) => text('cpuDetailVolt', orDash(volts, (v) => nf3.format(v))), panel);
+		glide('cpuDetailPpt', cpu.pptLimit, (percent) => {
+			text('cpuDetailPpt', orDash(percent, nf0));
+			setStyle($('cpuDetailPptFill'), 'width', isNum(percent) ? `${clamp(percent, 1, 100).toFixed(2)}%` : '0%');
+		}, { hidden: CPU_PANEL_HIDDEN });
+		glide('cpuDetailActive', cpu.activeCores, (cores) => text('cpuDetailActive', orDash(cores, (v) => nf1.format(v))), panel);
+
+		ensureCpuLanes(clocks.length, loads.length);
+		loads.forEach((load, i) => glide(`cpuThread${i}`, load, (value) => {
+			setStyle(cpuDetail.bars[i], 'height', `${clamp(isNum(value) ? value : 0, 0, 100).toFixed(1)}%`);
+		}, { hidden: CPU_PANEL_HIDDEN }));
+		clocks.forEach((mhz, i) => glide(`cpuCoreClock${i}`, mhz, (value) => {
+			if (cpuDetail.clockLabels[i]) {
+				setText(cpuDetail.clockLabels[i], orDash(value, ghz));
+			}
+		}, panel));
+	}
+
+	// One column per core with a bar per thread (two on SMT processors); without HWiNFO's core clocks,
+	// one column per thread. Rebuilt only when the counts change.
+	function ensureCpuLanes(cores, threads) {
+		const perCore = cores > 0 && threads % cores === 0 ? threads / cores : 1;
+		const lanes = cores > 0 && threads % cores === 0 ? cores : threads;
+		const layout = `${lanes}x${perCore}`;
+		if (layout === cpuDetail.layout) {
+			return;
+		}
+		cpuDetail.layout = layout;
+		cpuDetail.cores = cores;
+		cpuDetail.threads = threads;
+		cpuDetail.bars = [];
+		cpuDetail.clockLabels = [];
+		const container = $('cpuDetailLanes');
+		container.textContent = '';
+		container.style.setProperty('--cpu-lanes', Math.max(lanes, 1));
+		for (let lane = 0; lane < lanes; lane++) {
+			const column = document.createElement('div');
+			column.className = 'cpu-lane';
+			const clock = document.createElement('span');
+			clock.className = 'cpu-lane-clock';
+			clock.textContent = '\u00a0';
+			const bars = document.createElement('div');
+			bars.className = 'cpu-lane-bars';
+			for (let t = 0; t < perCore; t++) {
+				const track = document.createElement('i');
+				const fill = document.createElement('b');
+				track.appendChild(fill);
+				bars.appendChild(track);
+				cpuDetail.bars.push(fill);
+			}
+			const name = document.createElement('span');
+			name.className = 'cpu-lane-name';
+			name.textContent = (cores > 0 ? 'C' : 'T') + lane;
+			column.append(clock, bars, name);
+			container.appendChild(column);
+			if (cores > 0) {
+				cpuDetail.clockLabels.push(clock);
+			}
+		}
+		text('cpuDetailLanesHint', cores > 0 ? `GHz par cœur · ${perCore > 1 ? `${perCore} fils chacun` : 'un fil chacun'}` : 'un fil par barre');
+		text('cpuDetailCores', cores > 0 ? `/ ${cores}` : '');
+		text('cpuDetailModel', `${$('cpuMaker').textContent} ${$('cpuModel').textContent}${cores > 0 ? ` · ${cores} cœurs / ${threads} fils` : ` · ${threads} fils`}`);
+		// Values already gliding find their new elements
+		for (let i = 0; i < threads; i++) {
+			forgetGlide(`cpuThread${i}`);
+		}
+		for (let i = 0; i < cores; i++) {
+			forgetGlide(`cpuCoreClock${i}`);
+		}
+	}
+
+	function cpuPanelKeys() {
+		const keys = [...CPU_PANEL_GLIDES];
+		for (let i = 0; i < cpuDetail.threads; i++) {
+			keys.push(`cpuThread${i}`);
+		}
+		for (let i = 0; i < cpuDetail.cores; i++) {
+			keys.push(`cpuCoreClock${i}`);
+		}
+		return keys;
+	}
+
+	function armCpuDetailClose() {
+		clearTimeout(cpuDetail.closeTimer);
+		cpuDetail.closeTimer = setTimeout(closeCpuDetail, CPU_DETAIL_AUTO_CLOSE_MS);
+	}
+
+	function openCpuDetail() {
+		cpuDetail.open = true;
+		$('cpuDetail').hidden = false;
+		cpuPanelKeys().forEach(redrawGlide);
+		armCpuDetailClose();
+	}
+
+	function closeCpuDetail() {
+		clearTimeout(cpuDetail.closeTimer);
+		cpuDetail.open = false;
+		$('cpuDetail').hidden = true;
+	}
+
+	// Saved option (config.cpuDetails): the side readouts show again where their values stand
+	function applyCpuDetailsOption(shown) {
+		cpuDetailsShown = shown;
+		frame.classList.toggle('cpu-details-off', !shown);
+		$('cpuDetailToggle').setAttribute('aria-pressed', String(shown));
+		if (shown) {
+			CPU_SIDE_GLIDES.forEach(redrawGlide);
+		}
+	}
+
+	$('cpu').addEventListener('click', openCpuDetail);
+	$('cpuDetailClose').addEventListener('click', closeCpuDetail);
+	$('cpuDetail').addEventListener('click', (event) => {
+		if (event.target === $('cpuDetail')) {
+			closeCpuDetail();
+		} else {
+			armCpuDetailClose();
+		}
+	});
+	$('cpuDetailToggle').addEventListener('click', () => {
+		applyCpuDetailsOption(!cpuDetailsShown);
+		send({ type: 'saveMetric', cpuDetails: cpuDetailsShown });
+	});
 
 	// ---------- Temperature / power history (short tap on a tile) ----------
 	// The last 30 minutes of each metric, one point per sample, kept in the page (a reload starts over).
@@ -2282,6 +2441,7 @@
 		lastTick = performance.now();
 
 		renderCpu(cpu);
+		renderCpuDetails(cpu);
 		renderGpu(gpu);
 		recordHistory(cpu, gpu);
 		if (isNum(gpu.vramTotalGb) && gpu.vramTotalGb !== vramTicksFor) {
@@ -2304,6 +2464,7 @@
 		if (config.thresholds) applyLimits(config.thresholds);
 		if (config.weather) weatherConfig = config.weather;
 		if (config.gameView) gameViewConfig = config.gameView;
+		if (typeof config.cpuDetails === 'boolean') applyCpuDetailsOption(config.cpuDetails);
 	}
 
 	function onHostMessage(message) {
@@ -3347,7 +3508,17 @@
 			const down = scenario.offline ? Math.random() * 400 : (burst ? Math.random() * 22 : Math.random() * 0.7) * MB;
 			onHostMessage({
 				type: 'snapshot',
-				cpu: { load: sim.cpu, temp: sim.cpuTemp, power: 30 + sim.cpu * 1.25 },
+				cpu: {
+					load: sim.cpu,
+					temp: sim.cpuTemp,
+					power: 30 + sim.cpu * 1.25,
+					clockMhz: 3600 + sim.cpu * 14 + Math.random() * 300,
+					voltage: 0.95 + sim.cpu * 0.0035 + Math.random() * 0.02,
+					pptLimit: 18 + sim.cpu * 0.75,
+					activeCores: 1 + (sim.cpu / 100) * 7,
+					coreClocksMhz: Array.from({ length: 8 }, () => 4300 + sim.cpu * 8 + Math.random() * 600),
+					threadLoads: Array.from({ length: 16 }, (_, i) => clamp(sim.cpu * (i % 2 ? 0.5 : 1.4) + (Math.random() - 0.5) * 30, 0, 100))
+				},
 				gpu: { load: sim.gpu, temp: sim.gpuTemp, power: 25 + sim.gpu * 4.15, vramPercent: sim.vram, vramTotalGb: 24, fps: scenario.fps && !background ? scenario.fps - Math.random() * 12 : null, fpsLow: scenario.fpsLow && !background ? scenario.fpsLow + Math.random() * 4 : null, frameTimeMs: null },
 				ram: { usedGb: sim.ram, totalGb: 62 },
 				disks: [
@@ -3410,6 +3581,10 @@
 	// "?view=game" starts on the game view, game or not (as a swipe would), for captures
 	if (new URLSearchParams(location.search).get('view') === 'game') {
 		setTimeout(() => showView('game'), 1200);
+	}
+	// "?cpu=detail" opens the processor detail panel at load, for captures
+	if (new URLSearchParams(location.search).get('cpu') === 'detail') {
+		setTimeout(openCpuDetail, 2500);
 	}
 	// "?history=cpuTemp" (cpuPow, gpuTemp, gpuPow) opens a history chart at load, "&minutes=30" for the long one
 	const historyPreview = new URLSearchParams(location.search).get('history');

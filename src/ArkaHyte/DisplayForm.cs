@@ -572,6 +572,7 @@ public sealed class DisplayForm : Form
 				located = _settings.Weather is { Latitude: not null, Longitude: not null }
 			},
 			gameView = _settings.EffectiveGameView,
+			cpuDetails = _settings.CpuDetails,
 			shortcuts = _dockButtons
 		});
 	}
@@ -619,6 +620,7 @@ public sealed class DisplayForm : Form
 				SensorSettings.ApplyChoices(root, message);
 				SensorSettings.ApplyThresholds(root, message);
 				SensorSettings.ApplyWeather(root, message);
+				SensorSettings.ApplyDisplay(root, message);
 			});
 		}
 		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException or KeyNotFoundException)

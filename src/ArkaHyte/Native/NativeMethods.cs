@@ -62,6 +62,24 @@ internal static class NativeMethods
 	[return: MarshalAs(UnmanagedType.Bool)]
 	public static extern bool GetSystemTimes(out long idleTime, out long kernelTime, out long userTime);
 
+	// ---------- Per-processor times (ntdll) ----------
+	public const int SystemProcessorPerformanceInformation = 8;
+
+	/// <summary>Times of one logical processor, in 100 ns units; kernel time includes idle time.</summary>
+	[StructLayout(LayoutKind.Sequential)]
+	public struct ProcessorPerformance
+	{
+		public long IdleTime;
+		public long KernelTime;
+		public long UserTime;
+		public long DpcTime;
+		public long InterruptTime;
+		public uint InterruptCount;
+	}
+
+	[DllImport("ntdll.dll")]
+	public static extern int NtQuerySystemInformation(int informationClass, [Out] ProcessorPerformance[] information, int length, out int returnLength);
+
 	// ---------- Native Wi-Fi (wlanapi) ----------
 	public const uint WLAN_CLIENT_VERSION_2 = 2;
 	public const int WlanIntfOpcodeCurrentConnection = 7;

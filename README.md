@@ -42,11 +42,16 @@ Au premier lancement, une fenêtre s'ouvre sur l'écran principal (ensuite : men
 **Paramètres**) :
 
 1. **Écran du boîtier** : choix sur la carte des écrans (bouton pour afficher leurs numéros).
-2. **HWiNFO** : vérifie qu'il tourne et transmet des valeurs à Gadget, guide sa configuration.
+2. **HWiNFO** : vérifie qu'il tourne et transmet des valeurs à Gadget, guide sa configuration. Le bouton
+   **Configurer HWiNFO automatiquement** coche lui-même dans HWiNFO les valeurs utiles (une demande
+   d'administrateur, HWiNFO fermé puis relancé, une à deux minutes) ; réglages HWiNFO sauvegardés avant dans
+   `%LOCALAPPDATA%\ArkaHyte\hwinfo-backup-*.reg` (double-clic pour les restaurer), catalogue de toutes ses
+   mesures dans `hwinfo-catalog.json`.
 3. **Capteurs** : une valeur HWiNFO par widget, avec suggestion quand le réglage ne trouve rien.
 4. **Matériel** : noms CPU / GPU et mémoire GPU, détectés depuis le registre.
 5. **Météo** : ville affichée sous l'heure.
-6. **Vue jeu** : retour automatique à la vue normale quand le jeu passe en arrière-plan, après quel délai, et
+6. **Vue jeu** : passage automatique en vue jeu au lancement d'un jeu (ou seulement au balayage), retour
+   automatique à la vue normale quand le jeu passe en arrière-plan, après quel délai, et
    animation du changement de vue (morphing, balayage latéral, fondu ou aucune).
 7. **Terminer** : écrit `%LOCALAPPDATA%\ArkaHyte\appsettings.json` (`SetupCompleted: true`) et redémarre l'affichage.
 
@@ -82,6 +87,13 @@ long sur l'horloge l'affiche ou la masque. Réglage `Weather` de `appsettings.js
 (gratuit, sans compte ni clé, données sous licence CC BY 4.0).
 
 ### Réglages à l'écran
+
+**Toucher le compteur CPU** : panneau du processeur (fréquence des cœurs, moyenne et maximum, horloge effective
+en secondaire, tension du cœur, limite de puissance
+PPT, cœurs actifs, charge de chaque cœur et fil, fréquence de chaque cœur) et bouton vers le Gestionnaire des
+tâches. Une option du panneau affiche ou masque la fréquence et la tension de part et d'autre du compteur (vue
+normale ; réglage `CpuDetails`). Valeurs HWiNFO cochées par la configuration automatique ; charge par fil lue
+dans Windows.
 
 **Toucher court** sur une tuile de température ou de consommation (CPU, GPU) : courbe des 10 ou 30 dernières
 minutes avec actuelle / min / moyenne / max et les seuils d'alerte (mesures gardées depuis le démarrage de

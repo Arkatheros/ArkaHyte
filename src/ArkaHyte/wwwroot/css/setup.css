@@ -452,6 +452,12 @@ option {
 .row select.delay {
 	width: 180px;
 }
+/* Settings that do not apply (their parent option is off) */
+select:disabled,
+.switch:has(input:disabled) {
+	opacity: 0.45;
+	cursor: default;
+}
 .row select.transition {
 	width: 360px;
 }

@@ -107,7 +107,13 @@ public sealed class SensorHub : IDisposable
 		var cpu = new CpuData(
 			Safe(_system.ReadCpuLoad),
 			_hwInfo.Get(hw.CpuTemp),
-			_hwInfo.Get(hw.CpuPower));
+			_hwInfo.Get(hw.CpuPower),
+			_hwInfo.Get(hw.CpuClock, HwInfoSettings.CpuClockDefaults),
+			_hwInfo.Get(hw.CpuVoltage, HwInfoSettings.CpuVoltageDefaults),
+			_hwInfo.Get(hw.CpuPptLimit, HwInfoSettings.CpuPptLimitDefaults),
+			_hwInfo.Get(hw.CpuActiveCores, HwInfoSettings.CpuActiveCoresDefaults),
+			_hwInfo.CoreClocks(),
+			_system.ReadThreadLoads());
 
 		// PresentMon measures whatever has the focus: only a fullscreen window or a known game counts
 		var game = ForegroundGame.Read();

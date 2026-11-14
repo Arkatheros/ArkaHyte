@@ -2,7 +2,22 @@ namespace ArkaHyte.Sensors;
 
 // Shapes serialized to the web UI (camelCase); null values render as "--"
 
-public sealed record CpuData(double? Load, double? Temp, double? Power);
+/// <param name="ClockMhz">Average effective clock (HWiNFO).</param>
+/// <param name="Voltage">Core voltage in volts (HWiNFO).</param>
+/// <param name="PptLimit">Share of the package power limit in use, in percent (HWiNFO).</param>
+/// <param name="ActiveCores">Average number of active cores (HWiNFO).</param>
+/// <param name="CoreClocksMhz">Clock of each core, in core order (HWiNFO); empty when not reported.</param>
+/// <param name="ThreadLoads">Load of each logical processor in percent (Windows).</param>
+public sealed record CpuData(
+	double? Load,
+	double? Temp,
+	double? Power,
+	double? ClockMhz = null,
+	double? Voltage = null,
+	double? PptLimit = null,
+	double? ActiveCores = null,
+	IReadOnlyList<double>? CoreClocksMhz = null,
+	IReadOnlyList<double>? ThreadLoads = null);
 
 /// <param name="Fps">Framerate of the running game; null or 0 when none (the widget then hides).</param>
 /// <param name="FpsLow">"1 % low" framerate when HWiNFO reports it (the page computes a fallback).</param>

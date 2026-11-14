@@ -18,7 +18,6 @@ public sealed class SetupForm : Form
 {
 	private const string VirtualHost = "hyte.local";
 	private const string HwInfoDownloadUrl = "https://www.hwinfo.com/download/";
-	private static readonly string[] HwInfoProcessNames = ["HWiNFO64", "HWiNFO32", "HWiNFO"];
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
 	private AppSettings _settings;
@@ -131,6 +130,9 @@ public sealed class SetupForm : Form
 			case "startHwInfo":
 				StartHwInfo();
 				break;
+			case "configureHwInfo":
+				_ = ConfigureHwInfoAsync();
+				break;
 			case "save":
 				Save(root);
 				break;
@@ -174,7 +176,7 @@ public sealed class SetupForm : Form
 			hardware = _settings.Hardware,
 			detected,
 			drives = ReadDrives(),
-			hwInfoPath = FindHwInfo(),
+			hwInfoPath = HwInfoInstall.FindExecutable(),
 			weather = _settings.Weather,
 			gameView = _settings.EffectiveGameView
 		});
@@ -261,7 +263,7 @@ public sealed class SetupForm : Form
 
 	private static bool IsHwInfoRunning()
 	{
-		foreach (var name in HwInfoProcessNames)
+		foreach (var name in HwInfoInstall.ProcessNames)
 		{
 			var processes = Process.GetProcessesByName(name);
 			var found = processes.Length > 0;
@@ -277,44 +279,46 @@ public sealed class SetupForm : Form
 		return false;
 	}
 
-	/// <summary>HWiNFO executable from its uninstall entry, or the default install folder.</summary>
-	private static string? FindHwInfo()
+	/// <summary>
+	/// Reports the useful HWiNFO readings to Gadget: an elevated copy of this executable stops HWiNFO,
+	/// rewrites its sensor settings and starts it again (one UAC prompt); its result comes back as a file.
+	/// </summary>
+	private async Task ConfigureHwInfoAsync()
 	{
-		const string uninstallKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall";
+		var resultPath = Path.Combine(Path.GetTempPath(), $"arkahyte-hwinfo-{Guid.NewGuid():N}.json");
 		try
 		{
-			foreach (var hive in new[] { Registry.LocalMachine, Registry.CurrentUser })
+			using var process = Process.Start(new ProcessStartInfo(Environment.ProcessPath!, $"{HwInfoConfigurator.Argument} \"{resultPath}\"")
 			{
-				using var uninstall = hive.OpenSubKey(uninstallKey);
-				foreach (var name in uninstall?.GetSubKeyNames() ?? [])
-				{
-					if (!name.StartsWith("HWiNFO", StringComparison.OrdinalIgnoreCase))
-					{
-						continue;
-					}
-					using var entry = uninstall!.OpenSubKey(name);
-					if (entry?.GetValue("InstallLocation") is string folder)
-					{
-						var path = HwInfoProcessNames.Select(p => Path.Combine(folder, p + ".exe")).FirstOrDefault(File.Exists);
-						if (path is not null)
-						{
-							return path;
-						}
-					}
-				}
+				UseShellExecute = true,
+				Verb = "runas"
+			});
+			if (process is null)
+			{
+				Post(new { type = "hwinfoConfigured", ok = false, error = "failed" });
+				return;
 			}
+			await process.WaitForExitAsync();
+			var result = File.Exists(resultPath) ? File.ReadAllText(resultPath) : null;
+			PostJson(result is null
+				? """{"type":"hwinfoConfigured","ok":false,"error":"failed"}"""
+				: $$"""{"type":"hwinfoConfigured","result":{{result}}}""");
 		}
-		catch (Exception exception) when (exception is System.Security.SecurityException or UnauthorizedAccessException or IOException)
+		catch (System.ComponentModel.Win32Exception exception)
 		{
-			Log.Error("HWiNFO install lookup failed", exception);
+			// Also a declined UAC prompt
+			Log.Error("HWiNFO configuration not started", exception);
+			Post(new { type = "hwinfoConfigured", ok = false, error = "declined" });
 		}
-		var fallback = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "HWiNFO64", "HWiNFO64.exe");
-		return File.Exists(fallback) ? fallback : null;
+		finally
+		{
+			File.Delete(resultPath);
+		}
 	}
 
 	private static void StartHwInfo()
 	{
-		if (FindHwInfo() is not { } path)
+		if (HwInfoInstall.FindExecutable() is not { } path)
 		{
 			return;
 		}
@@ -436,6 +440,14 @@ public sealed class SetupForm : Form
 		if (_webReady && !IsDisposed && _webView.CoreWebView2 is { } core)
 		{
 			core.PostWebMessageAsJson(JsonSerializer.Serialize(message, message.GetType(), JsonOptions));
+		}
+	}
+
+	private void PostJson(string json)
+	{
+		if (_webReady && !IsDisposed && _webView.CoreWebView2 is { } core)
+		{
+			core.PostWebMessageAsJson(json);
 		}
 	}
 

@@ -63,12 +63,24 @@ par `PostFromAnyThread` (BeginInvoke).
 **Flux web → C#.** `host.postMessage({ type, ... })` traité dans le `switch` de `DisplayForm` :
 `ready`, `launch`, `media`, `listApps`, `saveShortcut`, `speedtest` (start/cancel), `hwinfoList` /
 `saveMetric` (réglages à l'écran : appui long sur une mesure → panneau `#sheet`, `SHEETS` dans `console.js` ;
+toucher le compteur CPU → `#cpuDetail` (fréquence, tension, PPT, cœurs actifs : `HwInfoSettings.Cpu*` ou leurs
+`*Defaults` nommés comme HWiNFO ; fréquences par cœur `HwInfoReader.CoreClocks` ; charge par fil
+`SystemMetrics.ReadThreadLoads` / `NtQuerySystemInformation`), option `CpuDetails` (`saveMetric { cpuDetails }`) pour
+fréquence et tension à côté du compteur ;
 toucher court sur une tuile température / consommation → `#history`, 30 min en tampon circulaire côté page,
 `HISTORY_METRICS`, courbe redessinée à chaque échantillon seulement panneau ouvert).
 Choix de capteurs et seuils écrits par `SensorSettings` (partagé avec l'assistant), appliqués à chaud
 (`SensorHub.UpdateSettings`, `config.thresholds` → `limits` côté page ; plus aucun seuil en dur).
 Ajouter une fonctionnalité interactive = un type de message de chaque côté.
 
+**Configuration de HWiNFO** (`HwInfoConfigurator`, `ArkaHyte.exe --configure-hwinfo` lancé élevé par l'assistant :
+HWiNFO tourne en admin). Réglage par mesure dans `HKCU\Software\HWiNFO64\Sensors\{capteur}\{Type}{n}` (`InVSB`,
+`VSBidx`, `Color`), lu au démarrage de HWiNFO et réécrit à sa sortie : modifié HWiNFO arrêté. Découverte : toutes
+les mesures possibles signalées avec `VSBidx` ≥ 100000 (Gadget numérote ses emplacements d'après `VSBidx`, trous
+compris) et une couleur unique, puis seules `Wanted` (noms anglais / français exacts) gardées ; échec = tout
+restauré. Ajouts suivis dans `hwinfo-added.json` (retirés s'ils ne sont plus voulus), emplacements de découverte
+effacés de `VSB` (HWiNFO laisse les anciennes valeurs). Lecteurs : parcourir les emplacements présents
+(`HwInfoReader.Slots`), jamais s'arrêter au premier trou.
 **Sources** (`Sensors/`) : HWiNFO Gadget via registre `HKCU\Software\HWiNFO64\VSB` (capteurs
 retrouvés par nom/libellé avec jokers, configurés dans `appsettings.json` → `HwInfo`, `Drives[].Temp` ;
 relu seulement après une écriture de HWiNFO, signalée par `RegNotifyChangeKeyValue`, donc à son rythme),
@@ -90,7 +102,8 @@ Deux pages : balayage horizontal sur `.frame` (`touch-action: pan-y`, clic de fi
 `#pageDots` → `viewChoice` (gardé jusqu'à la fin du jeu, ou jusqu'au prochain jeu sans partie en cours) ;
 vue jeu sans jeu possible (`renderNoGame`). Jeu en arrière-plan
 (`GameData.Foreground` faux) ou sans FPS : valeurs et courbe figées en gris (`.stale`) ; sans choix manuel,
-vue normale après `GameView.AutoNormalDelaySec` si `AutoNormal` (étape « Vue jeu » de l'assistant, `config.gameView`). Valeurs lissées comme ailleurs,
+vue jeu seule au lancement d'un jeu si `GameView.AutoGame` (sinon seulement au balayage), vue normale après
+`GameView.AutoNormalDelaySec` si `AutoNormal` (étape « Vue jeu » de l'assistant, `config.gameView`). Valeurs lissées comme ailleurs,
 courbe défilée par `transform` (`scrollGraph`), anneau CPU (compteur de charge) à gauche de température / consommation. 1 % low / temps de frame : `HwInfo.GpuFpsLow`,
 `GpuFrameTime` facultatifs, sinon calculés côté page.
 `wlanapi` natif lu à offsets fixes (`WifiReader`), `NetworkInterface` + `Ping` (statut

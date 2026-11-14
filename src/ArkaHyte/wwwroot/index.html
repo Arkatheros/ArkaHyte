@@ -89,7 +89,7 @@
 			<span class="rule"></span>
 		</div>
 
-		<section class="widget cpu" id="cpu" aria-label="Charge du processeur" data-action="cpu">
+		<section class="widget cpu" id="cpu" aria-label="Charge du processeur (toucher : détails)">
 			<canvas id="cpuSpikes" width="360" height="360"></canvas>
 			<canvas id="cpuRing" width="360" height="360"></canvas>
 			<div class="cpu-core">
@@ -97,6 +97,22 @@
 				<span class="big"><span id="cpuLoad">--</span><small>%</small></span>
 			</div>
 		</section>
+
+		<!-- Clock and voltage on both sides of the dial (normal view; option of the detail panel) -->
+		<div class="widget cpu-side cpu-side-clock">
+			<span class="label">Fréquence</span>
+			<span class="cpu-side-rule"></span>
+			<span class="cpu-side-value" id="cpuSideClock">--</span>
+			<span class="cpu-side-unit">GHz</span>
+			<span class="cpu-side-sub" id="cpuSideMax">&nbsp;</span>
+		</div>
+		<div class="widget cpu-side cpu-side-volt">
+			<span class="label">Tension</span>
+			<span class="cpu-side-rule"></span>
+			<span class="cpu-side-value" id="cpuSideVolt">--</span>
+			<span class="cpu-side-unit">V</span>
+			<span class="cpu-side-sub">cœur</span>
+		</div>
 
 		<div class="widget metrics cpu-metrics">
 			<div class="metric" id="cpuTempTile">
@@ -395,6 +411,50 @@
 				</div>
 			</div>
 		</div>
+		<!-- Processor details (tap on the CPU dial), filled by console.js -->
+		<div class="editor cpu-detail" id="cpuDetail" role="dialog" aria-modal="true" aria-labelledby="cpuDetailTitle" hidden>
+			<div class="editor-panel">
+				<div class="editor-head">
+					<div>
+						<span class="label" id="cpuDetailTitle">Processeur</span>
+						<div class="cpu-detail-model" id="cpuDetailModel">&nbsp;</div>
+					</div>
+					<button type="button" class="editor-close" id="cpuDetailClose" aria-label="Fermer">
+						<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
+					</button>
+				</div>
+				<div class="cpu-stats">
+					<div class="cpu-stat">
+						<span class="label">Fréquence des cœurs</span>
+						<div class="cpu-stat-value"><span id="cpuDetailClock">--</span><small>GHz</small></div>
+						<div class="cpu-stat-sub" id="cpuDetailFastest">&nbsp;</div>
+						<div class="cpu-stat-sub" id="cpuDetailEffective">&nbsp;</div>
+					</div>
+					<div class="cpu-stat">
+						<span class="label">Tension du cœur</span>
+						<div class="cpu-stat-value"><span id="cpuDetailVolt">--</span><small>V</small></div>
+						<div class="cpu-stat-sub">VDDCR_VDD (SVI3)</div>
+					</div>
+					<div class="cpu-stat">
+						<span class="label">Limite de puissance</span>
+						<div class="cpu-stat-value"><span id="cpuDetailPpt">--</span><small>% PPT</small></div>
+						<div class="gauge"><div class="gauge-fill" id="cpuDetailPptFill"><div class="blade-h"></div></div></div>
+					</div>
+					<div class="cpu-stat">
+						<span class="label">Cœurs actifs</span>
+						<div class="cpu-stat-value"><span id="cpuDetailActive">--</span><small id="cpuDetailCores"></small></div>
+						<div class="cpu-stat-sub">moyenne sur la seconde</div>
+					</div>
+				</div>
+				<div class="cpu-section-title"><span class="label">Charge par cœur</span><span class="hint" id="cpuDetailLanesHint">&nbsp;</span></div>
+				<div class="cpu-lanes" id="cpuDetailLanes"></div>
+				<button type="button" class="cpu-detail-toggle" id="cpuDetailToggle" aria-pressed="true">
+					<span>Afficher fréquence et tension à côté du compteur</span><i></i>
+				</button>
+				<button type="button" class="editor-btn" data-action="cpu">Ouvrir le Gestionnaire des tâches</button>
+			</div>
+		</div>
+
 		<!-- Last minutes of a temperature / power tile (short tap), drawn by console.js -->
 		<div class="editor history" id="history" role="dialog" aria-modal="true" aria-labelledby="historyTitle" hidden>
 			<div class="editor-panel">
