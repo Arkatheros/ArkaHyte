@@ -1475,7 +1475,18 @@
 		text('mediaArtist', media.artist || ' ');
 		$('mediaProgress').hidden = !!media.live;
 		$('mediaLive').hidden = !media.live;
-		if (!media.live && isNum(media.durationSec) && media.durationSec > 0) {
+		mediaSeek.duration = !media.live && isNum(media.durationSec) ? media.durationSec : 0;
+		$('mediaProgress').classList.toggle('seekable', !!media.canSeek && mediaSeek.duration > 0);
+		// While the finger is on the bar, the bar and the time follow it, not the player; after a seek, the
+		// position aimed at stays until the player reports it (it often answers a second late, which would
+		// pull the bar back and forth)
+		if (mediaSeek.target !== null) {
+			const reached = isNum(media.positionSec) && Math.abs(media.positionSec - mediaSeek.target) < SEEK_REACHED_SEC;
+			if (reached || performance.now() > mediaSeek.until) {
+				mediaSeek.target = null;
+			}
+		}
+		if (!media.live && isNum(media.durationSec) && media.durationSec > 0 && !mediaSeek.active && mediaSeek.target === null) {
 			text('mediaPos', formatTime(media.positionSec || 0));
 			text('mediaDur', formatTime(media.durationSec));
 			// A seek or another track (more than 5 % away) is drawn at once
@@ -1487,7 +1498,56 @@
 		}
 	}
 
+	// Seek: drag on the progress bar of a player that accepts it; the position is sent when the finger lifts
+	const SEEK_HOLD_MS = 3000;
+	const SEEK_REACHED_SEC = 3;
+	const mediaSeek = { active: false, duration: 0, fraction: 0, target: null, until: 0 };
+
+	function seekFraction(event) {
+		const box = $('mediaProgress').querySelector('.gauge').getBoundingClientRect();
+		return clamp((event.clientX - box.left) / box.width, 0, 1);
+	}
+
+	function previewSeek(event) {
+		mediaSeek.fraction = seekFraction(event);
+		drawMediaProgress(mediaSeek.fraction);
+		text('mediaPos', formatTime(mediaSeek.fraction * mediaSeek.duration));
+	}
+
+	const progressBar = $('mediaProgress');
+	progressBar.addEventListener('pointerdown', (event) => {
+		if (!progressBar.classList.contains('seekable')) {
+			return;
+		}
+		mediaSeek.active = true;
+		progressBar.setPointerCapture(event.pointerId);
+		previewSeek(event);
+	});
+	progressBar.addEventListener('pointermove', (event) => {
+		if (mediaSeek.active) {
+			previewSeek(event);
+		}
+	});
+	progressBar.addEventListener('pointerup', (event) => {
+		if (!mediaSeek.active) {
+			return;
+		}
+		previewSeek(event);
+		mediaSeek.active = false;
+		mediaSeek.target = mediaSeek.fraction * mediaSeek.duration;
+		mediaSeek.until = performance.now() + SEEK_HOLD_MS;
+		send({ type: 'media', action: 'seek', position: mediaSeek.target });
+		// The next position from the player is drawn at once, not glided from the old one
+		forgetGlide('mediaProgress');
+	});
+	progressBar.addEventListener('pointercancel', () => {
+		mediaSeek.active = false;
+	});
+
 	function drawMediaProgress(fraction) {
+		if ((mediaSeek.active || mediaSeek.target !== null) && fraction !== mediaSeek.fraction) {
+			return;
+		}
 		setStyle($('mediaFill'), 'width', isNum(fraction) ? `${clamp(fraction * 100, 1, 100).toFixed(2)}%` : '0%');
 	}
 
@@ -2023,8 +2083,9 @@
 	let swipedAt = 0;
 
 	frame.addEventListener('pointerdown', (event) => {
-		const panelOpen = document.querySelector('.editor:not([hidden])') !== null;
-		swipeStart = panelOpen ? null : { x: event.clientX, y: event.clientY, time: performance.now(), id: event.pointerId };
+		// Panels and horizontal controls of their own (the seek bar) are not swipes
+		const ignored = document.querySelector('.editor:not([hidden])') !== null || event.target.closest('[data-no-swipe]') !== null;
+		swipeStart = ignored ? null : { x: event.clientX, y: event.clientY, time: performance.now(), id: event.pointerId };
 	});
 	frame.addEventListener('pointerup', (event) => {
 		const start = swipeStart;
@@ -3051,20 +3112,11 @@
 			}
 		}
 	}
-	const flickerTargets = [...document.querySelectorAll('.blade-h')];
 	const breatheTargets = [...document.querySelectorAll('.time .colon')];
 	// Live collections: hot metric tiles (glowing value) and the network panel in alert
 	const hotTiles = frame.getElementsByClassName('hot');
 	const alertPanels = frame.getElementsByClassName('alert');
 
-	// Blade flicker: steady with three short dips per 2.7 s cycle
-	function flickerAt(now) {
-		const p = (now % 2700) / 2700;
-		if (p >= 0.12 && p < 0.14) return 0.93;
-		if (p >= 0.47 && p < 0.49) return 0.97;
-		if (p >= 0.71 && p < 0.73) return 0.9;
-		return 1;
-	}
 	const breatheAt = (now, period) => 0.35 + 0.55 * (0.5 - 0.5 * Math.cos((2 * Math.PI * now) / period));
 
 	const eqBars = [...document.querySelectorAll('.eq i')];
@@ -3138,7 +3190,6 @@
 			return;
 		}
 		animateBackground(now);
-		setVar(flickerTargets, '--flicker', flickerAt(now));
 		setVar(breatheTargets, '--breathe-2', breatheAt(now, 4000));
 		animateSignal(now);
 		if (hotTiles.length > 0 || alertPanels.length > 0) {
@@ -3720,7 +3771,7 @@
 					status: scenario.offline ? 'no-internet' : 'online',
 					offlineSec: scenario.offline ? offlineSec : null
 				},
-				media: { source: 'Spotify', kind: 'music', title: 'The Imperial March', artist: 'John Williams · London Symphony Orchestra', positionSec: position, durationSec: 182, playing: true, live: false, artKey: null },
+				media: { source: 'Spotify', kind: 'music', title: 'The Imperial March', artist: 'John Williams · London Symphony Orchestra', positionSec: position, durationSec: 182, playing: true, live: false, artKey: null, canSeek: true },
 				game: scenario.game ? { ...scenario.game, foreground: !background } : null
 			});
 		}, 1000);

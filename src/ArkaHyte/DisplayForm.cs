@@ -449,6 +449,12 @@ public sealed class DisplayForm : Form
 					Post(new { type = "toast", text = "Raccourci indisponible" });
 				}
 				break;
+			case "media" when action == "seek":
+				if (root.TryGetProperty("position", out var position) && position.TryGetDouble(out var seconds))
+				{
+					_ = SeekMediaAsync(seconds);
+				}
+				break;
 			case "media" when action is not null:
 				_ = ControlMediaAsync(action);
 				break;
@@ -680,6 +686,18 @@ public sealed class DisplayForm : Form
 			_dockButtons = null;
 			SendConfig();
 			Post(new { type = "toast", text = $"{label} enregistré" });
+		}
+	}
+
+	private async Task SeekMediaAsync(double seconds)
+	{
+		try
+		{
+			await _hub.Media.SeekAsync(seconds);
+		}
+		catch (Exception exception)
+		{
+			Log.Error("Media seek failed", exception);
 		}
 	}
 

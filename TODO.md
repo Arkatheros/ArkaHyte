@@ -15,18 +15,12 @@ du non fait.
 ---
 
 # Liste des tâches
-- [ ] Audio au toucher : volume général, bouton micro coupé / actif avec voyant bien visible,
-  bascule de la sortie par défaut (casque ↔ enceintes)
-  - API Core Audio (`IMMDeviceEnumerator`, `IAudioEndpointVolume`, sessions audio) dans l'hôte : pas de shell
-    chargé ; changement de sortie par défaut via l'interface non documentée `IPolicyConfig` (à valider)
-  - Notification des changements (volume, mute, périphériques) plutôt que sondage
-  - Mesurer la mémoire de l'hôte avant / après (`--memory-log`)
+- [ ] Lecture en cours enrichie : barre de progression touchable pour avancer / reculer
+  - SMTC : `GetTimelineProperties` + `TryChangePlaybackPositionAsync` ; volume via la session audio de l'appli
+    (dépend du point Audio)
 - [ ] Actions dans le dock : en plus des applis, raccourcis verrouiller le PC, mettre en veille, capture d'écran,
   lancer un script PowerShell, ouvrir une URL
   - Nouveaux types dans `ShortcutStore` / éditeur, icônes Lucide ; confirmation au toucher pour la veille
-- [ ] Lecture en cours enrichie : barre de progression touchable pour avancer / reculer, volume de l'appli qui joue
-  - SMTC : `GetTimelineProperties` + `TryChangePlaybackPositionAsync` ; volume via la session audio de l'appli
-    (dépend du point Audio)
 - [ ] Coût électrique du PC : compteur kWh et € (jour, session de jeu) à partir des puissances CPU + GPU (+ forfait
   pour le reste, réglable), prix du kWh dans les réglages
   - Cumul côté C# (persisté dans `%LOCALAPPDATA%\ArkaHyte` pour survivre au redémarrage), remise à zéro quotidienne

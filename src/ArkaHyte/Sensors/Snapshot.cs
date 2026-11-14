@@ -74,7 +74,9 @@ public sealed record MediaData(
 	double? DurationSec,
 	bool Playing,
 	bool Live,
-	string? ArtKey);
+	string? ArtKey,
+	// The player accepts a new position (the progress bar can then be dragged)
+	bool CanSeek = false);
 
 public sealed record Snapshot(
 	CpuData Cpu,

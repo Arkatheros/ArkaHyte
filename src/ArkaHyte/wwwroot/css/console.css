@@ -180,7 +180,6 @@ body {
 .frame {
 	/* Horizontal strokes are swipes between the views; vertical ones still scroll the lists */
 	touch-action: pan-y;
-	--flicker: 1;
 	--breathe-2: 0.6;
 	--alarm: 0;
 }
@@ -209,7 +208,7 @@ body {
 	flex: none;
 }
 
-/* Blades: ignition on the wrapper, flicker on the blade itself */
+/* Blades: ignition on the wrapper; steady light (no flicker, it read as blinking) */
 .blade-h {
 	height: 100%;
 	border-radius: 99px;
@@ -223,11 +222,6 @@ body {
 .frame.ignite .ix {
 	animation: igniteX 0.75s cubic-bezier(0.15, 0.85, 0.25, 1) both;
 	animation-delay: var(--d, 0s);
-}
-/* Own compositor layers: opacity changes then never repaint the glow or the text */
-.blade-h {
-	opacity: var(--flicker);
-	will-change: opacity;
 }
 @keyframes igniteX {
 	from { transform: scaleX(0); }
@@ -1324,6 +1318,28 @@ body {
 .media-progress .gauge {
 	height: 6px;
 	margin-top: 18px;
+}
+/* Player that accepts a new position: a knob, and a taller touch zone that keeps the layout */
+.media-progress.seekable {
+	padding: 14px 0;
+	margin: -14px 0;
+	touch-action: none;
+	cursor: pointer;
+}
+.media-progress.seekable #mediaFill {
+	position: relative;
+}
+.media-progress.seekable #mediaFill::after {
+	content: "";
+	position: absolute;
+	top: 50%;
+	right: -10px;
+	width: 20px;
+	height: 20px;
+	margin-top: -10px;
+	border-radius: 50%;
+	background: var(--core);
+	box-shadow: 0 0 10px var(--blade), 0 0 4px var(--blade);
 }
 .media-time {
 	display: flex;

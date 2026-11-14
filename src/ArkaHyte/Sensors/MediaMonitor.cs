@@ -71,7 +71,23 @@ public sealed class MediaMonitor
 			live ? null : duration,
 			playing,
 			live,
-			artKey);
+			artKey,
+			!live && playback?.Controls?.IsPlaybackPositionEnabled == true);
+	}
+
+	/// <summary>Moves the current item to a position, in seconds from its start.</summary>
+	public async Task SeekAsync(double seconds)
+	{
+		_manager ??= await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
+		var session = _manager.GetCurrentSession();
+		if (session is null)
+		{
+			return;
+		}
+		var timeline = session.GetTimelineProperties();
+		var duration = (timeline.EndTime - timeline.StartTime).TotalSeconds;
+		var target = timeline.StartTime + TimeSpan.FromSeconds(Math.Clamp(seconds, 0, Math.Max(0, duration)));
+		await session.TryChangePlaybackPositionAsync(target.Ticks);
 	}
 
 	public async Task ControlAsync(string action)

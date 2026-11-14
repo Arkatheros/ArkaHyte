@@ -67,6 +67,8 @@ toucher le compteur CPU → `#cpuDetail` (fréquence, tension, PPT, cœurs actif
 `*Defaults` nommés comme HWiNFO ; fréquences par cœur `HwInfoReader.CoreClocks` ; charge par fil
 `SystemMetrics.ReadThreadLoads` / `NtQuerySystemInformation`), option `CpuDetails` (`saveMetric { cpuDetails }`) pour
 fréquence et tension à côté du compteur ;
+barre de progression de la lecture en cours (`MediaData.CanSeek`, message `media` `{ action: seek, position }`
+→ `MediaMonitor.SeekAsync`, exclue du balayage par `data-no-swipe`) ;
 pastille audio de la lecture en cours → `#audioPanel` (`Audio/AudioService` : Core Audio par COM, `Native/CoreAudio.cs`,
 `IPolicyConfig` non documenté pour la sortie par défaut ; notifications `IMMNotificationClient` /
 `IAudioEndpointVolumeCallback`, appels hors thread UI, message `audio` regroupé sur 60 ms ; retour `audio`

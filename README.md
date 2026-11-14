@@ -88,6 +88,9 @@ long sur l'horloge l'affiche ou la masque. Réglage `Weather` de `appsettings.js
 
 ### Réglages à l'écran
 
+**Lecture en cours** : glisser le doigt sur la barre de progression avance ou recule dans le morceau (si le lecteur
+l'accepte : Spotify, navigateurs… ; un curseur apparaît alors sur la barre).
+
 **Audio** (en-tête de la lecture en cours) : une pastille (icône de la sortie, volume, micro barré en couleur
 d'alerte quand il est coupé, rappelé dans l'en-tête de la vue jeu) qui ouvre le panneau Audio : volume général au
 doigt, choix de la sortie par défaut parmi les périphériques actifs, micro coupé / actif. Core Audio de Windows, mis à jour par notifications (touches de volume, casque…).
