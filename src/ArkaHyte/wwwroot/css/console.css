@@ -2617,15 +2617,20 @@ body {
 	font-size: 104px;
 	margin-top: 4px;
 }
+/* Everything must end above the rule (top 196 px), title on two lines included */
 .game-head {
-	top: 50px;
+	top: 46px;
 	left: 362px;
 	width: 280px;
 	display: flex;
 	flex-direction: column;
 	align-items: flex-end;
-	gap: 10px;
+	gap: 8px;
 	text-align: right;
+}
+.game-chips {
+	display: flex;
+	gap: 8px;
 }
 .game-head .chip {
 	font-size: 15px;
@@ -2638,9 +2643,11 @@ body {
 .game-title {
 	font-weight: 700;
 	font-size: 26px;
-	line-height: 1.1;
+	line-height: 1.05;
 	letter-spacing: 0.1em;
 	text-transform: uppercase;
+	max-width: 100%;
+	overflow-wrap: anywhere;
 	display: -webkit-box;
 	-webkit-line-clamp: 2;
 	-webkit-box-orient: vertical;

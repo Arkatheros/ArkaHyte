@@ -55,9 +55,12 @@
 
 		<!-- ===== Game view (frame.game): header, FPS reactor, framerate details and history ===== -->
 		<div class="widget game-only game-head">
-			<span class="chip"><svg><use href="#i-gamepad"/></svg>Mode jeu</span>
+			<!-- Chips share one row so a two-line title still fits above the rule -->
+			<div class="game-chips">
+				<span class="game-mic" id="gameMic" hidden><svg><use href="#i-mic-off"/></svg>Micro coupé</span>
+				<span class="chip"><svg><use href="#i-gamepad"/></svg>Mode jeu</span>
+			</div>
 			<span class="game-title" id="gameTitle">--</span>
-			<span class="game-mic" id="gameMic" hidden><svg><use href="#i-mic-off"/></svg>Micro coupé</span>
 			<span class="data game-since" id="gameSince">&nbsp;</span>
 			<span class="data game-energy" id="gameEnergy" hidden><svg><use href="#i-bolt"/></svg>session <b id="gameEnergyCost">--</b> · <span id="gameEnergyKwh">--</span></span>
 		</div>
