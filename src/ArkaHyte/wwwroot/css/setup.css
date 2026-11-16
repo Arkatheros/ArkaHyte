@@ -225,6 +225,24 @@ button {
 	opacity: 0.4;
 	cursor: default;
 }
+.icon-button {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+}
+.button-icon {
+	flex: none;
+	width: 17px;
+	height: 17px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 2;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+#next:not(.saves) .button-icon {
+	display: none;
+}
 .link {
 	border: 0;
 	background: none;
@@ -656,6 +674,19 @@ h2 {
 .foot-links .link {
 	padding: 0;
 	font-size: 14px;
+}
+/* Underline on the words only, not under the icon */
+.foot-links .icon-button {
+	gap: 7px;
+	text-decoration: none;
+}
+.foot-links .icon-button span {
+	text-decoration: underline;
+	text-underline-offset: 3px;
+}
+.foot-links .button-icon {
+	width: 15px;
+	height: 15px;
 }
 /* Nothing worth exporting before the first setup */
 body:not(.settings-mode) #exportConfig {

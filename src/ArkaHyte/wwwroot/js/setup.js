@@ -60,7 +60,9 @@
 			button.classList.toggle('done', !model.settingsMode && index < model.step);
 		});
 		$('back').disabled = model.step === 0;
-		$('next').textContent = model.settingsMode ? 'Enregistrer' : model.step === LAST_STEP ? 'Enregistrer et redémarrer' : 'Suivant';
+		$('nextLabel').textContent = model.settingsMode ? 'Enregistrer' : model.step === LAST_STEP ? 'Enregistrer et redémarrer' : 'Suivant';
+		// The save icon only when the button saves
+		$('next').classList.toggle('saves', model.settingsMode || model.step === LAST_STEP);
 		// The map is measured from its box, which has no size while its page is hidden
 		if (model.step === 0 && model.state) {
 			renderScreens();

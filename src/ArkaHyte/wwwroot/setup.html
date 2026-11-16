@@ -259,14 +259,28 @@
 			<!-- Whole configuration in one file, for a reinstall: export once set up, import any time -->
 			<div class="foot-links">
 				<button type="button" class="link" id="skip">Passer l'assistant</button>
-				<button type="button" class="link" id="importConfig">Importer une configuration</button>
-				<button type="button" class="link" id="exportConfig">Exporter la configuration</button>
+				<!-- Arrow into / out of the tray (Lucide download / upload) -->
+				<button type="button" class="link icon-button" id="importConfig">
+					<svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg>
+					<span>Importer une configuration</span>
+				</button>
+				<button type="button" class="link icon-button" id="exportConfig">
+					<svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg>
+					<span>Exporter la configuration</span>
+				</button>
 			</div>
 			<span class="foot-status" id="footStatus"></span>
 			<div class="foot-actions">
+				<!-- Wizard: Précédent, Suivant; settings: Enregistrer, Fermer (Lucide save / x) -->
 				<button type="button" class="ghost" id="back">Précédent</button>
-				<button type="button" class="ghost" id="close" hidden>Fermer</button>
-				<button type="button" class="primary" id="next">Suivant</button>
+				<button type="button" class="primary icon-button" id="next">
+					<svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg>
+					<span id="nextLabel">Suivant</span>
+				</button>
+				<button type="button" class="ghost icon-button" id="close" hidden>
+					<svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+					<span>Fermer</span>
+				</button>
 			</div>
 		</footer>
 	</div>
