@@ -41,7 +41,7 @@ Pas de tests automatisés ni de linter. Vérification par les options one-shot d
 - `--screenshot out.png` : rend l'interface, capture, quitte. Moyen principal de valider un changement visuel.
 - `--dump out.json` : un échantillon de tous les capteurs + entrées HWiNFO disponibles.
 - `--demo stress|idle|game|desktop`, `--preview-speedtest [done]`, `--open-editor 0` : états à combiner avec `--screenshot`.
-- `--setup-preview out.png [--setup-step 0-7]` : capture de l'assistant, autonome (pas de mutex) et sans écriture.
+- `--setup-preview out.png [--setup-step 0-9]` : capture de l'assistant, autonome (pas de mutex) et sans écriture.
 - `--speedtest out.txt` : vrai test de débit (sature la connexion, ne pas lancer sans raison).
 - `--devtools` : F12.
 
@@ -176,6 +176,19 @@ n'installe que sur clic du menu. `AppSettings.Load()` préfère `%LOCALAPPDATA%\
 **Démarrage (dev)** : tâche planifiée `Arka Hyte` (AtLogOn) → `scripts/Start-ArkaHyte.ps1` → `bin\ArkaHyte\ArkaHyte.exe`.
 Sous PowerShell 5.1, ne pas utiliser `$PSScriptRoot` dans les valeurs par défaut de `param()` (vide).
 
+**Fond personnel** (étape « Apparence » des Paramètres, `data-page="8"`, « Terminer » = 9). `BackgroundStore` :
+image choisie (`pickBackground` → `OpenFileDialog`, copiée aussitôt en `source-*` dans `DataFolder.Backgrounds`),
+cadre au ratio de l'écran dessiné dans `setup.js` (fractions de l'image redressée), rendu une seule fois en C#
+(GDI+, orientation EXIF appliquée, 682 × 2560, `background-*.jpg` nouveau nom à chaque rendu) dans `Save`, seulement
+quand une image est en cours de recadrage. Réglage `Background` = `{ Enabled, Image, Shade }` : seul le rendu est gardé
+(choix du propriétaire), la copie de la photo effacée après enregistrement ; recadrer = la choisir à nouveau (l'étape
+montre le rendu seul, sans cadre, `.crop-stage.saved`). Fond du thème enregistré : dossier vidé. Les deux pages lisent ce dossier par l'hôte virtuel `hyte-user.local` (`DenyCors` : `img` et
+dessin sur canvas, rien d'autre) ; `config.background` `{ url, shade }` → `applyBackground` (`console.js`),
+jamais de particules sur un fond personnel (`drawFx` ne dessine plus rien ; option retirée, choix du propriétaire). Aperçu en direct sur l'écran du boîtier dès qu'on
+touche à l'étape : `previewBackground` (40 ms au plus) → `SetupForm.BackgroundPreviewChanged` → message `backgroundPreview`
+`{ url, crop, shade }`, cadre découpé dans l'original (`drawImage` source rect, image gardée chargée) ou rendu enregistré
+tel quel, `{ end }` à la fermeture des Paramètres (retour au fond enregistré, avant le `CleanUp`). Tout sauf le rendu
+enregistré est effacé après enregistrement et à la fermeture des Paramètres (`CleanUp`) ; rendu exporté en base64 (`ConfigBackup`).
 **Thèmes.** `Themes` (`AppSettings.cs`) : `sith` / `jedi`, `Theme` dans `appsettings.json`, choisi par le menu
 de l'icône (`DisplayForm.SetTheme` → message `config` `{ theme }`, sans recharger). Dans `console.css`, toute
 couleur liée au thème passe par une variable (`--blade-rgb`, `--line-rgb`, `--panel-rgb`…, triplets pour

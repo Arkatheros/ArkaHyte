@@ -20,6 +20,9 @@ public static class DataFolder
 	/// <summary>Programs downloaded on first use (Speedtest CLI).</summary>
 	public static string Tools => Path.Combine(Root, "tools");
 
+	/// <summary>Custom background: the picture chosen and its cropped rendering (<see cref="BackgroundStore"/>).</summary>
+	public static string Backgrounds => Path.Combine(Root, "backgrounds");
+
 	private static readonly Lazy<string> UiFolder = new(ResolveUi);
 
 	/// <summary>

@@ -26,7 +26,8 @@
 			<button type="button" data-step="5"><span class="step-dot"></span>Vue jeu</button>
 			<button type="button" data-step="6"><span class="step-dot"></span>Raccourcis</button>
 			<button type="button" data-step="7"><span class="step-dot"></span>Énergie</button>
-			<button type="button" data-step="8"><span class="step-dot"></span>Terminer</button>
+			<button type="button" data-step="8"><span class="step-dot"></span>Apparence</button>
+			<button type="button" data-step="9"><span class="step-dot"></span>Terminer</button>
 		</nav>
 
 		<main class="pages">
@@ -245,8 +246,53 @@
 					ne sont pas comptés.</p>
 			</section>
 
-			<!-- Summary -->
+			<!-- Appearance: the case screen's background -->
 			<section class="page" data-page="8">
+				<h1>Apparence</h1>
+				<p class="lead">Le fond de l'écran du boîtier : celui du thème, ou une de vos images. N'importe quelle photo
+					convient : vous choisissez la partie gardée, au format de l'écran (très haut et étroit).</p>
+				<div class="bg-modes" role="radiogroup" aria-label="Fond d'écran">
+					<label class="switch"><input type="radio" name="bgMode" value="theme" id="bgTheme"><span>Fond du thème</span></label>
+					<label class="switch"><input type="radio" name="bgMode" value="custom" id="bgCustom"><span>Image personnelle</span></label>
+					<!-- On the same line as the choice: always in view, the stage pushes anything below it out of the window -->
+					<button type="button" class="ghost bg-pick off" id="pickBackground">Choisir une image…</button>
+				</div>
+				<div class="bg-editor" id="bgEditor">
+					<div class="crop-layout">
+						<!-- The picture fitted in the stage; the frame keeps the screen's ratio -->
+						<div class="crop-stage" id="cropStage">
+							<div class="crop-picture" id="cropPicture" hidden>
+								<img id="cropImage" alt="" draggable="false">
+								<!-- Dimming clipped to the picture; the frame above it is not, so its grips stay whole on the edges -->
+								<div class="crop-clip"><div class="crop-window" id="cropWindow"></div></div>
+								<div class="crop-frame" id="cropFrame">
+									<span class="crop-thirds" aria-hidden="true"></span>
+									<span class="crop-grip" data-corner="nw"></span>
+									<span class="crop-grip" data-corner="ne"></span>
+									<span class="crop-grip" data-corner="se"></span>
+									<span class="crop-grip" data-corner="sw"></span>
+								</div>
+							</div>
+							<button type="button" class="crop-empty" id="cropEmpty">Choisir une image…</button>
+						</div>
+						<div class="crop-side">
+							<span class="hint">Aperçu</span>
+							<div class="bg-preview" id="bgPreview"><span class="bg-preview-shade" id="bgPreviewShade"></span></div>
+						</div>
+					</div>
+					<p class="hint" id="cropHint">Glisser le cadre pour le déplacer ; ses coins ou la molette pour l'agrandir ou le réduire.
+						L'écran du boîtier suit en direct.</p>
+					<p class="status" id="bgStatus"></p>
+					<div class="row">
+						<label class="hint" for="bgShade">Assombrir derrière l'horloge</label>
+						<input type="range" id="bgShade" min="0" max="80" step="5" class="shade-range">
+						<span class="shade-value" id="bgShadeValue"></span>
+					</div>
+				</div>
+			</section>
+
+			<!-- Summary -->
+			<section class="page" data-page="9">
 				<h1>Terminer</h1>
 				<p class="lead">Les réglages sont enregistrés dans votre dossier de données, puis l'affichage
 					du boîtier redémarre pour les appliquer. L'assistant reste accessible depuis le menu de l'icône.</p>

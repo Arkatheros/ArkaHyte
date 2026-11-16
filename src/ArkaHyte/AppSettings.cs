@@ -57,6 +57,31 @@ public static class Themes
 	public static string Normalize(string? theme) => All.Any(t => t.Id == theme) ? theme! : Sith;
 }
 
+/// <summary>
+/// Custom background (Appearance step of the settings). Image: the frame chosen on the user's picture, rendered
+/// once at the display size; the only file kept (the picture itself is not, choosing it again re-crops it).
+/// The theme's embers or sand (born on the hot spots of its own picture) are not drawn over it. Shade darkens
+/// the top of the screen behind the clock, 0 to <see cref="MaxShade"/>. Back to the theme's background, nothing
+/// is kept.
+/// </summary>
+public sealed record BackgroundSettings(
+	bool Enabled = false,
+	string? Image = null,
+	double Shade = BackgroundSettings.DefaultShade)
+{
+	public const double DefaultShade = 0.4;
+	public const double MaxShade = 0.8;
+}
+
+/// <summary>Area kept from a picture, in fractions (0 to 1) of its upright size (EXIF orientation applied).</summary>
+public sealed record CropFrame(double X, double Y, double Width, double Height)
+{
+	[JsonIgnore]
+	public bool IsValid =>
+		double.IsFinite(X) && double.IsFinite(Y) && double.IsFinite(Width) && double.IsFinite(Height)
+		&& X >= 0 && Y >= 0 && Width > 0 && Height > 0 && X + Width <= 1.0001 && Y + Height <= 1.0001;
+}
+
 /// <summary>Gauge range of a metric and its alert levels: warm tints the value, hot raises the alert.</summary>
 public sealed record Threshold(double Min, double Max, double Warm, double Hot);
 
@@ -203,7 +228,8 @@ public sealed record AppSettings(
 	// Clock and voltage next to the CPU dial (toggled from the processor detail panel)
 	bool CpuDetails = true,
 	IReadOnlyList<CustomAction>? CustomActions = null,
-	EnergySettings? Energy = null)
+	EnergySettings? Energy = null,
+	BackgroundSettings? Background = null)
 {
 	public GameViewSettings EffectiveGameView => GameView ?? new GameViewSettings();
 

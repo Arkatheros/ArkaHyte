@@ -165,6 +165,10 @@ public sealed class DisplayForm : Form
 				ReloadSettings();
 			}
 		};
+		// Live result of the crop on the case screen; end: back to the saved background
+		_setup.BackgroundPreviewChanged += preview => Post(preview is null
+			? new { type = "backgroundPreview", end = true }
+			: (object)new { type = "backgroundPreview", url = preview.Url, crop = preview.Crop, shade = preview.Shade });
 		_setup.FormClosed += (_, _) => _setup = null;
 		_setup.Show();
 		_setup.Activate();
@@ -338,6 +342,7 @@ public sealed class DisplayForm : Form
 			VirtualHost,
 			Path.Combine(AppContext.BaseDirectory, "wwwroot"),
 			CoreWebView2HostResourceAccessKind.Deny);
+		BackgroundStore.Map(core);
 		core.WebMessageReceived += OnWebMessage;
 		core.NavigationStarting += (_, _) => _webReady = false;
 		core.ProcessFailed += (_, args) =>
@@ -620,6 +625,12 @@ public sealed class DisplayForm : Form
 			customActions = (_settings.CustomActions ?? []).Select(a => new { id = a.Id, name = a.Name, kind = a.Kind }),
 			cpuDetails = _settings.CpuDetails,
 			energy = _settings.EffectiveEnergy,
+			// url null: the theme's own picture, particles and shading
+			background = new
+			{
+				url = BackgroundStore.ActiveUrl(_settings.Background),
+				shade = Math.Clamp(_settings.Background?.Shade ?? BackgroundSettings.DefaultShade, 0, BackgroundSettings.MaxShade)
+			},
 			shortcuts = _dockButtons
 		});
 	}

@@ -705,6 +705,187 @@ body:not(.settings-mode) #exportConfig {
 /* Settings (opened from the tray once set up): free navigation, no summary step, saved in place */
 .settings-mode #back,
 .settings-mode #skip,
-.settings-mode .steps [data-step="8"] {
+.settings-mode .steps [data-step="9"] {
 	display: none;
+}
+
+/* ---------- Appearance step: background crop ---------- */
+.bg-modes {
+	display: flex;
+	align-items: center;
+	gap: 28px;
+}
+.bg-modes .switch {
+	margin-bottom: 0;
+}
+.bg-pick {
+	margin-left: auto;
+	padding: 6px 16px;
+	font-size: 13px;
+}
+/* Kept in the layout when out of use: the line keeps its height and the radios do not move */
+.bg-pick.off {
+	visibility: hidden;
+}
+.bg-modes input {
+	accent-color: var(--blade);
+}
+.bg-editor.off {
+	display: none;
+}
+.crop-layout {
+	display: flex;
+	gap: 18px;
+	margin-top: 14px;
+}
+.crop-stage {
+	position: relative;
+	flex: 1;
+	min-width: 0;
+	height: 380px;
+	border: 1px solid var(--line);
+	background: rgba(0, 0, 0, 0.55);
+	overflow: hidden;
+	user-select: none;
+}
+/* The picture at its fitted size, centred by the script */
+.crop-picture {
+	position: absolute;
+}
+.crop-picture img {
+	display: block;
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+}
+.crop-clip {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	pointer-events: none;
+}
+/* Same box as the frame: its huge shadow dims everything outside it */
+.crop-window {
+	position: absolute;
+	box-shadow: 0 0 0 4000px rgba(3, 1, 4, 0.68);
+}
+.crop-frame {
+	position: absolute;
+	box-sizing: border-box;
+	border: 1px solid var(--core);
+	cursor: move;
+	touch-action: none;
+}
+.crop-thirds {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	background:
+		linear-gradient(to right, transparent calc(33.33% - 0.5px), rgba(255, 255, 255, 0.28) calc(33.33% - 0.5px), rgba(255, 255, 255, 0.28) calc(33.33% + 0.5px), transparent calc(33.33% + 0.5px), transparent calc(66.67% - 0.5px), rgba(255, 255, 255, 0.28) calc(66.67% - 0.5px), rgba(255, 255, 255, 0.28) calc(66.67% + 0.5px), transparent calc(66.67% + 0.5px)),
+		linear-gradient(to bottom, transparent calc(33.33% - 0.5px), rgba(255, 255, 255, 0.28) calc(33.33% - 0.5px), rgba(255, 255, 255, 0.28) calc(33.33% + 0.5px), transparent calc(33.33% + 0.5px), transparent calc(66.67% - 0.5px), rgba(255, 255, 255, 0.28) calc(66.67% - 0.5px), rgba(255, 255, 255, 0.28) calc(66.67% + 0.5px), transparent calc(66.67% + 0.5px));
+}
+/* Corner grips: an L drawn on the corner, with a larger invisible hit area */
+.crop-grip {
+	position: absolute;
+	width: 26px;
+	height: 26px;
+	touch-action: none;
+}
+.crop-grip::before {
+	content: '';
+	position: absolute;
+	width: 14px;
+	height: 14px;
+	border: 0 solid var(--blade);
+}
+.crop-grip[data-corner="nw"] { left: -13px; top: -13px; cursor: nwse-resize; }
+.crop-grip[data-corner="ne"] { right: -13px; top: -13px; cursor: nesw-resize; }
+.crop-grip[data-corner="se"] { right: -13px; bottom: -13px; cursor: nwse-resize; }
+.crop-grip[data-corner="sw"] { left: -13px; bottom: -13px; cursor: nesw-resize; }
+.crop-grip[data-corner="nw"]::before { left: 9px; top: 9px; border-left-width: 4px; border-top-width: 4px; }
+.crop-grip[data-corner="ne"]::before { right: 9px; top: 9px; border-right-width: 4px; border-top-width: 4px; }
+.crop-grip[data-corner="se"]::before { right: 9px; bottom: 9px; border-right-width: 4px; border-bottom-width: 4px; }
+.crop-grip[data-corner="sw"]::before { left: 9px; bottom: 9px; border-left-width: 4px; border-bottom-width: 4px; }
+/* The saved rendering alone: already the screen's frame, nothing to move */
+.crop-stage.saved .crop-frame,
+.crop-stage.saved .crop-clip {
+	display: none;
+}
+.crop-empty {
+	position: absolute;
+	inset: 0;
+	margin: auto;
+	width: max-content;
+	height: max-content;
+	padding: 10px 20px;
+	border: 1px dashed var(--line);
+	background: none;
+	color: var(--ash);
+	font-size: 15px;
+	cursor: pointer;
+}
+.crop-empty:hover {
+	border-color: var(--blade);
+	color: var(--bone);
+}
+.crop-side {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 6px;
+}
+/* The screen's own ratio (682 × 2560) at the stage's height */
+.bg-preview {
+	position: relative;
+	height: 356px;
+	aspect-ratio: 682 / 2560;
+	border: 1px solid var(--line);
+	background: var(--void) no-repeat;
+	overflow: hidden;
+}
+/* Same gradient as the display draws behind the clock (22 % of the height) */
+.bg-preview-shade {
+	position: absolute;
+	inset: 0 0 auto;
+	height: 22%;
+	background: linear-gradient(rgba(0, 0, 0, var(--shade, 0)), rgba(0, 0, 0, calc(var(--shade, 0) * 0.36)) 60%, transparent);
+}
+/* Drawn here: the native slider stops its thumb a radius away from the track's ends, so 0 never looks empty.
+   --fill (set by the script) is the thumb's centre, the red part of the track ends there */
+.shade-range {
+	-webkit-appearance: none;
+	appearance: none;
+	width: 220px;
+	height: 20px;
+	margin: 0;
+	/* Not the text field's box (input rule above) */
+	padding: 0;
+	border: 0;
+	background: transparent;
+	cursor: pointer;
+}
+.shade-range::-webkit-slider-runnable-track {
+	height: 4px;
+	border-radius: 2px;
+	background: linear-gradient(to right, var(--blade) var(--fill, 8px), rgba(243, 233, 234, 0.22) var(--fill, 8px));
+}
+.shade-range::-webkit-slider-thumb {
+	-webkit-appearance: none;
+	appearance: none;
+	width: 16px;
+	height: 16px;
+	margin-top: -6px;
+	border: 2px solid var(--core);
+	border-radius: 50%;
+	background: var(--blade);
+	box-shadow: 0 0 8px rgba(255, 31, 51, 0.55);
+}
+.shade-range:focus-visible {
+	outline: 1px solid var(--blade);
+	outline-offset: 4px;
+}
+.shade-value {
+	min-width: 44px;
+	font-family: var(--font-data);
+	color: var(--bone);
 }

@@ -5,8 +5,9 @@
 	'use strict';
 
 	const host = window.chrome && window.chrome.webview ? window.chrome.webview : null;
-	const LAST_STEP = 8;
+	const LAST_STEP = 9;
 	const GAME_VIEW_STEP = 5;
+	const APPEARANCE_STEP = 8;
 
 	/* Widgets fed by HWiNFO. Suggestions: entries of the right unit whose sensor matches, label
 	   patterns tried in order (English and French HWiNFO names). */
@@ -74,11 +75,18 @@
 		if (model.step === GAME_VIEW_STEP) {
 			send({ type: 'listProcesses' });
 		}
+		// The crop stage, like the map, is measured from its box
+		if (model.step === APPEARANCE_STEP) {
+			renderCrop();
+		}
 	}
 
 	window.addEventListener('resize', () => {
 		if (model.step === 0 && model.state) {
 			renderScreens();
+		}
+		if (model.step === APPEARANCE_STEP) {
+			renderCrop();
 		}
 	});
 
@@ -574,6 +582,11 @@
 			: 'Énergie : <b>coût non affiché</b> (le compteur tourne quand même)');
 		const ready = customActions.filter(a => a.name.trim() && a.target.trim());
 		add('ok', 'Raccourcis : <b>' + (ready.length ? ready.map(a => escapeHtml(a.name.trim())).join(', ') : 'aucune action personnelle') + '</b>');
+		add(background.enabled && !background.frame ? 'warn' : 'ok', !background.enabled
+			? 'Fond : <b>celui du thème</b>'
+			: background.frame
+				? 'Fond : <b>image personnelle</b>'
+				: 'Fond : <b>aucune image choisie</b>, celui du thème reste affiché');
 		const weatherOn = $('weatherEnabled').checked;
 		add(!weatherOn || weatherPlace ? 'ok' : 'warn', weatherOn
 			? (weatherPlace ? 'Météo : <b>' + escapeHtml(weatherPlace.place) + '</b>' : 'Météo : <b>aucune ville choisie</b>, rien ne s\'affichera')
@@ -599,6 +612,7 @@
 			extraGames
 		};
 		message.energy = readEnergy();
+		message.background = readBackground();
 		// Rows left half filled are not kept (the host checks the rest)
 		message.customActions = customActions
 			.filter(a => a.name.trim() && a.target.trim())
@@ -870,6 +884,331 @@
 	$('addUrl').addEventListener('click', () => addCustomAction('url'));
 	$('addScript').addEventListener('click', () => addCustomAction('script'));
 
+	// ---------- Appearance: custom background ----------
+	// Two states: a picture being cropped (source: its copy in the data folder, rendered at the next save then
+	// deleted) or the saved rendering alone (source null), shown as is, without a frame: re-cropping means
+	// choosing the picture again. pictureUrl: what the stage shows; natural: its upright size once loaded;
+	// frame: the area kept, in pixels of that picture, always at the screen's ratio
+	const background = {
+		enabled: false,
+		source: null,
+		pictureUrl: null,
+		natural: null,
+		frame: null,
+		shade: 0.4,
+		maxShade: 0.8,
+		screen: { width: 682, height: 2560 }
+	};
+	// Smallest frame: a tenth of the largest one, enough to zoom far into a photo
+	const MIN_FRAME_SHARE = 0.1;
+	const WHEEL_STEP = 1.08;
+	// Screen pixels per picture pixel beyond which the result looks blurry on the case
+	const SOFT_UPSCALE = 1.5;
+	// Picture pixels to stage pixels, from the last layout
+	let cropScale = 1;
+	let cropDrag = null;
+	// Live result on the case screen, at most every PREVIEW_INTERVAL ms, once the user has changed something
+	// (opening the settings alone leaves the screen as it is)
+	const PREVIEW_INTERVAL = 40;
+	let previewLive = false;
+	let previewTimer = 0;
+	let previewSentAt = 0;
+
+	function sendPreview() {
+		if (!previewLive || previewTimer) {
+			return;
+		}
+		previewTimer = setTimeout(() => {
+			previewTimer = 0;
+			previewSentAt = performance.now();
+			// Without a picture being cropped, the host shows the saved rendering
+			send({ type: 'previewBackground', ...readBackground() });
+		}, Math.max(0, PREVIEW_INTERVAL - (performance.now() - previewSentAt)));
+	}
+
+	/** A change made by the user: from now on the case screen follows the editor. */
+	function previewChange() {
+		previewLive = true;
+		sendPreview();
+	}
+
+	const screenRatio = () => background.screen.width / background.screen.height;
+	const largestFrameHeight = () => Math.min(background.natural.height, background.natural.width / screenRatio());
+	const clampHeight = height => Math.max(largestFrameHeight() * MIN_FRAME_SHARE, Math.min(height, largestFrameHeight()));
+
+	/** Keeps the frame at the screen's ratio, inside the picture. */
+	function clampFrame(frame) {
+		const height = clampHeight(frame.height);
+		const width = height * screenRatio();
+		return {
+			x: Math.max(0, Math.min(background.natural.width - width, frame.x)),
+			y: Math.max(0, Math.min(background.natural.height - height, frame.y)),
+			width,
+			height
+		};
+	}
+
+	/** The largest frame, centred: a new picture starts there; the saved rendering is exactly that frame. */
+	function largestFrame() {
+		const natural = background.natural;
+		const height = largestFrameHeight();
+		const width = height * screenRatio();
+		return { x: (natural.width - width) / 2, y: (natural.height - height) / 2, width, height };
+	}
+
+	/** A corner dragged: the opposite one stays, the frame follows the pointer on the axis that asks for more. */
+	function resizeFrame(start, corner, pointer) {
+		const natural = background.natural;
+		const right = corner.includes('e');
+		const bottom = corner.includes('s');
+		const anchorX = right ? start.x : start.x + start.width;
+		const anchorY = bottom ? start.y : start.y + start.height;
+		const roomX = right ? natural.width - anchorX : anchorX;
+		const roomY = bottom ? natural.height - anchorY : anchorY;
+		const wantedX = right ? pointer.x - anchorX : anchorX - pointer.x;
+		const wantedY = bottom ? pointer.y - anchorY : anchorY - pointer.y;
+		const height = clampHeight(Math.min(Math.max(wantedY, wantedX / screenRatio()), roomY, roomX / screenRatio()));
+		const width = height * screenRatio();
+		return clampFrame({ x: right ? anchorX : anchorX - width, y: bottom ? anchorY : anchorY - height, width, height });
+	}
+
+	function pointerInPicture(event) {
+		const box = $('cropPicture').getBoundingClientRect();
+		return { x: (event.clientX - box.left) / cropScale, y: (event.clientY - box.top) / cropScale };
+	}
+
+	function renderCrop() {
+		$('bgTheme').checked = !background.enabled;
+		$('bgCustom').checked = background.enabled;
+		$('bgEditor').classList.toggle('off', !background.enabled);
+		$('pickBackground').classList.toggle('off', !background.enabled);
+		$('pickBackground').textContent = background.pictureUrl ? 'Changer d’image…' : 'Choisir une image…';
+		const ready = Boolean(background.natural && background.frame);
+		$('cropPicture').hidden = !ready;
+		// The saved rendering: no frame to move
+		$('cropStage').classList.toggle('saved', !background.source);
+		$('cropHint').hidden = !background.source;
+		$('cropEmpty').hidden = Boolean(background.pictureUrl);
+		if (!ready) {
+			renderPreview();
+			return;
+		}
+		const stage = $('cropStage');
+		const natural = background.natural;
+		const pad = 14;
+		const scale = Math.min((stage.clientWidth - 2 * pad) / natural.width, (stage.clientHeight - 2 * pad) / natural.height);
+		// Hidden page: laid out again when it is shown
+		if (!(scale > 0)) {
+			return;
+		}
+		cropScale = scale;
+		const picture = $('cropPicture');
+		picture.style.width = natural.width * scale + 'px';
+		picture.style.height = natural.height * scale + 'px';
+		picture.style.left = (stage.clientWidth - natural.width * scale) / 2 + 'px';
+		picture.style.top = (stage.clientHeight - natural.height * scale) / 2 + 'px';
+		placeFrame();
+	}
+
+	function placeFrame() {
+		const frame = background.frame;
+		for (const element of [$('cropFrame'), $('cropWindow')]) {
+			element.style.left = frame.x * cropScale + 'px';
+			element.style.top = frame.y * cropScale + 'px';
+			element.style.width = frame.width * cropScale + 'px';
+			element.style.height = frame.height * cropScale + 'px';
+		}
+		renderPreview();
+		renderCropStatus();
+		sendPreview();
+	}
+
+	/** The kept area at the screen's ratio, with the shading the display adds behind the clock. */
+	function renderPreview() {
+		const preview = $('bgPreview');
+		$('bgPreviewShade').style.setProperty('--shade', background.shade);
+		const frame = background.frame;
+		if (!frame || !background.natural || !preview.clientWidth) {
+			preview.style.backgroundImage = 'none';
+			return;
+		}
+		const k = preview.clientWidth / frame.width;
+		preview.style.backgroundImage = 'url("' + background.pictureUrl + '")';
+		preview.style.backgroundSize = background.natural.width * k + 'px ' + background.natural.height * k + 'px';
+		preview.style.backgroundPosition = -frame.x * k + 'px ' + -frame.y * k + 'px';
+	}
+
+	function showBackgroundStatus(text, level) {
+		const status = $('bgStatus');
+		status.className = 'status ' + (level || '');
+		status.textContent = text;
+	}
+
+	function renderCropStatus() {
+		if (!background.source) {
+			showBackgroundStatus('Image enregistrée, déjà recadrée. Pour changer le cadrage, choisissez à nouveau la photo d’origine (Changer d’image).');
+			return;
+		}
+		const frame = background.frame;
+		const size = Math.round(frame.width) + ' × ' + Math.round(frame.height);
+		const upscale = background.screen.width / frame.width;
+		if (upscale > SOFT_UPSCALE) {
+			showBackgroundStatus('Partie gardée de ' + size + ' pixels, agrandie ' + upscale.toFixed(1).replace('.', ',')
+				+ ' fois sur l’écran : elle sera floue. Agrandissez le cadre ou choisissez une image plus grande.', 'warn');
+		} else {
+			showBackgroundStatus('Partie gardée : ' + size + ' pixels de l’image, pour un écran de '
+				+ background.screen.width + ' × ' + background.screen.height + '.');
+		}
+	}
+
+	function loadPicture(url) {
+		background.pictureUrl = url;
+		background.natural = null;
+		background.frame = null;
+		const image = $('cropImage');
+		image.onload = () => {
+			// A newer pick replaced it meanwhile
+			if (image.getAttribute('src') !== url) {
+				return;
+			}
+			background.natural = { width: image.naturalWidth, height: image.naturalHeight };
+			background.frame = largestFrame();
+			renderCrop();
+		};
+		image.onerror = () => {
+			background.source = null;
+			background.pictureUrl = null;
+			renderCrop();
+			showBackgroundStatus('Image introuvable : choisissez-en une autre.', 'bad');
+		};
+		image.src = url;
+		renderCrop();
+	}
+
+	function pickBackground() {
+		send({ type: 'pickBackground' });
+		if (!host) {
+			onPickedBackground({ source: 'design.jpg', sourceUrl: 'assets/background-jedi.jpg' });
+		}
+	}
+
+	function onPickedBackground(message) {
+		background.source = message.source;
+		background.enabled = true;
+		// Sent once the picture is laid out (placeFrame)
+		previewLive = true;
+		loadPicture(message.sourceUrl);
+	}
+
+	function startCropDrag(event, corner) {
+		if (event.button !== 0 || !background.frame || !background.source) {
+			return;
+		}
+		// A grip is inside the frame: its own drag only
+		event.preventDefault();
+		event.stopPropagation();
+		$('cropFrame').setPointerCapture(event.pointerId);
+		cropDrag = { id: event.pointerId, corner, start: { ...background.frame }, from: pointerInPicture(event) };
+	}
+
+	$('cropFrame').addEventListener('pointerdown', event => startCropDrag(event, null));
+	document.querySelectorAll('.crop-grip').forEach(grip =>
+		grip.addEventListener('pointerdown', event => startCropDrag(event, grip.dataset.corner)));
+	$('cropFrame').addEventListener('pointermove', (event) => {
+		if (!cropDrag || event.pointerId !== cropDrag.id) {
+			return;
+		}
+		const pointer = pointerInPicture(event);
+		const start = cropDrag.start;
+		background.frame = cropDrag.corner
+			? resizeFrame(start, cropDrag.corner, pointer)
+			: clampFrame({ ...start, x: start.x + pointer.x - cropDrag.from.x, y: start.y + pointer.y - cropDrag.from.y });
+		previewLive = true;
+		placeFrame();
+	});
+	const endCropDrag = () => {
+		cropDrag = null;
+	};
+	$('cropFrame').addEventListener('pointerup', endCropDrag);
+	$('cropFrame').addEventListener('pointercancel', endCropDrag);
+
+	// Wheel: the frame grows or shrinks around its centre
+	$('cropStage').addEventListener('wheel', (event) => {
+		if (!background.frame || !background.source || $('cropPicture').hidden) {
+			return;
+		}
+		event.preventDefault();
+		const frame = background.frame;
+		const height = clampHeight(frame.height * (event.deltaY > 0 ? WHEEL_STEP : 1 / WHEEL_STEP));
+		const width = height * screenRatio();
+		background.frame = clampFrame({ x: frame.x + (frame.width - width) / 2, y: frame.y + (frame.height - height) / 2, width, height });
+		previewLive = true;
+		placeFrame();
+	}, { passive: false });
+
+	$('bgTheme').addEventListener('change', () => {
+		background.enabled = false;
+		renderCrop();
+		previewChange();
+	});
+	$('bgCustom').addEventListener('change', () => {
+		background.enabled = true;
+		renderCrop();
+		previewChange();
+		if (!background.pictureUrl) {
+			pickBackground();
+		}
+	});
+	$('pickBackground').addEventListener('click', pickBackground);
+	$('cropEmpty').addEventListener('click', pickBackground);
+
+	function renderShade() {
+		$('bgShadeValue').textContent = Math.round(background.shade * 100) + ' %';
+		// Red up to the thumb's centre: the thumb (16 px) travels the track minus its own width
+		const slider = $('bgShade');
+		const share = Number(slider.value) / Number(slider.max || 100);
+		slider.style.setProperty('--fill', 'calc(8px + ' + share + ' * (100% - 16px))');
+	}
+	$('bgShade').addEventListener('input', () => {
+		background.shade = Number($('bgShade').value) / 100;
+		renderShade();
+		renderPreview();
+		previewChange();
+	});
+
+	/** The saved background (state, or after a save): its rendering alone, nothing being cropped. */
+	function showBackground(state) {
+		background.enabled = Boolean(state.enabled);
+		background.source = null;
+		background.maxShade = Number.isFinite(state.maxShade) ? state.maxShade : background.maxShade;
+		background.shade = Number.isFinite(state.shade) ? Math.min(state.shade, background.maxShade) : background.shade;
+		if (state.size) {
+			background.screen = state.size;
+		}
+		$('bgShade').max = Math.round(background.maxShade * 100);
+		$('bgShade').value = Math.round(background.shade * 100);
+		renderShade();
+		if (state.imageUrl) {
+			loadPicture(state.imageUrl);
+		} else {
+			background.pictureUrl = null;
+			background.natural = null;
+			background.frame = null;
+			renderCrop();
+		}
+	}
+
+	/** { enabled, shade, source?, crop? }: the picture and its frame (fractions) only while one is being cropped. */
+	function readBackground() {
+		const result = { enabled: background.enabled, shade: background.shade };
+		const { source, natural, frame } = background;
+		if (source && natural && frame) {
+			result.source = source;
+			result.crop = { x: frame.x / natural.width, y: frame.y / natural.height, width: frame.width / natural.width, height: frame.height / natural.height };
+		}
+		return result;
+	}
+
 	// ---------- Host messages ----------
 
 	function onState(state) {
@@ -883,6 +1222,9 @@
 		}
 		if (state.energy) {
 			showEnergy(state.energy);
+		}
+		if (state.background) {
+			showBackground(state.background);
 		}
 		const weather = state.weather;
 		if (weather) {
@@ -943,6 +1285,12 @@
 			case 'pickedScript':
 				onPickedScript(message);
 				break;
+			case 'pickedBackground':
+				onPickedBackground(message);
+				break;
+			case 'backgroundFailed':
+				showBackgroundStatus(message.message, 'bad');
+				break;
 			case 'processes':
 				openProcesses = message.processes || [];
 				renderProcessPick();
@@ -951,6 +1299,10 @@
 				goTo(message.step);
 				break;
 			case 'saved':
+				// The picture just cropped is deleted: only its rendering is shown from now on
+				if (message.background) {
+					showBackground(message.background);
+				}
 				$('next').disabled = false;
 				showFootStatus('Réglages enregistrés et appliqués');
 				break;
@@ -991,6 +1343,10 @@
 				{ id: 'bk1', name: 'Sauvegarde', kind: 'script', target: 'D:\\Scripts\\sauvegarde.ps1' }
 			],
 			energy: { pricePerKwh: 0.1952, otherWatts: 40, psuEfficiency: 90, show: true },
+			// "?background=<picture url>&saved=1": that picture as the saved rendering (see the picked one below)
+			background: new URLSearchParams(location.search).get('saved') === '1'
+				? { enabled: true, imageUrl: new URLSearchParams(location.search).get('background'), shade: 0.4, maxShade: 0.8, size: { width: 682, height: 2560 } }
+				: { enabled: false, shade: 0.4, maxShade: 0.8, size: { width: 682, height: 2560 } },
 			gameView: { autoGame: new URLSearchParams(location.search).get('autoGame') !== 'off', autoNormal: true, autoNormalDelaySec: 20, transition: 'morph', detectEngines: true, extraGames: [{ exe: 'TFTClient-Win64-Shipping.exe', name: 'TFT' }] },
 			caseSize: { width: 682, height: 2560 },
 			screens: [
@@ -1024,5 +1380,10 @@
 			],
 			matches: { cpuTemp: 0, cpuPower: 1, gpuTemp: -1, gpuPower: -1, gpuLoad: 4, gpuVram: 5 }
 		});
+		// "?background=<picture url>": that picture just picked, being cropped
+		const designPicture = new URLSearchParams(location.search).get('background');
+		if (designPicture && new URLSearchParams(location.search).get('saved') !== '1') {
+			dispatch({ type: 'pickedBackground', source: 'design.jpg', sourceUrl: designPicture });
+		}
 	}
 })();

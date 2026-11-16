@@ -42,6 +42,10 @@ public sealed class SetupForm : Form
 	/// </summary>
 	public event Action<bool>? Saved;
 
+	/// <summary>Background being edited, to show live on the case screen; null when the window closes.</summary>
+	public event Action<BackgroundPreview?>? BackgroundPreviewChanged;
+	private bool _backgroundPreviewed;
+
 	/// <param name="previewPath">Diagnostics: capture the page to this PNG and quit, never saving anything.</param>
 	public SetupForm(AppSettings settings, int startStep = 0, string? previewPath = null, EnergyMeter? energy = null)
 	{
@@ -55,8 +59,8 @@ public sealed class SetupForm : Form
 		Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
 		AutoScaleMode = AutoScaleMode.Dpi;
 		AutoScaleDimensions = new SizeF(96, 96);
-		ClientSize = new Size(960, 700);
-		MinimumSize = new Size(760, 560);
+		ClientSize = new Size(960, 770);
+		MinimumSize = new Size(760, 616);
 		StartPosition = FormStartPosition.CenterScreen;
 		BackColor = Color.Black;
 		MaximizeBox = false;
@@ -100,6 +104,7 @@ public sealed class SetupForm : Form
 			VirtualHost,
 			Path.Combine(AppContext.BaseDirectory, "wwwroot"),
 			CoreWebView2HostResourceAccessKind.Deny);
+		BackgroundStore.Map(core);
 		core.WebMessageReceived += OnWebMessage;
 		core.NavigationStarting += (_, _) => _webReady = false;
 		_webView.Source = new Uri($"https://{VirtualHost}/setup.html?step={_startStep}");
@@ -159,6 +164,16 @@ public sealed class SetupForm : Form
 				break;
 			case "pickScript":
 				PickScript(ReadId(root));
+				break;
+			case "pickBackground":
+				PickBackground();
+				break;
+			case "previewBackground":
+				if (_previewPath is null)
+				{
+					_backgroundPreviewed = true;
+					BackgroundPreviewChanged?.Invoke(BackgroundStore.ReadPreview(root, _settings.Background));
+				}
 				break;
 			case "exportConfig":
 				ExportConfig();
@@ -240,7 +255,7 @@ public sealed class SetupForm : Form
 		{
 			ConfigBackup.Import(backup, dialog.FileName, _energy);
 		}
-		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException)
+		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException or FormatException)
 		{
 			Log.Error("Configuration import failed", exception);
 			Post(new { type = "configFailed", message = "Import impossible : voir le journal." });
@@ -280,9 +295,55 @@ public sealed class SetupForm : Form
 			weather = _settings.Weather,
 			gameView = _settings.EffectiveGameView,
 			energy = _settings.EffectiveEnergy,
+			background = BackgroundState(_settings.Background),
 			customActions = (_settings.CustomActions ?? []).Select(a => new { id = a.Id, name = a.Name, kind = a.Kind, target = a.Target })
 		});
 		SendHwInfo();
+	}
+
+	/// <summary>Appearance step: the saved background, its rendering only when the file is still there.</summary>
+	private static object BackgroundState(BackgroundSettings? settings)
+	{
+		settings ??= new BackgroundSettings();
+		var imageUrl = BackgroundStore.ActiveUrl(settings);
+		return new
+		{
+			enabled = imageUrl is not null,
+			imageUrl,
+			shade = settings.Shade,
+			maxShade = BackgroundSettings.MaxShade,
+			size = new { width = BackgroundStore.Width, height = BackgroundStore.Height }
+		};
+	}
+
+	/// <summary>Appearance step: a picture chosen with Windows' file dialog, copied to the data folder at once.</summary>
+	private void PickBackground()
+	{
+		if (_previewPath is not null)
+		{
+			return;
+		}
+		using var dialog = new OpenFileDialog
+		{
+			Title = "Image de fond",
+			Filter = "Images (*.jpg, *.png, *.bmp)|" + string.Join(';', BackgroundStore.Extensions.Select(e => "*" + e)),
+			InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
+			CheckFileExists = true
+		};
+		if (dialog.ShowDialog(this) != DialogResult.OK)
+		{
+			return;
+		}
+		try
+		{
+			var (name, width, height) = BackgroundStore.Import(dialog.FileName);
+			Post(new { type = "pickedBackground", source = name, sourceUrl = BackgroundStore.UrlOf(name), width, height });
+		}
+		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+		{
+			Log.Error("Background picture refused", exception);
+			Post(new { type = "backgroundFailed", message = "Image illisible ou trop grande : choisissez une photo JPEG, PNG ou BMP." });
+		}
 	}
 
 	/// <summary>Shows a page of the already open window (the dock editor asks for the shortcuts one).</summary>
@@ -519,7 +580,24 @@ public sealed class SetupForm : Form
 			SensorSettings.ApplyGameView(root, message);
 			SensorSettings.ApplyCustomActions(root, message);
 			SensorSettings.ApplyEnergy(root, message);
+			// Last: the rendering takes a moment and must not be made for a save that fails before it
+			BackgroundStore.Apply(root, message, _settings.Background);
 		}, restart: () => !_settings.SetupCompleted || displayChanged, close: false);
+	}
+
+	protected override void OnFormClosed(FormClosedEventArgs e)
+	{
+		// The case screen goes back to the saved background before the files it no longer uses are deleted
+		if (_backgroundPreviewed)
+		{
+			BackgroundPreviewChanged?.Invoke(null);
+		}
+		// Pictures picked but never saved, renderings replaced since
+		if (_previewPath is null)
+		{
+			BackgroundStore.CleanUp(AppSettings.Load().Background);
+		}
+		base.OnFormClosed(e);
 	}
 
 	private void Complete(Action<JsonObject> change, bool restart, bool close) => Complete(change, () => restart, close);
@@ -555,7 +633,9 @@ public sealed class SetupForm : Form
 		{
 			// Stays open: later saves compare with what is now written
 			_settings = AppSettings.Load();
-			Post(new { type = "saved" });
+			BackgroundStore.CleanUp(_settings.Background);
+			// The picture just cropped is gone: the page shows the saved rendering from now on
+			Post(new { type = "saved", background = BackgroundState(_settings.Background) });
 		}
 		Saved?.Invoke(mustRestart);
 	}

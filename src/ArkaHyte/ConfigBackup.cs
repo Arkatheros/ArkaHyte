@@ -8,7 +8,8 @@ namespace ArkaHyte;
 
 /// <summary>
 /// The whole configuration in one JSON file, to bring it back after reinstalling Windows or the app:
-/// settings (appsettings.json), dock shortcuts (shortcuts.json) and the electricity history (energy.json).
+/// settings (appsettings.json), dock shortcuts (shortcuts.json), the electricity history (energy.json) and the
+/// custom background (its rendering, in base64).
 /// Left out on purpose: logs, browser profile, downloaded tools and the HWiNFO files, which belong to
 /// this Windows installation (HWiNFO is configured again from the wizard).
 /// </summary>
@@ -21,6 +22,8 @@ public static class ConfigBackup
 	private const string SettingsKey = "appsettings";
 	private const string ShortcutsKey = "shortcuts";
 	private const string EnergyKey = "energy";
+	// { "background-….jpg": base64 }, older versions ignore it
+	private const string BackgroundsKey = "backgrounds";
 
 	private static readonly JsonSerializerOptions WriteOptions = new()
 	{
@@ -55,6 +58,15 @@ public static class ConfigBackup
 		if (ReadJson(EnergyMeter.FilePath) is { } history)
 		{
 			root[EnergyKey] = history;
+		}
+		var backgrounds = new JsonObject();
+		foreach (var name in BackgroundStore.FilesOf(AppSettings.Load().Background))
+		{
+			backgrounds[name] = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(DataFolder.Backgrounds, name)));
+		}
+		if (backgrounds.Count > 0)
+		{
+			root[BackgroundsKey] = backgrounds;
 		}
 		var temp = path + ".tmp";
 		File.WriteAllText(temp, root.ToJsonString(WriteOptions) + Environment.NewLine);
@@ -135,6 +147,18 @@ public static class ConfigBackup
 			else
 			{
 				Write(EnergyMeter.FilePath, history);
+			}
+		}
+
+		// New names each time, nothing overwritten: the files the imported settings do not use go at the next cleanup
+		if (backup[BackgroundsKey] is JsonObject backgrounds)
+		{
+			foreach (var (name, content) in backgrounds)
+			{
+				if (content?.GetValueKind() == JsonValueKind.String)
+				{
+					BackgroundStore.Restore(name, Convert.FromBase64String(content.GetValue<string>()));
+				}
 			}
 		}
 		Log.Info($"Configuration imported from {source} (previous files kept in {keep})");

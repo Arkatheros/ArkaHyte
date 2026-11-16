@@ -40,6 +40,9 @@
 	const palette = {};
 	let themeName = null;
 	let theme = THEMES.sith;
+	// The user's own picture (settings, Appearance step), already cropped to the frame by the host; null url:
+	// the theme's. Its shading replaces the theme's; the theme's particles belong to the theme's picture only
+	let customBackground = { url: null, shade: 0.4 };
 
 	function readPalette() {
 		const style = getComputedStyle(document.documentElement);
@@ -88,21 +91,26 @@
 		ctx.fillRect(x - r, y - r, r * 2, r * 2);
 	}
 
+	// Made once: the live crop preview redraws the background many times a second
+	let grainTile = null;
+
 	function addGrain(ctx) {
-		const tile = document.createElement('canvas');
-		tile.width = 160;
-		tile.height = 160;
-		const tc = tile.getContext('2d');
-		const img = tc.createImageData(160, 160);
-		for (let i = 0; i < img.data.length; i += 4) {
-			const v = Math.random() * 255;
-			img.data[i] = v;
-			img.data[i + 1] = v;
-			img.data[i + 2] = v;
-			img.data[i + 3] = Math.random() * 14;
+		if (!grainTile) {
+			grainTile = document.createElement('canvas');
+			grainTile.width = 160;
+			grainTile.height = 160;
+			const tc = grainTile.getContext('2d');
+			const img = tc.createImageData(160, 160);
+			for (let i = 0; i < img.data.length; i += 4) {
+				const v = Math.random() * 255;
+				img.data[i] = v;
+				img.data[i + 1] = v;
+				img.data[i + 2] = v;
+				img.data[i + 3] = Math.random() * 14;
+			}
+			tc.putImageData(img, 0, 0);
 		}
-		tc.putImageData(img, 0, 0);
-		ctx.fillStyle = ctx.createPattern(tile, 'repeat');
+		ctx.fillStyle = ctx.createPattern(grainTile, 'repeat');
 		ctx.fillRect(0, 0, W, H);
 	}
 
@@ -158,48 +166,115 @@
 		}
 	}
 
-	// Each change of theme bumps the token: a picture still loading for the previous theme is dropped
+	// Each change bumps the token: a picture still loading for an earlier one is dropped
 	let backgroundToken = 0;
+	// The settings window is editing the background: { url, crop, shade }, drawn from the original
+	// picture until the window closes (url null: the theme's); null otherwise
+	let backgroundPreview = null;
+	// Last picture loaded, reused while the preview moves its frame (the original stays decoded meanwhile)
+	let loadedPicture = { url: null, image: null };
+
+	/** What the background shows now: the preview, the user's picture or the theme's. */
+	function backgroundTarget() {
+		const chosen = backgroundPreview || customBackground;
+		return chosen.url
+			? { url: chosen.url, crop: chosen.crop || null, shade: chosen.shade, custom: true }
+			: { url: theme.background, crop: null, shade: theme.skyShade, custom: false };
+	}
 
 	function drawBackground() {
 		const token = ++backgroundToken;
 		const ctx = $('bg').getContext('2d');
-		ctx.fillStyle = `rgb(${palette.void})`;
-		ctx.fillRect(0, 0, W, H);
-		const finish = () => {
+		let target = backgroundTarget();
+		// Drawn in one go once the picture is there: the previous background stays meanwhile
+		const paint = (photo) => {
+			ctx.fillStyle = `rgb(${palette.void})`;
+			ctx.fillRect(0, 0, W, H);
+			if (photo && target.crop) {
+				// The frame being chosen in the settings, cut from the original picture
+				const { naturalWidth: width, naturalHeight: height } = photo;
+				const crop = target.crop;
+				ctx.drawImage(photo, crop.x * width, crop.y * height, crop.width * width, crop.height * height, 0, 0, W, H);
+			} else if (photo) {
+				// Any picture fills the frame: scaled to cover it, centred, the overflow cropped
+				const scale = Math.max(W / photo.naturalWidth, H / photo.naturalHeight);
+				const width = photo.naturalWidth * scale;
+				const height = photo.naturalHeight * scale;
+				ctx.drawImage(photo, (W - width) / 2, (H - height) / 2, width, height);
+			} else if (theme.particles === 'sand') {
+				drawDesert(ctx);
+			}
 			// Darken the bright sky behind the clock so the digits keep their contrast
-			if (theme.skyShade > 0) {
+			if (target.shade > 0) {
 				const shade = ctx.createLinearGradient(0, 0, 0, 560);
-				shade.addColorStop(0, `rgba(0, 0, 0, ${theme.skyShade})`);
-				shade.addColorStop(0.6, `rgba(0, 0, 0, ${theme.skyShade * 0.36})`);
+				shade.addColorStop(0, `rgba(0, 0, 0, ${target.shade})`);
+				shade.addColorStop(0.6, `rgba(0, 0, 0, ${target.shade * 0.36})`);
 				shade.addColorStop(1, 'rgba(0, 0, 0, 0)');
 				ctx.fillStyle = shade;
 				ctx.fillRect(0, 0, W, 560);
 			}
 			addGrain(ctx);
 		};
-		const photo = new Image();
-		photo.onload = () => {
-			if (token !== backgroundToken) {
+		const load = () => {
+			if (loadedPicture.url === target.url && loadedPicture.image) {
+				paint(loadedPicture.image);
 				return;
 			}
-			// Any picture fills the frame: scaled to cover it, centred, the overflow cropped
-			const scale = Math.max(W / photo.naturalWidth, H / photo.naturalHeight);
-			const width = photo.naturalWidth * scale;
-			const height = photo.naturalHeight * scale;
-			ctx.drawImage(photo, (W - width) / 2, (H - height) / 2, width, height);
-			finish();
+			const photo = new Image();
+			photo.onload = () => {
+				if (token !== backgroundToken) {
+					return;
+				}
+				loadedPicture = { url: target.url, image: photo };
+				paint(photo);
+			};
+			photo.onerror = () => {
+				if (token !== backgroundToken) {
+					return;
+				}
+				// The user's picture gone: the theme's, with its own shading
+				if (target.custom) {
+					target = { url: theme.background, crop: null, shade: theme.skyShade, custom: false };
+					load();
+					return;
+				}
+				paint(null);
+			};
+			photo.src = target.url;
 		};
-		photo.onerror = () => {
-			if (token !== backgroundToken) {
+		load();
+	}
+
+	/** Live result of the crop being edited in the settings window; end: back to the saved background. */
+	function applyBackgroundPreview(message) {
+		if (message.end) {
+			if (!backgroundPreview) {
 				return;
 			}
-			if (theme.particles === 'sand') {
-				drawDesert(ctx);
-			}
-			finish();
+			backgroundPreview = null;
+		} else {
+			backgroundPreview = {
+				url: typeof message.url === 'string' && message.url ? message.url : null,
+				crop: message.crop || null,
+				shade: Number.isFinite(message.shade) ? message.shade : 0.4
+			};
+		}
+		if (themeName) {
+			drawBackground();
+		}
+	}
+
+	function applyBackground(config) {
+		const next = {
+			url: typeof config.url === 'string' && config.url ? config.url : null,
+			shade: Number.isFinite(config.shade) ? config.shade : customBackground.shade
 		};
-		photo.src = theme.background;
+		const redraw = next.url !== customBackground.url || (next.url && next.shade !== customBackground.shade);
+		customBackground = next;
+		// Before the first theme the palette is not read yet: applyTheme draws it
+		if (redraw && themeName) {
+			drawBackground();
+		}
 	}
 
 	// ---------- State fed by the host (or the design-mode simulator) ----------
@@ -3165,6 +3240,8 @@
 			refreshEditorActions();
 		}
 		if (Array.isArray(config.shortcuts)) buildDock(config.shortcuts);
+		// Before the theme: a theme changed at the same time redraws with the new picture, never the old one
+		if (config.background) applyBackground(config.background);
 		if (config.theme) applyTheme(config.theme);
 		if (config.thresholds) applyLimits(config.thresholds);
 		if (config.weather) weatherConfig = config.weather;
@@ -3184,6 +3261,8 @@
 			showCover(message.dataUrl, null);
 		} else if (message.type === 'config') {
 			applyConfig(message);
+		} else if (message.type === 'backgroundPreview') {
+			applyBackgroundPreview(message);
 		} else if (message.type === 'toast') {
 			showToast(message.text);
 		} else if (message.type === 'update') {
@@ -3523,8 +3602,21 @@
 		}
 	}
 
+	// Cleared once when the particles go off, then nothing drawn at all
+	let fxIdle = false;
+
 	function drawFx(now, ticks) {
 		const ctx = fxCtx;
+		// Embers and sand belong to the theme's own picture: none on the user's
+		if ((backgroundPreview || customBackground).url) {
+			if (!fxIdle) {
+				ctx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
+				embers.length = 0;
+				fxIdle = true;
+			}
+			return;
+		}
+		fxIdle = false;
 		ctx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
 		if (!motion) {
 			return;
@@ -4300,6 +4392,21 @@
 	document.fonts.ready.then(fitGpuLoadBox);
 	// "?theme=jedi" (set by the host from the settings, or by hand in design mode); config messages switch it live
 	applyTheme(new URLSearchParams(location.search).get('theme') || 'sith');
+	// "?background=<picture url>&shade=0.4": a custom background in design mode (the host sends the setting);
+	// with "&crop=x,y,width,height" (fractions), the live preview of a frame cut from that picture
+	const backgroundParam = new URLSearchParams(location.search).get('background');
+	if (backgroundParam) {
+		const cropParam = (new URLSearchParams(location.search).get('crop') || '').split(',').map(Number);
+		const designBackground = {
+			url: backgroundParam,
+			shade: Number(new URLSearchParams(location.search).get('shade') ?? 0.4)
+		};
+		if (cropParam.length === 4 && cropParam.every(Number.isFinite)) {
+			applyBackgroundPreview({ ...designBackground, crop: { x: cropParam[0], y: cropParam[1], width: cropParam[2], height: cropParam[3] } });
+		} else {
+			applyBackground(designBackground);
+		}
+	}
 	drawArtPlaceholder(null);
 	// "?transition=slide|fade|none" picks the view change animation in design mode (the host sends the setting)
 	const transitionParam = new URLSearchParams(location.search).get('transition');

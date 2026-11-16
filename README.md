@@ -57,7 +57,8 @@ Au premier lancement, une fenêtre s'ouvre sur l'écran principal (ensuite : men
 8. **Énergie** : prix du kWh, rendement de l'alimentation, correction des puissances CPU / GPU de HWiNFO,
    consommation de chaque partie non mesurée (carte mère, mémoire, stockage, ventilateurs, pompe, RGB, écran du
    boîtier, autre ; valeur totale par catégorie), affichage du coût.
-9. **Terminer** : écrit `%LOCALAPPDATA%\ArkaHyte\appsettings.json` (`SetupCompleted: true`) et redémarre l'affichage.
+9. **Apparence** : fond de l'écran du boîtier, celui du thème ou une image personnelle (voir [Thèmes](#thèmes)).
+10. **Terminer** : écrit `%LOCALAPPDATA%\ArkaHyte\appsettings.json` (`SetupCompleted: true`) et redémarre l'affichage.
 
 « Passer l'assistant » ne change rien d'autre que `SetupCompleted` ; fermer la fenêtre le repropose
 au prochain démarrage.
@@ -67,7 +68,8 @@ Une fois la configuration faite, le menu **Paramètres** ouvre les mêmes pages 
 d'écran du boîtier qui relance l'affichage.
 
 **Sauvegarde de la configuration** (réinstallation) : « Exporter la configuration », en bas de la fenêtre
-Paramètres, écrit un seul fichier JSON (réglages, raccourcis du dock, historique de consommation). « Importer une
+Paramètres, écrit un seul fichier JSON (réglages, raccourcis du dock, historique de consommation, image de fond
+personnelle). « Importer une
 configuration », aussi proposé dès la première page de l'assistant, le recharge après confirmation : les fichiers
 remplacés sont gardés dans `%LOCALAPPDATA%\ArkaHyte\backup\`, puis l'affichage redémarre. HWiNFO n'en fait pas
 partie : relancer sa configuration automatique après une réinstallation de Windows.
@@ -309,6 +311,17 @@ Jedi n'est pas assombri : le thème s'y adapte (halo sombre sous les textes et i
 pistes de jauge foncées). Un désert dessiné par le code remplace l'image si elle manque.
 Aperçu sans changer le choix enregistré : `--theme jedi` (avec `--screenshot`, `--menu-preview`), ou
 `index.html?theme=jedi` dans un navigateur.
+
+**Fond personnel** (Paramètres › **Apparence**) : une image JPEG, PNG ou BMP (64 Mo au plus), copiée le temps du
+recadrage dans `%LOCALAPPDATA%\ArkaHyte\backgrounds\`. Un cadre au format de l'écran choisit la partie gardée (déplacer,
+coins ou molette pour l'agrandir, grille des tiers, aperçu) ; un avertissement signale une partie trop petite, qui serait
+floue. Dès qu'on y touche, l'écran du boîtier suit en direct (cadre, assombrissement) ; fermer sans enregistrer
+y remet le fond enregistré. À l'enregistrement, cette partie est rendue une fois en 682 × 2560 (orientation des photos
+respectée) et seule cette image reste dans le dossier : la copie de la photo est effacée, recadrer demande de la choisir
+à nouveau. Revenir au fond du thème vide le dossier. Seul réglage : l'assombrissement derrière
+l'horloge (0 à 80 %). Pas de braises ni de sable sur une image personnelle : ils naissent sur la lave et les dunes de
+l'image du thème. Réglage `Background` de `appsettings.json`. Aperçu dans un navigateur :
+`index.html?background=<url d'une image>&shade=0.4[&crop=x,y,l,h]`, `setup.html?step=8&mode=settings&background=<url>[&saved=1]`.
 
 ## Icône de notification
 
