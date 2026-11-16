@@ -9,20 +9,19 @@ namespace ArkaHyte;
 /// </summary>
 internal sealed class SithMenuRenderer : ToolStripProfessionalRenderer
 {
-	// Colours of the active theme (Sith by default), same palette as console.css
+	// Colours of the palette shown on the display (Sith red by default)
 	private static Color Panel = Color.FromArgb(15, 6, 7);
 	private static Color Hover = Color.FromArgb(58, 10, 16);
 	private static Color Blade = Color.FromArgb(255, 31, 51);
 	private static Color Bone = Color.FromArgb(243, 233, 234);
 	private static Color Line = Color.FromArgb(110, 255, 31, 51);
 
-	public static void SetTheme(string theme)
+	public static void SetPalette(Palette palette)
 	{
-		var jedi = theme == Themes.Jedi;
-		Panel = jedi ? Color.FromArgb(5, 10, 19) : Color.FromArgb(15, 6, 7);
-		Hover = jedi ? Color.FromArgb(10, 32, 62) : Color.FromArgb(58, 10, 16);
-		Blade = jedi ? Color.FromArgb(40, 140, 255) : Color.FromArgb(255, 31, 51);
-		Bone = jedi ? Color.FromArgb(232, 239, 246) : Color.FromArgb(243, 233, 234);
+		Panel = palette.Panel;
+		Hover = palette.Hover;
+		Blade = palette.Blade;
+		Bone = palette.Bone;
 		Line = Color.FromArgb(110, Blade);
 	}
 
@@ -185,7 +184,9 @@ internal sealed class SithMenuRenderer : ToolStripProfessionalRenderer
 		e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
 		using var fill = new SolidBrush(Blade);
 		e.Graphics.FillRectangle(fill, box);
-		using var tick = new Pen(Color.White, Math.Max(1.6f, size / 8f)) { StartCap = LineCap.Round, EndCap = LineCap.Round };
+		// A light blade (white, yellow) takes a dark tick
+		var light = 0.2126 * Blade.R + 0.7152 * Blade.G + 0.0722 * Blade.B > 160;
+		using var tick = new Pen(light ? Panel : Color.White, Math.Max(1.6f, size / 8f)) { StartCap = LineCap.Round, EndCap = LineCap.Round };
 		e.Graphics.DrawLines(tick,
 		[
 			new PointF(box.Left + size * 0.22f, box.Top + size * 0.52f),

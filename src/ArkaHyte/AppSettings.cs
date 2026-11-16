@@ -45,16 +45,58 @@ public sealed record HwInfoSettings(
 		[new("CPU [#*", "Average Active Core Count"), new("CPU [#*", "Nombre moyen de cœurs actifs")];
 }
 
-/// <summary>Display themes: colours, hilt, background and particles (console.css, console.js).</summary>
+/// <summary>
+/// Display themes: the world shown (background, particles, hilt of the VRAM saber) and the palette it sets when
+/// it is chosen (console.css, console.js).
+/// </summary>
 public static class Themes
 {
 	public const string Sith = "sith";
 	public const string Jedi = "jedi";
+	public const string Coruscant = "coruscant";
 
-	/// <summary>Theme id and the name shown in the tray menu.</summary>
-	public static readonly IReadOnlyList<(string Id, string Name)> All = [(Sith, "Sith · sabre rouge"), (Jedi, "Jedi · sabre bleu")];
+	/// <summary>Theme id, the name shown in the settings and the palette it sets when it is chosen.</summary>
+	public static readonly IReadOnlyList<(string Id, string Name, string Palette)> All =
+	[
+		(Sith, "Sith · volcan", Palettes.Red),
+		(Jedi, "Jedi · désert", Palettes.Blue),
+		(Coruscant, "Coruscant · ville", Palettes.Violet)
+	];
 
 	public static string Normalize(string? theme) => All.Any(t => t.Id == theme) ? theme! : Sith;
+
+	/// <summary>The palette a theme sets when it is chosen, and the one used while none is saved.</summary>
+	public static string PaletteOf(string theme) => All.FirstOrDefault(t => t.Id == theme).Palette ?? Palettes.Red;
+}
+
+/// <summary>
+/// A saber colour applied to the whole display, whatever the theme: its full set of CSS variables lives in
+/// console.css (:root[data-palette]); here, what the tray menu and the settings swatches need.
+/// </summary>
+public sealed record Palette(string Id, string Name, Color Blade, Color Panel, Color Hover, Color Bone);
+
+public static class Palettes
+{
+	public const string Red = "red";
+	public const string Blue = "blue";
+	public const string Violet = "violet";
+
+	public static readonly IReadOnlyList<Palette> All =
+	[
+		new(Red, "Rouge", Color.FromArgb(255, 31, 51), Color.FromArgb(15, 6, 7), Color.FromArgb(58, 10, 16), Color.FromArgb(243, 233, 234)),
+		new(Blue, "Bleu", Color.FromArgb(40, 140, 255), Color.FromArgb(5, 10, 19), Color.FromArgb(10, 32, 62), Color.FromArgb(232, 239, 246)),
+		new("green", "Vert", Color.FromArgb(46, 214, 92), Color.FromArgb(5, 14, 8), Color.FromArgb(10, 46, 22), Color.FromArgb(236, 245, 238)),
+		new(Violet, "Violet", Color.FromArgb(166, 70, 255), Color.FromArgb(10, 5, 16), Color.FromArgb(38, 14, 60), Color.FromArgb(242, 236, 250)),
+		new("yellow", "Jaune", Color.FromArgb(255, 204, 34), Color.FromArgb(14, 12, 5), Color.FromArgb(52, 42, 8), Color.FromArgb(246, 242, 228)),
+		new("orange", "Orange", Color.FromArgb(255, 122, 26), Color.FromArgb(15, 8, 4), Color.FromArgb(58, 26, 6), Color.FromArgb(246, 238, 230)),
+		new("white", "Blanc", Color.FromArgb(226, 234, 246), Color.FromArgb(10, 11, 13), Color.FromArgb(40, 43, 50), Color.FromArgb(244, 246, 250))
+	];
+
+	/// <summary>A known palette id; otherwise (none saved, former "auto") the theme's.</summary>
+	public static string Normalize(string? palette, string theme) =>
+		All.Any(p => p.Id == palette) ? palette! : Themes.PaletteOf(Themes.Normalize(theme));
+
+	public static Palette Get(string palette) => All.FirstOrDefault(p => p.Id == palette) ?? All[0];
 }
 
 /// <summary>
@@ -222,6 +264,8 @@ public sealed record AppSettings(
 	string CpuClickTarget = "taskmgr.exe",
 	bool SetupCompleted = false,
 	string Theme = Themes.Sith,
+	// One of Palettes.All, set to the theme's when a theme is chosen; none: the theme's (EffectivePalette)
+	string? Palette = null,
 	ThresholdSettings? Thresholds = null,
 	WeatherSettings? Weather = null,
 	GameViewSettings? GameView = null,
@@ -232,6 +276,9 @@ public sealed record AppSettings(
 	BackgroundSettings? Background = null)
 {
 	public GameViewSettings EffectiveGameView => GameView ?? new GameViewSettings();
+
+	/// <summary>The palette shown: the one saved, or the theme's.</summary>
+	public string EffectivePalette => Palettes.Normalize(Palette, Theme);
 
 	/// <summary>Energy settings, out-of-range values from a hand-edited file brought back in range.</summary>
 	public EnergySettings EffectiveEnergy => Energy is { } energy

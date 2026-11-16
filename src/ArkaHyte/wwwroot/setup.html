@@ -249,8 +249,15 @@
 			<!-- Appearance: the case screen's background -->
 			<section class="page" data-page="8">
 				<h1>Apparence</h1>
-				<p class="lead">Le fond de l'écran du boîtier : celui du thème, ou une de vos images. N'importe quelle photo
-					convient : vous choisissez la partie gardée, au format de l'écran (très haut et étroit).</p>
+				<p class="lead">Le thème, les couleurs et le fond de l'écran du boîtier. L'écran suit en direct ; rien
+					n'est gardé avant Enregistrer.</p>
+				<h2>Thème</h2>
+				<div class="themes" id="themeList" role="radiogroup" aria-label="Thème"></div>
+				<h2>Couleurs</h2>
+				<div class="palettes" id="paletteList" role="radiogroup" aria-label="Couleurs"></div>
+				<h2>Fond</h2>
+				<p class="hint">Celui du thème, ou une de vos images : n'importe quelle photo convient, vous choisissez la
+					partie gardée, au format de l'écran (très haut et étroit).</p>
 				<div class="bg-modes" role="radiogroup" aria-label="Fond d'écran">
 					<label class="switch"><input type="radio" name="bgMode" value="theme" id="bgTheme"><span>Fond du thème</span></label>
 					<label class="switch"><input type="radio" name="bgMode" value="custom" id="bgCustom"><span>Image personnelle</span></label>

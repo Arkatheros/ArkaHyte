@@ -42,9 +42,9 @@ public sealed class SetupForm : Form
 	/// </summary>
 	public event Action<bool>? Saved;
 
-	/// <summary>Background being edited, to show live on the case screen; null when the window closes.</summary>
-	public event Action<BackgroundPreview?>? BackgroundPreviewChanged;
-	private bool _backgroundPreviewed;
+	/// <summary>Appearance being edited (background, palette), to show live on the case screen; null when the window closes.</summary>
+	public event Action<AppearancePreview?>? AppearancePreviewChanged;
+	private bool _appearancePreviewed;
 
 	/// <param name="previewPath">Diagnostics: capture the page to this PNG and quit, never saving anything.</param>
 	public SetupForm(AppSettings settings, int startStep = 0, string? previewPath = null, EnergyMeter? energy = null)
@@ -168,11 +168,11 @@ public sealed class SetupForm : Form
 			case "pickBackground":
 				PickBackground();
 				break;
-			case "previewBackground":
+			case "previewAppearance":
 				if (_previewPath is null)
 				{
-					_backgroundPreviewed = true;
-					BackgroundPreviewChanged?.Invoke(BackgroundStore.ReadPreview(root, _settings.Background));
+					_appearancePreviewed = true;
+					AppearancePreviewChanged?.Invoke(BackgroundStore.ReadPreview(root, _settings.Background));
 				}
 				break;
 			case "exportConfig":
@@ -296,6 +296,12 @@ public sealed class SetupForm : Form
 			gameView = _settings.EffectiveGameView,
 			energy = _settings.EffectiveEnergy,
 			background = BackgroundState(_settings.Background),
+			// Appearance step: swatches, and what "the theme's colours" means now
+			theme = Themes.Normalize(_settings.Theme),
+			themes = Themes.All.Select(t => new { id = t.Id, name = t.Name }),
+			palette = _settings.EffectivePalette,
+			palettes = Palettes.All.Select(p => new { id = p.Id, name = p.Name, color = ColorTranslator.ToHtml(p.Blade) }),
+			themePalettes = Themes.All.ToDictionary(t => t.Id, t => Themes.PaletteOf(t.Id)),
 			customActions = (_settings.CustomActions ?? []).Select(a => new { id = a.Id, name = a.Name, kind = a.Kind, target = a.Target })
 		});
 		SendHwInfo();
@@ -580,6 +586,17 @@ public sealed class SetupForm : Form
 			SensorSettings.ApplyGameView(root, message);
 			SensorSettings.ApplyCustomActions(root, message);
 			SensorSettings.ApplyEnergy(root, message);
+			// The page sets the theme's palette when a theme is chosen; another one may be chosen after it
+			var savedTheme = Themes.Normalize(_settings.Theme);
+			if (message.TryGetProperty("theme", out var theme) && theme.ValueKind == JsonValueKind.String)
+			{
+				savedTheme = Themes.Normalize(theme.GetString());
+				root["Theme"] = savedTheme;
+			}
+			if (message.TryGetProperty("palette", out var palette) && palette.ValueKind == JsonValueKind.String)
+			{
+				root["Palette"] = Palettes.Normalize(palette.GetString(), savedTheme);
+			}
 			// Last: the rendering takes a moment and must not be made for a save that fails before it
 			BackgroundStore.Apply(root, message, _settings.Background);
 		}, restart: () => !_settings.SetupCompleted || displayChanged, close: false);
@@ -588,9 +605,9 @@ public sealed class SetupForm : Form
 	protected override void OnFormClosed(FormClosedEventArgs e)
 	{
 		// The case screen goes back to the saved background before the files it no longer uses are deleted
-		if (_backgroundPreviewed)
+		if (_appearancePreviewed)
 		{
-			BackgroundPreviewChanged?.Invoke(null);
+			AppearancePreviewChanged?.Invoke(null);
 		}
 		// Pictures picked but never saved, renderings replaced since
 		if (_previewPath is null)

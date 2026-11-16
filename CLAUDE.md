@@ -189,16 +189,28 @@ touche à l'étape : `previewBackground` (40 ms au plus) → `SetupForm.Backgrou
 `{ url, crop, shade }`, cadre découpé dans l'original (`drawImage` source rect, image gardée chargée) ou rendu enregistré
 tel quel, `{ end }` à la fermeture des Paramètres (retour au fond enregistré, avant le `CleanUp`). Tout sauf le rendu
 enregistré est effacé après enregistrement et à la fermeture des Paramètres (`CleanUp`) ; rendu exporté en base64 (`ConfigBackup`).
-**Thèmes.** `Themes` (`AppSettings.cs`) : `sith` / `jedi`, `Theme` dans `appsettings.json`, choisi par le menu
-de l'icône (`DisplayForm.SetTheme` → message `config` `{ theme }`, sans recharger). Dans `console.css`, toute
-couleur liée au thème passe par une variable (`--blade-rgb`, `--line-rgb`, `--panel-rgb`…, triplets pour
-`rgba()`), redéfinie par `:root[data-theme="jedi"]` ; ne jamais réintroduire de rouge en dur. `console.js` lit
-ces triplets dans `palette` (`readPalette`) pour le canvas ; `THEMES` y donne le fond, les particules et
-l'ombrage du ciel (`skyShade`). Fond clair (Jedi) : ne pas assombrir l'image (choix du propriétaire), rendre
-le thème lisible (`--halo` hérité depuis `.frame`, `-webkit-text-stroke` sur les chiffres, `--track` foncé).
-Alertes : `--ember-rgb` par thème (orange Sith, violet Jedi), rien de plus qu'un changement de couleur
-(une plaque sombre derrière les valeurs a été refusée). Fourreaux `.hilt-sith` / `.hilt-jedi` dans le SVG du sabre VRAM. Le menu de
-l'icône suit le thème (`SithMenuRenderer.SetTheme`).
+**Thèmes, palettes, lisibilité** : trois attributs indépendants posés par `console.js` sur la racine.
+- `data-theme` (`Themes`, `sith` / `jedi` / `coruscant`, `Theme` dans `appsettings.json`, étape Apparence seulement, appliqué par `ReloadSettings`) :
+  le monde. `THEMES` (`console.js`) : fond, particules, ombrage du ciel (`skyShade`), palette propre, clarté ;
+  CSS : fourreau `.hilt-sith` en Sith, `.hilt-jedi` ailleurs ; voiles de fumée et taches de lave en Sith seulement
+  (masqués aussi sur un fond personnel, animation `animateBackground` arrêtée). Particules `none` (Coruscant) : `drawFx`
+  ne dessine rien. Ajouter un thème : `Themes.All` (C#, avec sa palette), `THEMES` (`console.js`), `THEME_CARDS`
+  (`setup.js`), fond 682 × 2560 dans `assets/` (recadré au centre, JPEG ~250 Ko).
+- `data-palette` (`Palettes`, 7 couleurs de sabres ; pas de « couleurs du thème » (choix du propriétaire) : choisir un
+  thème pose sa palette (`Themes.PaletteOf`, rouge / bleu), qu'on change ensuite ; `Palette` absent ou inconnu =
+  celle du thème, `EffectivePalette` ; étape Apparence seulement (le menu de l'icône en prend les couleurs) → `config` `{ palette }`,
+  sans recharger) : toutes les couleurs sont des
+  variables (`--blade-rgb`, `--line-rgb`, `--panel-rgb`…, triplets pour `rgba()`), redéfinies par
+  `:root[data-palette="…"]` ; ne jamais réintroduire de couleur en dur. `console.js` les lit dans `palette`
+  (`readPalette`) pour le canvas. Alertes : `--ember-rgb` par palette, teinte qui tranche avec la lame (orange sur
+  rouge / vert / violet, violet sur bleu / orange, rouge sur jaune / blanc), rien de plus qu'un changement de couleur
+  (une plaque sombre derrière les valeurs a été refusée). `--upload-rgb` : phase d'envoi du test de débit. Le menu
+  suit la palette affichée (`TrayIcon.SetPalette` → `SithMenuRenderer.SetPalette`). Catalogue C# (`Palettes.All`) = noms
+  et couleurs du menu et des pastilles ; jeux complets de variables dans `console.css` seulement.
+- `data-bright` : fond clair → ne pas assombrir l'image (choix du propriétaire), rendre l'écran lisible (`--halo`
+  hérité depuis `.frame`, `-webkit-text-stroke` sur les chiffres, `--track` foncé), dans le ton le plus sombre de
+  la palette. Thème : `THEMES.bright` (Jedi, Coruscant) ; image personnelle : luminance moyenne mesurée sur une copie 34 × 128
+  (`isBrightPicture`, seuil 0,28, d'où `Allow` sur `hyte-user.local` et `crossOrigin`).
 
 ## Règles de performance de l'UI (impératives)
 

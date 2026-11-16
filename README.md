@@ -57,7 +57,8 @@ Au premier lancement, une fenêtre s'ouvre sur l'écran principal (ensuite : men
 8. **Énergie** : prix du kWh, rendement de l'alimentation, correction des puissances CPU / GPU de HWiNFO,
    consommation de chaque partie non mesurée (carte mère, mémoire, stockage, ventilateurs, pompe, RGB, écran du
    boîtier, autre ; valeur totale par catégorie), affichage du coût.
-9. **Apparence** : fond de l'écran du boîtier, celui du thème ou une image personnelle (voir [Thèmes](#thèmes)).
+9. **Apparence** : thème, couleur de sabre et fond de l'écran du boîtier (celui du thème ou une image personnelle),
+   suivis en direct sur l'écran (voir [Thèmes](#thèmes)).
 10. **Terminer** : écrit `%LOCALAPPDATA%\ArkaHyte\appsettings.json` (`SetupCompleted: true`) et redémarre l'affichage.
 
 « Passer l'assistant » ne change rien d'autre que `SetupCompleted` ; fermer la fenêtre le repropose
@@ -297,20 +298,29 @@ powershell -File scripts\New-AppIcon.ps1 -SourceImage src\ArkaHyte\Assets\empire
 
 ## Thèmes
 
-Menu de l'icône › **Thème** : changement immédiat, retenu dans `appsettings.json` (`Theme`).
+Paramètres › **Apparence** › **Thème** : le monde affiché, avec aperçu en direct sur l'écran, retenu à l'enregistrement dans
+`appsettings.json` (`Theme`).
 
-| Thème | Sabre | Fourreau | Alertes | Décor | Particules |
-|---|---|---|---|---|---|
-| **Sith** (`sith`, défaut) | rouge | Dark Vador | orange | monde volcanique (`assets/background.jpg`) | braises, éruptions |
-| **Jedi** (`jedi`) | bleu | Obi-Wan | violet (Mace Windu) | Tatooine (`assets/background-jedi.jpg`) | sable porté par le vent |
+| Thème | Couleur posée en le choisissant | Fourreau | Décor | Particules |
+|---|---|---|---|---|
+| **Sith** (`sith`, défaut) | rouge | Dark Vador | monde volcanique (`assets/background.jpg`) | braises, éruptions |
+| **Jedi** (`jedi`) | bleu | Obi-Wan | Tatooine (`assets/background-jedi.jpg`) | sable porté par le vent |
+| **Coruscant** (`coruscant`) | violet | Obi-Wan | la ville de nuit et le temple Jedi (`assets/background-coruscant.jpg`) | aucune |
 
-Les couleurs sont des variables CSS (`console.css`, bloc `:root[data-theme="jedi"]`) reprises par les
-dessins du canvas ; les alertes (valeurs élevées, pas d'internet) ont leur propre couleur par thème. Une image de fond de n'importe quelle
-taille est recadrée pour couvrir l'écran (idéalement en portrait, 682 × 2560). Le désert ensoleillé du thème
-Jedi n'est pas assombri : le thème s'y adapte (halo sombre sous les textes et icônes, chiffres épaissis,
-pistes de jauge foncées). Un désert dessiné par le code remplace l'image si elle manque.
-Aperçu sans changer le choix enregistré : `--theme jedi` (avec `--screenshot`, `--menu-preview`), ou
-`index.html?theme=jedi` dans un navigateur.
+**Couleurs** (Paramètres › **Apparence**, avec aperçu en direct) : une des sept
+couleurs de sabres, quel que soit le thème. Choisir un thème pose sa couleur (rouge ou bleu), qu'on peut changer
+ensuite. Réglage `Palette` : `red`, `blue`, `green`, `violet`, `yellow`, `orange`, `white` (absent : celle du
+thème). Chaque palette a sa propre couleur d'alerte (valeurs
+élevées, pas d'internet), choisie pour trancher avec la lame : orange sur rouge, vert et violet, violet sur bleu et
+orange, rouge sur jaune et blanc. Les couleurs sont des variables CSS (`console.css`, blocs
+`:root[data-palette]`) reprises par les dessins du canvas ; le menu de l'icône prend la couleur affichée.
+
+Une image de fond de n'importe quelle taille est recadrée pour couvrir l'écran (idéalement en portrait, 682 × 2560).
+Un fond clair n'est pas assombri : l'écran s'y adapte (halo sombre sous les textes et icônes, chiffres épaissis,
+pistes de jauge foncées). C'est le cas du désert Jedi, de Coruscant (ses lumières derrière les chiffres) et d'une image personnelle dont la luminance moyenne dépasse
+0,28 (mesurée à l'affichage). Un désert dessiné par le code remplace l'image si elle manque.
+Aperçu sans changer le choix enregistré : `--theme jedi`, `--palette green` (avec `--screenshot`, `--menu-preview`),
+ou `index.html?theme=jedi&palette=green` dans un navigateur.
 
 **Fond personnel** (Paramètres › **Apparence**) : une image JPEG, PNG ou BMP (64 Mo au plus), copiée le temps du
 recadrage dans `%LOCALAPPDATA%\ArkaHyte\backgrounds\`. Un cadre au format de l'écran choisit la partie gardée (déplacer,
@@ -326,7 +336,7 @@ l'image du thème. Réglage `Background` de `appsettings.json`. Aperçu dans un 
 ## Icône de notification
 
 Clic droit sur l'emblème gris dans la zone de notification : **mode démo** (CPU/GPU 100 %, sans internet),
-**thème**, **recharger l'affichage**, **assistant de configuration**, **ouvrir le dossier des journaux**,
+**recharger l'affichage**, **assistant de configuration**, **ouvrir le dossier des journaux**,
 **mises à jour**, **quitter**.
 
 ## Diagnostic

@@ -27,22 +27,34 @@
 		frame.style.transform = `scale(${scale})`;
 	}
 
-	// ---------- Themes ----------
-	// Colours come from the active theme's CSS variables (console.css); the background picture and
-	// the particle effect belong to the theme as well
-	// skyShade: darkening of the sky behind the clock (the Jedi theme keeps its sunlit sky and makes its
-	// text readable with a halo instead, see console.css)
+	// ---------- Themes and palettes ----------
+	// A theme is a world: background picture, particles, hilt (console.css :root[data-theme]). Colours come
+	// from the palette's CSS variables (:root[data-palette]), chosen apart: choosing a theme sets its own (THEMES.palette).
+	// skyShade: darkening of the sky behind the clock; bright: readability aids over the picture (the Jedi
+	// theme keeps its sunlit sky and makes its text readable with a halo instead, see console.css)
 	const THEMES = {
-		sith: { background: 'assets/background.jpg', particles: 'embers', skyShade: 0.5 },
-		jedi: { background: 'assets/background-jedi.jpg', particles: 'sand', skyShade: 0 }
+		sith: { background: 'assets/background.jpg', particles: 'embers', skyShade: 0.5, palette: 'red', bright: false },
+		jedi: { background: 'assets/background-jedi.jpg', particles: 'sand', skyShade: 0, palette: 'blue', bright: true },
+		// The city at night: its sky is already dark, nothing drifts over its lights; the halo keeps the
+		// figures readable over the lit temple and streets
+		coruscant: { background: 'assets/background-coruscant.jpg', particles: 'none', skyShade: 0, palette: 'violet', bright: true }
 	};
-	// "r, g, b" triplets for the canvas drawings, read from the CSS when the theme changes
+	const PALETTES = ['red', 'blue', 'green', 'violet', 'yellow', 'orange', 'white'];
+	// "r, g, b" triplets for the canvas drawings, read from the CSS when the palette changes
 	const palette = {};
 	let themeName = null;
 	let theme = THEMES.sith;
+	// Chosen in the settings or the tray menu; the settings window may preview another one meanwhile
+	let paletteChoice = null;
+	let shownPalette = null;
 	// The user's own picture (settings, Appearance step), already cropped to the frame by the host; null url:
 	// the theme's. Its shading replaces the theme's; the theme's particles belong to the theme's picture only
 	let customBackground = { url: null, shade: 0.4 };
+	// Mean luminance (0 to 1) of the user's picture beyond which the readability aids come on: measured on
+	// the volcano (0.17), a dark wallpaper (0.21), a grey portrait (0.35), a pale sky (0.39), the desert (0.54)
+	const BRIGHT_PICTURE = 0.28;
+	// Whether the user's picture shown now is bright, measured when it is drawn
+	let customBright = true;
 
 	function readPalette() {
 		const style = getComputedStyle(document.documentElement);
@@ -57,23 +69,69 @@
 		palette.artTop = read('--art-top-rgb');
 		palette.artBottom = read('--art-bottom-rgb');
 		palette.ember = read('--ember-rgb');
+		palette.upload = read('--upload-rgb');
 	}
 
+	// The saved theme; the settings window may preview the other one meanwhile
+	let themeChoice = 'sith';
+
 	function applyTheme(name) {
-		const next = THEMES[name] ? name : 'sith';
+		themeChoice = THEMES[name] ? name : 'sith';
+		showTheme();
+	}
+
+	/** Shows the previewed theme or the saved one; true when it changed (colours and background redrawn). */
+	function showTheme() {
+		const previewed = appearancePreview && appearancePreview.theme;
+		const next = THEMES[previewed] ? previewed : themeChoice;
 		if (next === themeName) {
-			return;
+			return false;
 		}
 		themeName = next;
 		theme = THEMES[next];
-		// Set once per change, on the root: every themed colour follows from these variables
+		// Set once per change, on the root: the world's own rules follow from it
 		document.documentElement.dataset.theme = next;
-		readPalette();
+		applyColors();
 		drawBackground();
 		// Embers belong to the volcano, sand to the desert: the next frames respawn the right ones
 		embers.length = 0;
+		return true;
+	}
+
+	/** The palette in force: a preview from the settings window, or the one chosen (the theme's when none). */
+	function applyColors() {
+		const wanted = (appearancePreview && appearancePreview.palette) || paletteChoice;
+		const next = PALETTES.includes(wanted) ? wanted : theme.palette;
+		updateBright();
+		if (next === shownPalette) {
+			return;
+		}
+		shownPalette = next;
+		// Set once per change, on the root: every colour follows from these variables
+		document.documentElement.dataset.palette = next;
+		readPalette();
+		// Canvases keyed on their colour (CPU ring, gauges) redraw by themselves; this one is drawn once
 		if ($('mediaCover').hidden) {
 			drawArtPlaceholder(placeholderLabel);
+		}
+	}
+
+	function applyPalette(choice) {
+		paletteChoice = PALETTES.includes(choice) ? choice : null;
+		if (themeName) {
+			applyColors();
+		}
+	}
+
+	/** Readability aids over a bright background: the theme's, or measured on the user's picture. */
+	function updateBright() {
+		const custom = Boolean((appearancePreview || customBackground).url);
+		const root = document.documentElement;
+		root.toggleAttribute('data-bright', custom ? customBright : theme.bright);
+		if (custom) {
+			root.dataset.background = 'custom';
+		} else {
+			delete root.dataset.background;
 		}
 	}
 
@@ -168,15 +226,42 @@
 
 	// Each change bumps the token: a picture still loading for an earlier one is dropped
 	let backgroundToken = 0;
-	// The settings window is editing the background: { url, crop, shade }, drawn from the original
-	// picture until the window closes (url null: the theme's); null otherwise
-	let backgroundPreview = null;
+	// The settings window is editing the appearance: { url, crop, shade, palette }, the background drawn from
+	// the original picture until the window closes (url null: the theme's); null otherwise
+	let appearancePreview = null;
 	// Last picture loaded, reused while the preview moves its frame (the original stays decoded meanwhile)
 	let loadedPicture = { url: null, image: null };
+	// A tiny copy of the user's picture, read back to measure how bright it is (the themes' are known)
+	const probe = document.createElement('canvas');
+	probe.width = 34;
+	probe.height = 128;
+	const probeCtx = probe.getContext('2d', { willReadFrequently: true });
+
+	/** Mean luminance of the part of the picture shown is high enough to need the readability aids. */
+	function isBrightPicture(photo, crop) {
+		const { naturalWidth: width, naturalHeight: height } = photo;
+		// The frame being chosen, or the centred cover the display draws
+		const scale = Math.max(W / width, H / height);
+		const area = crop
+			? [crop.x * width, crop.y * height, crop.width * width, crop.height * height]
+			: [(width - W / scale) / 2, (height - H / scale) / 2, W / scale, H / scale];
+		try {
+			probeCtx.drawImage(photo, ...area, 0, 0, probe.width, probe.height);
+			const pixels = probeCtx.getImageData(0, 0, probe.width, probe.height).data;
+			let sum = 0;
+			for (let i = 0; i < pixels.length; i += 4) {
+				sum += 0.2126 * pixels[i] + 0.7152 * pixels[i + 1] + 0.0722 * pixels[i + 2];
+			}
+			return sum / (pixels.length / 4) / 255 >= BRIGHT_PICTURE;
+		} catch {
+			// Unreadable (served without CORS): the aids never hurt
+			return true;
+		}
+	}
 
 	/** What the background shows now: the preview, the user's picture or the theme's. */
 	function backgroundTarget() {
-		const chosen = backgroundPreview || customBackground;
+		const chosen = appearancePreview || customBackground;
 		return chosen.url
 			? { url: chosen.url, crop: chosen.crop || null, shade: chosen.shade, custom: true }
 			: { url: theme.background, crop: null, shade: theme.skyShade, custom: false };
@@ -214,6 +299,10 @@
 				ctx.fillRect(0, 0, W, 560);
 			}
 			addGrain(ctx);
+			if (target.custom && photo) {
+				customBright = isBrightPicture(photo, target.crop);
+			}
+			updateBright();
 		};
 		const load = () => {
 			if (loadedPicture.url === target.url && loadedPicture.image) {
@@ -240,26 +329,34 @@
 				}
 				paint(null);
 			};
+			// The user's pictures come from another host: read back only with CORS (to measure them)
+			if (target.custom && target.url.startsWith('https://')) {
+				photo.crossOrigin = 'anonymous';
+			}
 			photo.src = target.url;
 		};
 		load();
 	}
 
-	/** Live result of the crop being edited in the settings window; end: back to the saved background. */
-	function applyBackgroundPreview(message) {
+	/** Live result of the appearance being edited in the settings window; end: back to the saved one. */
+	function applyAppearancePreview(message) {
 		if (message.end) {
-			if (!backgroundPreview) {
+			if (!appearancePreview) {
 				return;
 			}
-			backgroundPreview = null;
+			appearancePreview = null;
 		} else {
-			backgroundPreview = {
+			appearancePreview = {
 				url: typeof message.url === 'string' && message.url ? message.url : null,
 				crop: message.crop || null,
-				shade: Number.isFinite(message.shade) ? message.shade : 0.4
+				shade: Number.isFinite(message.shade) ? message.shade : 0.4,
+				palette: typeof message.palette === 'string' ? message.palette : null,
+				theme: typeof message.theme === 'string' ? message.theme : null
 			};
 		}
-		if (themeName) {
+		// A theme change redraws everything already
+		if (themeName && !showTheme()) {
+			applyColors();
 			drawBackground();
 		}
 	}
@@ -689,8 +786,8 @@
 		error: 'Échec du test'
 	};
 	const SPEEDTEST_AUTO_CLOSE_MS = 30000;
-	// Download in the blade colour, upload in amber
-	const speedColor = (dial) => (dial === 'upload' ? '255, 176, 32' : palette.blade);
+	// Download in the blade colour, upload in the palette's contrasting one (amber, or sky blue next to yellow)
+	const speedColor = (dial) => (dial === 'upload' ? palette.upload : palette.blade);
 	// Speedometer scales, graduations evenly spaced like Speedtest's dial; the wide one kicks in above 1 Gbit/s
 	const GAUGE_SCALES = [
 		[0, 5, 10, 50, 100, 250, 500, 750, 1000],
@@ -3242,6 +3339,7 @@
 		if (Array.isArray(config.shortcuts)) buildDock(config.shortcuts);
 		// Before the theme: a theme changed at the same time redraws with the new picture, never the old one
 		if (config.background) applyBackground(config.background);
+		if (typeof config.palette === 'string') applyPalette(config.palette);
 		if (config.theme) applyTheme(config.theme);
 		if (config.thresholds) applyLimits(config.thresholds);
 		if (config.weather) weatherConfig = config.weather;
@@ -3261,8 +3359,8 @@
 			showCover(message.dataUrl, null);
 		} else if (message.type === 'config') {
 			applyConfig(message);
-		} else if (message.type === 'backgroundPreview') {
-			applyBackgroundPreview(message);
+		} else if (message.type === 'appearancePreview') {
+			applyAppearancePreview(message);
 		} else if (message.type === 'toast') {
 			showToast(message.text);
 		} else if (message.type === 'update') {
@@ -3607,8 +3705,8 @@
 
 	function drawFx(now, ticks) {
 		const ctx = fxCtx;
-		// Embers and sand belong to the theme's own picture: none on the user's
-		if ((backgroundPreview || customBackground).url) {
+		// Embers and sand belong to the theme's own picture: none on the user's, none over the city
+		if ((appearancePreview || customBackground).url || theme.particles === 'none') {
 			if (!fxIdle) {
 				ctx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
 				embers.length = 0;
@@ -3709,6 +3807,10 @@
 	}));
 
 	function animateBackground(now) {
+		// Lava and smoke belong to the volcano's own picture: hidden elsewhere, nothing to animate
+		if (themeName !== 'sith' || (appearancePreview || customBackground).url) {
+			return;
+		}
 		for (const spot of lavaSpots) {
 			const slow = 0.5 + 0.5 * Math.sin((2 * Math.PI * now) / spot.slow + spot.phase);
 			const fast = 0.5 + 0.5 * Math.sin((2 * Math.PI * now) / spot.fast + spot.phase * 2);
@@ -4391,6 +4493,8 @@
 	applyScale();
 	document.fonts.ready.then(fitGpuLoadBox);
 	// "?theme=jedi" (set by the host from the settings, or by hand in design mode); config messages switch it live
+	// "?palette=green" (set by the host, or by hand in design mode), before the theme draws anything
+	applyPalette(new URLSearchParams(location.search).get('palette'));
 	applyTheme(new URLSearchParams(location.search).get('theme') || 'sith');
 	// "?background=<picture url>&shade=0.4": a custom background in design mode (the host sends the setting);
 	// with "&crop=x,y,width,height" (fractions), the live preview of a frame cut from that picture
@@ -4402,7 +4506,7 @@
 			shade: Number(new URLSearchParams(location.search).get('shade') ?? 0.4)
 		};
 		if (cropParam.length === 4 && cropParam.every(Number.isFinite)) {
-			applyBackgroundPreview({ ...designBackground, crop: { x: cropParam[0], y: cropParam[1], width: cropParam[2], height: cropParam[3] } });
+			applyAppearancePreview({ ...designBackground, crop: { x: cropParam[0], y: cropParam[1], width: cropParam[2], height: cropParam[3] } });
 		} else {
 			applyBackground(designBackground);
 		}

@@ -582,6 +582,9 @@
 			: 'Énergie : <b>coût non affiché</b> (le compteur tourne quand même)');
 		const ready = customActions.filter(a => a.name.trim() && a.target.trim());
 		add('ok', 'Raccourcis : <b>' + (ready.length ? ready.map(a => escapeHtml(a.name.trim())).join(', ') : 'aucune action personnelle') + '</b>');
+		const shownTheme = themes.find(t => t.id === palettes.theme);
+		add('ok', 'Thème : <b>' + escapeHtml(shownTheme ? shownTheme.name : palettes.theme) + '</b>');
+		add('ok', 'Couleurs : <b>' + escapeHtml(paletteSummary()) + '</b>');
 		add(background.enabled && !background.frame ? 'warn' : 'ok', !background.enabled
 			? 'Fond : <b>celui du thème</b>'
 			: background.frame
@@ -613,6 +616,8 @@
 		};
 		message.energy = readEnergy();
 		message.background = readBackground();
+		message.palette = palettes.choice;
+		message.theme = palettes.theme;
 		// Rows left half filled are not kept (the host checks the rest)
 		message.customActions = customActions
 			.filter(a => a.name.trim() && a.target.trim())
@@ -884,6 +889,90 @@
 	$('addUrl').addEventListener('click', () => addCustomAction('url'));
 	$('addScript').addEventListener('click', () => addCustomAction('script'));
 
+	// ---------- Appearance: theme ----------
+	// The world shown: its picture for the card (y: the band shown, on the volcano and on the dunes), what it
+	// brings besides its colours
+	const THEME_CARDS = {
+		sith: { picture: 'assets/background.jpg', y: '40%', detail: 'Volcan, braises, sabre de Dark Vador' },
+		jedi: { picture: 'assets/background-jedi.jpg', y: '52%', detail: 'Désert, sable, sabre d’Obi-Wan' },
+		coruscant: { picture: 'assets/background-coruscant.jpg', y: '38%', detail: 'Ville de nuit, temple Jedi' }
+	};
+	let themes = [{ id: 'sith', name: 'Sith · volcan' }, { id: 'jedi', name: 'Jedi · désert' }, { id: 'coruscant', name: 'Coruscant · ville' }];
+
+	function renderThemes() {
+		const container = $('themeList');
+		container.textContent = '';
+		for (const theme of themes) {
+			const card = THEME_CARDS[theme.id] || {};
+			const button = document.createElement('button');
+			button.type = 'button';
+			button.className = 'theme-card' + (theme.id === palettes.theme ? ' selected' : '');
+			button.setAttribute('role', 'radio');
+			button.setAttribute('aria-checked', String(theme.id === palettes.theme));
+			// Absolute: a relative url() inside a custom property resolves against the stylesheet using it
+			button.style.setProperty('--picture', 'url("' + new URL(card.picture, location.href).href + '")');
+			button.style.setProperty('--picture-y', card.y || '50%');
+			const name = document.createElement('strong');
+			name.textContent = theme.name;
+			const detail = document.createElement('span');
+			detail.textContent = card.detail || '';
+			button.append(name, detail);
+			button.addEventListener('click', () => {
+				palettes.theme = theme.id;
+				// A theme comes with its own colour; another one may be chosen after it
+				palettes.choice = palettes.themePalettes[theme.id] || palettes.choice;
+				renderThemes();
+				renderPalettes();
+				previewChange();
+			});
+			container.append(button);
+		}
+	}
+
+	// ---------- Appearance: palette ----------
+	// list: [{ id, name, color }] from the host; choice: one of them; themePalettes: the one each theme sets
+	const palettes = { list: [], choice: 'red', theme: 'sith', themePalettes: { sith: 'red', jedi: 'blue', coruscant: 'violet' } };
+
+	function renderPalettes() {
+		const container = $('paletteList');
+		container.textContent = '';
+		for (const entry of palettes.list) {
+			const button = document.createElement('button');
+			button.type = 'button';
+			button.className = 'palette' + (entry.id === palettes.choice ? ' selected' : '');
+			button.setAttribute('role', 'radio');
+			button.setAttribute('aria-checked', String(entry.id === palettes.choice));
+			const dot = document.createElement('span');
+			dot.className = 'palette-dot';
+			dot.style.setProperty('--dot', entry.color);
+			const name = document.createElement('span');
+			name.textContent = entry.name;
+			button.append(dot, name);
+			button.addEventListener('click', () => {
+				palettes.choice = entry.id;
+				renderPalettes();
+				previewChange();
+			});
+			container.append(button);
+		}
+	}
+
+	function showPalettes(state) {
+		palettes.list = state.palettes || palettes.list;
+		palettes.choice = state.palette || palettes.choice;
+		palettes.theme = state.theme || palettes.theme;
+		palettes.themePalettes = state.themePalettes || palettes.themePalettes;
+		themes = state.themes || themes;
+		renderThemes();
+		renderPalettes();
+	}
+
+	/** Name of the colour chosen, for the summary. */
+	function paletteSummary() {
+		const chosen = palettes.list.find(p => p.id === palettes.choice);
+		return chosen ? chosen.name : palettes.choice;
+	}
+
 	// ---------- Appearance: custom background ----------
 	// Two states: a picture being cropped (source: its copy in the data folder, rendered at the next save then
 	// deleted) or the saved rendering alone (source null), shown as is, without a frame: re-cropping means
@@ -922,7 +1011,7 @@
 			previewTimer = 0;
 			previewSentAt = performance.now();
 			// Without a picture being cropped, the host shows the saved rendering
-			send({ type: 'previewBackground', ...readBackground() });
+			send({ type: 'previewAppearance', theme: palettes.theme, palette: palettes.choice, background: readBackground() });
 		}, Math.max(0, PREVIEW_INTERVAL - (performance.now() - previewSentAt)));
 	}
 
@@ -1226,6 +1315,7 @@
 		if (state.background) {
 			showBackground(state.background);
 		}
+		showPalettes(state);
 		const weather = state.weather;
 		if (weather) {
 			$('weatherEnabled').checked = Boolean(weather.enabled);
@@ -1343,6 +1433,19 @@
 				{ id: 'bk1', name: 'Sauvegarde', kind: 'script', target: 'D:\\Scripts\\sauvegarde.ps1' }
 			],
 			energy: { pricePerKwh: 0.1952, otherWatts: 40, psuEfficiency: 90, show: true },
+			theme: new URLSearchParams(location.search).get('theme') || 'sith',
+			themes: [{ id: 'sith', name: 'Sith · volcan' }, { id: 'jedi', name: 'Jedi · désert' }, { id: 'coruscant', name: 'Coruscant · ville' }],
+			palette: new URLSearchParams(location.search).get('palette') || ({ jedi: 'blue', coruscant: 'violet' }[new URLSearchParams(location.search).get('theme')] || 'red'),
+			palettes: [
+				{ id: 'red', name: 'Rouge', color: '#FF1F33' },
+				{ id: 'blue', name: 'Bleu', color: '#288CFF' },
+				{ id: 'green', name: 'Vert', color: '#2ED65C' },
+				{ id: 'violet', name: 'Violet', color: '#A646FF' },
+				{ id: 'yellow', name: 'Jaune', color: '#FFCC22' },
+				{ id: 'orange', name: 'Orange', color: '#FF7A1A' },
+				{ id: 'white', name: 'Blanc', color: '#E2EAF6' }
+			],
+			themePalettes: { sith: 'red', jedi: 'blue', coruscant: 'violet' },
 			// "?background=<picture url>&saved=1": that picture as the saved rendering (see the picked one below)
 			background: new URLSearchParams(location.search).get('saved') === '1'
 				? { enabled: true, imageUrl: new URLSearchParams(location.search).get('background'), shade: 0.4, maxShade: 0.8, size: { width: 682, height: 2560 } }

@@ -1,7 +1,11 @@
 /* Layout: fixed 682x2560 portrait frame scaled to the window; landscape background behind,
    CPU and GPU sections open with a header rule, widgets float over the landscape.
-   Themes: the colours below are the Sith theme (red blade, volcanic world); :root[data-theme]
-   blocks redefine them. Triplets ("r, g, b") feed rgba() here and the canvas drawings in console.js. */
+   Three independent layers set on the root by console.js:
+   - data-palette: the colours (red below, the other saber colours in :root[data-palette] blocks), chosen in
+     the settings or the theme's own (Sith red, Jedi blue). Triplets ("r, g, b") feed rgba() here and the
+     canvas drawings in console.js.
+   - data-theme: the world (hilt of the VRAM saber, smoke over the volcano, lava spots).
+   - data-bright: readability aids over a bright background (the desert, a light picture of the user's). */
 :root {
 	--blade-rgb: 255, 31, 51;
 	--line-rgb: 255, 60, 75;
@@ -15,8 +19,15 @@
 	--art-top-rgb: 42, 5, 8;
 	--art-bottom-rgb: 7, 1, 2;
 	/* Light tint of the blade, for the glow edge of the clock digits */
-	--blade-soft: var(--blade-soft);
-	/* Veils drifting over the sky: dark smoke here, light haze in the desert */
+	--blade-soft: #ff6b78;
+	/* Alerts (high values, no internet): a hue that stands out from the blade, orange next to red */
+	--ember-rgb: 255, 122, 69;
+	--ember-glow-rgb: 255, 90, 40;
+	--warm: #ffb08a;
+	--alert-panel: rgba(52, 7, 4, 0.9);
+	/* Speed test upload phase, to tell it apart from the download (blade colour) */
+	--upload-rgb: 255, 176, 32;
+	/* Veils drifting over the sky: dark smoke, over the volcano only */
 	--veil-a: rgba(18, 5, 5, 0.75);
 	--veil-b: rgba(30, 8, 6, 0.3);
 	/* Unlit part of gauges, segments and LEDs */
@@ -29,24 +40,18 @@
 	--bone: rgb(var(--bone-rgb));
 	--blade: rgb(var(--blade-rgb));
 	--core: rgb(var(--core-rgb));
-	/* Alerts (high values, no internet): a hue that stands out from both the blade and the backdrop,
-	   orange over the volcano */
-	--ember-rgb: 255, 122, 69;
-	--ember-glow-rgb: 255, 90, 40;
-	--warm: #ffb08a;
-	--alert-panel: rgba(52, 7, 4, 0.9);
 	--ember: rgb(var(--ember-rgb));
-	/* Speed test upload phase, to tell it apart from the download (blade colour) */
-	--upload: #ffb020;
+	--upload: rgb(var(--upload-rgb));
 	--line: rgba(var(--line-rgb), 0.26);
 	--font-display: 'Advent Pro', 'Segoe UI', sans-serif;
 	--font-label: 'Rajdhani', 'Segoe UI', sans-serif;
 	--font-data: 'Share Tech Mono', Consolas, monospace;
 	color-scheme: dark;
 }
-/* Jedi: Obi-Wan's blue blade, cool steel greys, sunlit desert world. The picture stays as bright
-   as it is: the theme makes itself readable on it instead (halo, thicker digits, dark tracks). */
-:root[data-theme="jedi"] {
+
+/* ---------- Palettes: one saber colour each, its alerts in a hue that stands out from it ---------- */
+/* Obi-Wan's blue, cool steel greys; alerts take Mace Windu's violet (orange would vanish on the sand) */
+:root[data-palette="blue"] {
 	--blade-rgb: 40, 140, 255;
 	--line-rgb: 80, 165, 255;
 	--core-rgb: 240, 248, 255;
@@ -58,51 +63,152 @@
 	--art-top-rgb: 6, 24, 52;
 	--art-bottom-rgb: 1, 4, 10;
 	--blade-soft: #7cc2ff;
-	--veil-a: transparent;
-	--veil-b: transparent;
-	--track: rgba(4, 16, 34, 0.5);
-	/* Orange disappears against the sand and the suns: alerts take Mace Windu's violet blade */
 	--ember-rgb: 168, 28, 255;
 	--ember-glow-rgb: 150, 20, 255;
 	--warm: #c070ff;
 	--alert-panel: rgba(34, 8, 54, 0.9);
-	--halo: 0 1px 2px rgba(2, 10, 24, 0.95), 0 0 4px rgba(2, 10, 24, 0.75), 0 0 12px rgba(2, 10, 24, 0.5);
+}
+/* Luke's and Yoda's green; orange alerts */
+:root[data-palette="green"] {
+	--blade-rgb: 46, 214, 92;
+	--line-rgb: 90, 230, 125;
+	--core-rgb: 240, 255, 244;
+	--bone-rgb: 236, 245, 238;
+	--ash-rgb: 128, 160, 138;
+	--void-rgb: 1, 4, 2;
+	--panel-rgb: 5, 14, 8;
+	--panel-hi-rgb: 8, 25, 13;
+	--art-top-rgb: 6, 42, 18;
+	--art-bottom-rgb: 1, 8, 3;
+	--blade-soft: #8ff0aa;
+	--ember-rgb: 255, 128, 40;
+	--ember-glow-rgb: 255, 96, 20;
+	--warm: #ffb27a;
+	--alert-panel: rgba(52, 22, 4, 0.9);
+}
+/* Mace Windu's violet; orange alerts */
+:root[data-palette="violet"] {
+	--blade-rgb: 166, 70, 255;
+	--line-rgb: 182, 108, 255;
+	--core-rgb: 248, 240, 255;
+	--bone-rgb: 242, 236, 250;
+	--ash-rgb: 156, 138, 178;
+	--void-rgb: 3, 1, 6;
+	--panel-rgb: 10, 5, 16;
+	--panel-hi-rgb: 19, 9, 30;
+	--art-top-rgb: 36, 10, 58;
+	--art-bottom-rgb: 6, 1, 10;
+	--blade-soft: #d2a8ff;
+	--ember-rgb: 255, 128, 40;
+	--ember-glow-rgb: 255, 96, 20;
+	--warm: #ffb27a;
+	--alert-panel: rgba(52, 22, 4, 0.9);
+}
+/* Temple guard yellow; red alerts, the upload in sky blue */
+:root[data-palette="yellow"] {
+	--blade-rgb: 255, 204, 34;
+	--line-rgb: 255, 214, 80;
+	--core-rgb: 255, 252, 236;
+	--bone-rgb: 246, 242, 228;
+	--ash-rgb: 168, 156, 122;
+	--void-rgb: 4, 3, 1;
+	--panel-rgb: 14, 12, 5;
+	--panel-hi-rgb: 27, 23, 8;
+	--art-top-rgb: 50, 40, 6;
+	--art-bottom-rgb: 8, 6, 1;
+	--blade-soft: #ffe48a;
+	--ember-rgb: 255, 48, 64;
+	--ember-glow-rgb: 255, 30, 48;
+	--warm: #ff8f98;
+	--alert-panel: rgba(58, 6, 10, 0.9);
+	--upload-rgb: 60, 190, 255;
+}
+/* Orange blade; violet alerts, the upload in sky blue */
+:root[data-palette="orange"] {
+	--blade-rgb: 255, 122, 26;
+	--line-rgb: 255, 148, 66;
+	--core-rgb: 255, 246, 236;
+	--bone-rgb: 246, 238, 230;
+	--ash-rgb: 166, 138, 116;
+	--void-rgb: 4, 2, 1;
+	--panel-rgb: 15, 8, 4;
+	--panel-hi-rgb: 28, 14, 6;
+	--art-top-rgb: 54, 22, 4;
+	--art-bottom-rgb: 9, 4, 1;
+	--blade-soft: #ffb680;
+	--ember-rgb: 186, 64, 255;
+	--ember-glow-rgb: 166, 40, 255;
+	--warm: #d69cff;
+	--alert-panel: rgba(34, 8, 54, 0.9);
+	--upload-rgb: 60, 190, 255;
+}
+/* Ahsoka's white blades, neutral greys; red alerts */
+:root[data-palette="white"] {
+	--blade-rgb: 226, 234, 246;
+	--line-rgb: 200, 212, 230;
+	--core-rgb: 255, 255, 255;
+	--bone-rgb: 240, 242, 246;
+	--ash-rgb: 150, 156, 170;
+	--void-rgb: 2, 2, 3;
+	--panel-rgb: 10, 11, 13;
+	--panel-hi-rgb: 20, 22, 26;
+	--art-top-rgb: 40, 44, 52;
+	--art-bottom-rgb: 6, 7, 9;
+	--blade-soft: #ffffff;
+	--ember-rgb: 255, 72, 60;
+	--ember-glow-rgb: 255, 50, 40;
+	--warm: #ff9a8c;
+	--alert-panel: rgba(56, 8, 6, 0.9);
+}
+
+/* ---------- Themes: the world ---------- */
+/* The VRAM saber shows Vader's hilt on the volcano, a Jedi one elsewhere (desert, Coruscant); lava and smoke
+   belong to the volcano's own picture */
+:root:not([data-theme="sith"]) .hilt-sith,
+:root[data-theme="sith"] .hilt-jedi,
+:root:not([data-theme="sith"]) .lava-spot,
+:root:not([data-theme="sith"]) .smoke,
+:root[data-background="custom"] .lava-spot,
+:root[data-background="custom"] .smoke {
+	display: none;
+}
+
+/* ---------- Readability over a bright background ---------- */
+/* The picture stays as bright as it is: the display makes itself readable on it instead (halo, thicker
+   digits, dark tracks), in the palette's own darkest tone */
+:root[data-bright] {
+	--track: rgba(var(--void-rgb), 0.5);
+	--halo: 0 1px 2px rgba(var(--void-rgb), 0.95), 0 0 4px rgba(var(--void-rgb), 0.75), 0 0 12px rgba(var(--void-rgb), 0.5);
 }
 /* A dark halo under every text over the landscape: set once on the frame, text-shadow is inherited */
-:root[data-theme="jedi"] .frame {
+:root[data-bright] .frame {
 	text-shadow: var(--halo);
 }
-:root[data-theme="jedi"] .ico,
-:root[data-theme="jedi"] .rule,
-:root[data-theme="jedi"] .media-controls svg {
-	filter: drop-shadow(0 0 2px rgba(2, 10, 24, 0.9));
+:root[data-bright] .ico,
+:root[data-bright] .rule,
+:root[data-bright] .media-controls svg {
+	filter: drop-shadow(0 0 2px rgba(var(--void-rgb), 0.9));
 }
-/* Blue on blue sky: the maker names take the light tint of the blade */
-:root[data-theme="jedi"] .section-head .maker {
+/* A saturated blade on a sky of the same hue: the maker names take its light tint */
+:root[data-bright] .section-head .maker {
 	color: var(--blade-soft);
 }
-:root[data-theme="jedi"] .dock-label {
+:root[data-bright] .dock-label {
 	color: var(--bone);
 }
-/* Over the sand the play button gets a dark disc, like the dock buttons */
-:root[data-theme="jedi"] .media-controls button.main {
+/* Over a bright ground the play button gets a dark disc, like the dock buttons */
+:root[data-bright] .media-controls button.main {
 	background: rgba(var(--panel-rgb), 0.75);
 }
-/* The display font only ships its thinnest weight: a stroke thickens the digits on the bright sky */
-:root[data-theme="jedi"] .time,
-:root[data-theme="jedi"] .date,
-:root[data-theme="jedi"] .gpu-load .big,
-:root[data-theme="jedi"] .metric-value {
+/* The display font only ships its thinnest weight: a stroke thickens the digits on a bright sky */
+:root[data-bright] .time,
+:root[data-bright] .date,
+:root[data-bright] .gpu-load .big,
+:root[data-bright] .metric-value {
 	-webkit-text-stroke: 1px currentColor;
 }
-:root[data-theme="jedi"] .time .mm {
+:root[data-bright] .time .mm {
 	text-shadow: var(--halo), 0 0 2px var(--blade-soft), 0 0 22px rgba(var(--blade-rgb), 0.6);
-}
-/* Each theme shows its own hilt in the VRAM saber, and lava only exists on the volcanic world */
-:root[data-theme="jedi"] .hilt-sith,
-:root:not([data-theme="jedi"]) .hilt-jedi,
-:root[data-theme="jedi"] .lava-spot {
-	display: none;
 }
 
 * {
@@ -290,7 +396,7 @@ body {
 }
 .time .mm {
 	color: var(--blade);
-	text-shadow: 0 0 2px #ff6b78, 0 0 22px rgba(var(--blade-rgb), 0.6);
+	text-shadow: 0 0 2px var(--blade-soft), 0 0 22px rgba(var(--blade-rgb), 0.6);
 }
 .time .colon {
 	display: inline-block;
@@ -1038,7 +1144,7 @@ body {
 .holonet.alert .chip {
 	font-size: 17px;
 	font-weight: 700;
-	color: #1a0505;
+	color: rgb(var(--void-rgb));
 	background: var(--ember);
 	border-color: var(--ember);
 	box-shadow: 0 0 calc(8px + 14px * var(--alarm)) rgba(var(--ember-rgb), 0.8);
@@ -2950,8 +3056,8 @@ body {
 	box-shadow: 0 0 10px rgba(var(--blade-rgb), 0.8);
 }
 
-/* Jedi: same readability aids as the other figures on the bright sky */
-:root[data-theme="jedi"] .game-fps-value,
-:root[data-theme="jedi"] .game-trio-value {
+/* Bright background: same readability aids as the other figures */
+:root[data-bright] .game-fps-value,
+:root[data-bright] .game-trio-value {
 	-webkit-text-stroke: 1px currentColor;
 }

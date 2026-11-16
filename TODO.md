@@ -15,10 +15,6 @@ du non fait.
 ---
 
 # Liste des tâches
-- [ ] Palettes de couleurs prédéfinies, choisies indépendamment du fond (au-delà de Sith / Jedi)
-  - Une palette = le jeu de variables CSS d'un thème (`--blade-rgb`, `--line-rgb`, `--ember-rgb`…), aucune couleur à régler une à une
-  - Choix dans l'étape « Apparence » avec aperçu, toujours accessible par le menu de l'icône
-  - Lisibilité sur fond clair (halo, contour des chiffres) selon la palette
 - [ ] Fond animé : vidéo ou image animée (GIF / WebP animé)
   - Mesurer d'abord le coût (`Measure-ArkaHyte.ps1`, cible ~16 % d'un cœur), décodage matériel de la vidéo
   - En pause écrans éteints ou session verrouillée, comme le reste ; rognage au même cadre que l'image

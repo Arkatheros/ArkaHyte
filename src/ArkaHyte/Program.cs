@@ -15,6 +15,7 @@ internal static class Program
 	///   ArkaHyte.exe --setup              same, opening the setup wizard at start
 	///   ArkaHyte.exe --simulate-updates   development build: tray update entry with a fake check (nothing downloaded)
 	///   ArkaHyte.exe --theme jedi         use a theme for this run only (with --screenshot, --menu-preview...)
+	///   ArkaHyte.exe --palette green      use a colour palette for this run only (same)
 	///   ArkaHyte.exe --identify-screens   show each screen's number for 3 s (as the setup wizard does) and exit
 	///   ArkaHyte.exe --setup-preview out.png [--setup-step 2]  render the setup wizard alone, capture it and exit
 	///   ArkaHyte.exe --screenshot out.png render, save a capture of the page and exit
@@ -43,6 +44,10 @@ internal static class Program
 		if (ArgumentValue(args, "--theme") is { } themeOverride)
 		{
 			settings = settings with { Theme = Themes.Normalize(themeOverride) };
+		}
+		if (ArgumentValue(args, "--palette") is { } paletteOverride)
+		{
+			settings = settings with { Palette = Palettes.Normalize(paletteOverride, settings.Theme) };
 		}
 		var hwInfoResultPath = ArgumentValue(args, HwInfoConfigurator.Argument);
 		if (hwInfoResultPath is not null)
@@ -83,7 +88,7 @@ internal static class Program
 		if (menuPreviewPath is not null)
 		{
 			ApplicationConfiguration.Initialize();
-			return MenuPreview(menuPreviewPath, settings.Theme);
+			return MenuPreview(menuPreviewPath, settings.EffectivePalette);
 		}
 
 		if (args.Contains("--identify-screens"))
@@ -189,11 +194,12 @@ internal static class Program
 		return 0;
 	}
 
-	// Renders the tray menu (demo checked, one item hovered) to a PNG without showing it
-	private static int MenuPreview(string path, string theme)
+	// Renders the tray menu (demo checked, one item hovered) to a PNG without showing it, in the colours of
+	// the saved palette (or --palette)
+	private static int MenuPreview(string path, string palette)
 	{
 		using var tray = new TrayIcon(demoEnabled: true);
-		tray.SetTheme(Themes.Normalize(theme));
+		tray.SetPalette(palette);
 		var menu = tray.Menu;
 		menu.CreateControl();
 		menu.Size = menu.GetPreferredSize(Size.Empty);

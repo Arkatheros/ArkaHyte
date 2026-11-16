@@ -11,7 +11,6 @@ public sealed class TrayIcon : IDisposable
 	private readonly NotifyIcon _notifyIcon;
 	private readonly ToolStripMenuItem _demoItem;
 	private readonly ToolStripMenuItem _updateItem;
-	private readonly ToolStripMenuItem _themeItem;
 	private readonly Icon _icon;
 	// "No update" is only shown for a moment after a check, so it never stays on screen once outdated
 	private readonly System.Windows.Forms.Timer _noUpdateReset = new() { Interval = 4000 };
@@ -23,7 +22,6 @@ public sealed class TrayIcon : IDisposable
 	public event Action? ExitRequested;
 	public event Action? UpdateRequested;
 	public event Action? SetupRequested;
-	public event Action<string>? ThemeSelected;
 
 	public TrayIcon(bool demoEnabled, string? version = null)
 	{
@@ -44,20 +42,12 @@ public sealed class TrayIcon : IDisposable
 		};
 		_updateItem.Click += (_, _) => UpdateRequested?.Invoke();
 
-		_themeItem = new ToolStripMenuItem("Thème");
-		foreach (var (id, name) in Themes.All)
-		{
-			var item = new ToolStripMenuItem(name) { Tag = id };
-			item.Click += (_, _) => ThemeSelected?.Invoke(id);
-			_themeItem.DropDownItems.Add(item);
-		}
-
+		// Theme and colours are chosen in the settings (Appearance step), with a live preview
 		var menu = new ContextMenuStrip();
 		// A label rather than a disabled item: disabled items are always painted greyed out
 		menu.Items.Add(new ToolStripLabel(version is null ? AppName : $"{AppName}  {version}", _icon.ToBitmap()));
 		menu.Items.Add(new ToolStripSeparator());
 		menu.Items.Add(_demoItem);
-		menu.Items.Add(_themeItem);
 		menu.Items.Add("Recharger l'affichage", null, (_, _) => ReloadRequested?.Invoke());
 		menu.Items.Add("Paramètres", null, (_, _) => SetupRequested?.Invoke());
 		menu.Items.Add("Ouvrir le dossier des journaux", null, (_, _) => OpenLogs());
@@ -112,14 +102,10 @@ public sealed class TrayIcon : IDisposable
 		}
 	}
 
-	/// <summary>Ticks the active theme and recolours the menu with it (call on the UI thread).</summary>
-	public void SetTheme(string theme)
+	/// <summary>Recolours the menu with the palette of the display (call on the UI thread).</summary>
+	public void SetPalette(string palette)
 	{
-		foreach (ToolStripMenuItem item in _themeItem.DropDownItems)
-		{
-			item.Checked = Equals(item.Tag, theme);
-		}
-		SithMenuRenderer.SetTheme(theme);
+		SithMenuRenderer.SetPalette(Palettes.Get(palette));
 		_notifyIcon.ContextMenuStrip?.Invalidate();
 	}
 

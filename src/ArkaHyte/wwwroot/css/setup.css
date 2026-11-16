@@ -709,6 +709,96 @@ body:not(.settings-mode) #exportConfig {
 	display: none;
 }
 
+/* ---------- Appearance step: themes ---------- */
+.themes {
+	display: flex;
+	gap: 12px;
+	margin-bottom: 8px;
+}
+/* A landscape strip of the theme's own picture, its name over it */
+.theme-card {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	justify-content: flex-end;
+	/* Share the line, up to 230 px each */
+	flex: 1 1 0;
+	min-width: 0;
+	max-width: 230px;
+	height: 110px;
+	padding: 10px 12px;
+	border: 1px solid var(--line);
+	background: var(--picture) center var(--picture-y, 50%) / cover no-repeat;
+	color: #fff;
+	text-align: left;
+	cursor: pointer;
+	overflow: hidden;
+}
+.theme-card::before {
+	content: '';
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(transparent 35%, rgba(0, 0, 0, 0.82));
+}
+.theme-card > * {
+	position: relative;
+}
+.theme-card:hover {
+	border-color: var(--ash);
+}
+.theme-card.selected {
+	border: 2px solid var(--core);
+	padding: 9px 11px;
+}
+.theme-card strong {
+	font: 700 16px var(--font-label);
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+.theme-card span {
+	color: #d8c8ca;
+	font-size: 13px;
+}
+
+/* ---------- Appearance step: palettes ---------- */
+.palettes {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-bottom: 8px;
+}
+.palette {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 14px 6px 10px;
+	border: 1px solid var(--line);
+	background: rgba(255, 255, 255, 0.02);
+	color: var(--bone);
+	font: 600 14px var(--font-label);
+	letter-spacing: 0.04em;
+	cursor: pointer;
+}
+.palette:hover {
+	border-color: var(--ash);
+}
+.palette.selected {
+	border-color: var(--core);
+	background: rgba(255, 255, 255, 0.08);
+}
+/* The blade colour, glowing like the saber */
+.palette-dot {
+	width: 14px;
+	height: 14px;
+	border-radius: 50%;
+	background: var(--dot);
+	box-shadow: 0 0 8px var(--dot);
+}
+.palette small {
+	color: var(--ash);
+	font-weight: 500;
+}
+
 /* ---------- Appearance step: background crop ---------- */
 .bg-modes {
 	display: flex;

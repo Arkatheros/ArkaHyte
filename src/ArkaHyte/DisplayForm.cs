@@ -52,6 +52,7 @@ public sealed class DisplayForm : Form
 	private List<object>? _dockButtons;
 	private SetupForm? _setup;
 	private string _theme;
+	private string _palette;
 
 	/// <summary>Set when the window closed so that a new instance applies freshly saved settings.</summary>
 	public bool RestartRequested { get; private set; }
@@ -66,6 +67,7 @@ public sealed class DisplayForm : Form
 		_demo = options.Demo;
 		_shortcuts = new ShortcutStore(settings.Shortcuts);
 		_theme = Themes.Normalize(settings.Theme);
+		_palette = settings.EffectivePalette;
 		// Reads the settings at launch: custom actions edited in the settings window apply at once
 		_launcher = new ShortcutLauncher(_shortcuts, () => _settings);
 
@@ -88,8 +90,7 @@ public sealed class DisplayForm : Form
 			_tray.ExitRequested += Close;
 			_tray.UpdateRequested += () => _ = _updater.ActAsync();
 			_tray.SetupRequested += () => OpenSetup();
-			_tray.ThemeSelected += SetTheme;
-			_tray.SetTheme(_theme);
+			_tray.SetPalette(_palette);
 			_updater.StateChanged += state => PostToUiThread(() => OnUpdateState(state));
 			_updater.ExitRequested += () => PostToUiThread(Close);
 			Microsoft.Win32.SystemEvents.SessionSwitch += OnSessionSwitch;
@@ -166,9 +167,9 @@ public sealed class DisplayForm : Form
 			}
 		};
 		// Live result of the crop on the case screen; end: back to the saved background
-		_setup.BackgroundPreviewChanged += preview => Post(preview is null
-			? new { type = "backgroundPreview", end = true }
-			: (object)new { type = "backgroundPreview", url = preview.Url, crop = preview.Crop, shade = preview.Shade });
+		_setup.AppearancePreviewChanged += preview => Post(preview is null
+			? new { type = "appearancePreview", end = true }
+			: (object)new { type = "appearancePreview", url = preview.Url, crop = preview.Crop, shade = preview.Shade, palette = preview.Palette, theme = preview.Theme });
 		_setup.FormClosed += (_, _) => _setup = null;
 		_setup.Show();
 		_setup.Activate();
@@ -381,7 +382,7 @@ public sealed class DisplayForm : Form
 	private void Navigate()
 	{
 		// In the address so the first paint already has the theme's colours
-		var parameters = new List<string> { $"theme={_theme}" };
+		var parameters = new List<string> { $"theme={_theme}", $"palette={_palette}" };
 		if (!string.IsNullOrWhiteSpace(_demo))
 		{
 			parameters.Add($"demo={Uri.EscapeDataString(_demo)}");
@@ -396,28 +397,6 @@ public sealed class DisplayForm : Form
 		}
 		var query = parameters.Count == 0 ? string.Empty : "?" + string.Join('&', parameters);
 		_webView.Source = new Uri($"https://{VirtualHost}/index.html{query}");
-	}
-
-	/// <summary>Tray choice: switched live on the page, kept in the user settings.</summary>
-	private void SetTheme(string theme)
-	{
-		theme = Themes.Normalize(theme);
-		if (theme == _theme)
-		{
-			return;
-		}
-		_theme = theme;
-		_tray?.SetTheme(theme);
-		Post(new { type = "config", theme });
-		try
-		{
-			AppSettings.SaveUser(root => root["Theme"] = theme);
-		}
-		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
-		{
-			Log.Error("Saving the theme failed", exception);
-		}
-		Log.Info($"Theme '{theme}'");
 	}
 
 	private void SetDemo(string? scenario)
@@ -612,6 +591,7 @@ public sealed class DisplayForm : Form
 			gpuMaker = hardware.GpuMaker,
 			gpuModel = hardware.GpuModel,
 			theme = _theme,
+			palette = _palette,
 			thresholds = _settings.EffectiveThresholds,
 			// The place is picked in the setup wizard; the case screen only turns the weather on or off
 			weather = new
@@ -696,6 +676,10 @@ public sealed class DisplayForm : Form
 	{
 		var weatherBefore = _settings.Weather;
 		_settings = AppSettings.Load();
+		// Theme and palette are chosen in the settings window; the tray menu takes the palette's colours
+		_theme = Themes.Normalize(_settings.Theme);
+		_palette = _settings.EffectivePalette;
+		_tray?.SetPalette(_palette);
 		_hub.UpdateSettings(_settings);
 		if (_settings.Weather != weatherBefore)
 		{

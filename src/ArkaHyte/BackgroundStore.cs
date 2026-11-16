@@ -8,8 +8,11 @@ using Microsoft.Web.WebView2.Core;
 
 namespace ArkaHyte;
 
-/// <summary>Background edited in the settings window, sent to the case screen: Url null for the theme's own.</summary>
-public sealed record BackgroundPreview(string? Url, CropFrame? Crop, double Shade);
+/// <summary>
+/// Appearance being edited in the settings window, sent to the case screen: theme, background (Url null for the
+/// theme's own) and palette.
+/// </summary>
+public sealed record AppearancePreview(string? Url, CropFrame? Crop, double Shade, string Palette, string Theme);
 
 /// <summary>
 /// Files of the custom background, in <see cref="DataFolder.Backgrounds"/>: the picture chosen (source-*), only
@@ -34,11 +37,14 @@ public static class BackgroundStore
 	private const int ExifOrientation = 0x0112;
 	private const long JpegQuality = 92;
 
-	/// <summary>Serves the folder to a page on hyte.local: shown in img and drawn on a canvas, never fetched.</summary>
+	/// <summary>
+	/// Serves the folder to the pages on hyte.local, CORS included: the display reads a tiny copy of the picture
+	/// back from a canvas to measure its brightness (readability aids). Only this app's own pages load here.
+	/// </summary>
 	public static void Map(CoreWebView2 core)
 	{
 		Directory.CreateDirectory(DataFolder.Backgrounds);
-		core.SetVirtualHostNameToFolderMapping(VirtualHost, DataFolder.Backgrounds, CoreWebView2HostResourceAccessKind.DenyCors);
+		core.SetVirtualHostNameToFolderMapping(VirtualHost, DataFolder.Backgrounds, CoreWebView2HostResourceAccessKind.Allow);
 	}
 
 	public static string UrlOf(string fileName) => $"https://{VirtualHost}/{Uri.EscapeDataString(fileName)}";
@@ -213,25 +219,33 @@ public static class BackgroundStore
 			: null;
 
 	/// <summary>
-	/// Background being edited in the settings window, shown live on the case screen: previewBackground { enabled,
-	/// source?, crop?, shade? }. A picture being cropped is cut from its original; without one, the saved
-	/// rendering is shown as is. Url null: the theme's own background.
+	/// Appearance being edited in the settings window, shown live on the case screen: previewAppearance { theme,
+	/// palette, background: { enabled, source?, crop?, shade? } }. A picture being cropped is cut from its original;
+	/// without one, the saved rendering is shown as is. Url null: the theme's own background.
 	/// </summary>
-	public static BackgroundPreview ReadPreview(JsonElement message, BackgroundSettings? current)
+	public static AppearancePreview ReadPreview(JsonElement message, BackgroundSettings? current)
 	{
-		var enabled = message.TryGetProperty("enabled", out var enabledElement) && enabledElement.ValueKind == JsonValueKind.True;
-		var shade = message.TryGetProperty("shade", out var shadeElement) && shadeElement.TryGetDouble(out var level) && double.IsFinite(level)
+		string? Text(string name) =>
+			message.TryGetProperty(name, out var element) && element.ValueKind == JsonValueKind.String ? element.GetString() : null;
+		var palette = Palettes.Normalize(Text("palette"), Text("theme") ?? Themes.Sith);
+		var theme = Themes.Normalize(Text("theme"));
+		if (!message.TryGetProperty("background", out var background) || background.ValueKind != JsonValueKind.Object)
+		{
+			return new AppearancePreview(ActiveUrl(current), null, current?.Shade ?? BackgroundSettings.DefaultShade, palette, theme);
+		}
+		var enabled = background.TryGetProperty("enabled", out var enabledElement) && enabledElement.ValueKind == JsonValueKind.True;
+		var shade = background.TryGetProperty("shade", out var shadeElement) && shadeElement.TryGetDouble(out var level) && double.IsFinite(level)
 			? Math.Clamp(level, 0, BackgroundSettings.MaxShade)
 			: BackgroundSettings.DefaultShade;
 		if (!enabled)
 		{
-			return new BackgroundPreview(null, null, shade);
+			return new AppearancePreview(null, null, shade, palette, theme);
 		}
-		if (ReadSource(message) is { } source && ReadCrop(message) is { } crop)
+		if (ReadSource(background) is { } source && ReadCrop(background) is { } crop)
 		{
-			return new BackgroundPreview(UrlOf(source), crop, shade);
+			return new AppearancePreview(UrlOf(source), crop, shade, palette, theme);
 		}
-		return new BackgroundPreview(Exists(current?.Image) ? UrlOf(current!.Image!) : null, null, shade);
+		return new AppearancePreview(Exists(current?.Image) ? UrlOf(current!.Image!) : null, null, shade, palette, theme);
 	}
 
 	private static CropFrame? ReadCrop(JsonElement background)
