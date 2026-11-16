@@ -15,11 +15,16 @@ du non fait.
 ---
 
 # Liste des tâches
- - [ ] ajoute d'une gestion de theme plus pousser, par exemple pouvoir choisir le fond d'ecran,
-     - gestion d'un rognage au ratio de l'applis via un rectangle afin de pouvoir utiliser n'immporte quel photos.
-     - gestion d'utilisation d'une video ? image animé ?
-     - gestion d'un choix couleur via palette predefini, pour eviter de devoir choisir tout les couleur une a une
-     - gestion du positionnement de chaque widget
+- [ ] Palettes de couleurs prédéfinies, choisies indépendamment du fond (au-delà de Sith / Jedi)
+  - Une palette = le jeu de variables CSS d'un thème (`--blade-rgb`, `--line-rgb`, `--ember-rgb`…), aucune couleur à régler une à une
+  - Choix dans l'étape « Apparence » avec aperçu, toujours accessible par le menu de l'icône
+  - Lisibilité sur fond clair (halo, contour des chiffres) selon la palette
+- [ ] Fond animé : vidéo ou image animée (GIF / WebP animé)
+  - Mesurer d'abord le coût (`Measure-ArkaHyte.ps1`, cible ~16 % d'un cœur), décodage matériel de la vidéo
+  - En pause écrans éteints ou session verrouillée, comme le reste ; rognage au même cadre que l'image
+- [ ] Positionnement des widgets
+  - Définir le modèle (emplacements prédéfinis, ordre des blocs, ou placement libre) avant de coder : les vues normale et jeu
+    et le morph entre elles en dépendent
  - [ ] intégration de home assistant dans un page, via api
  
 
