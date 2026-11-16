@@ -39,7 +39,8 @@ public static class ConfigBackup
 	public static string DefaultFileName => $"ArkaHyte-config-{DateTime.Now:yyyy-MM-dd}.{Extension}";
 
 	/// <summary>Writes the saved configuration (not what is still being edited in the wizard) to <paramref name="path"/>.</summary>
-	public static void Export(string path, EnergyMeter? energy)
+	/// <returns>The custom background's picture is part of it.</returns>
+	public static bool Export(string path, EnergyMeter? energy)
 	{
 		// The meter keeps up to a minute of counting in memory
 		energy?.Save();
@@ -71,7 +72,8 @@ public static class ConfigBackup
 		var temp = path + ".tmp";
 		File.WriteAllText(temp, root.ToJsonString(WriteOptions) + Environment.NewLine);
 		File.Move(temp, path, overwrite: true);
-		Log.Info($"Configuration exported to {path}");
+		Log.Info($"Configuration exported to {path}" + (backgrounds.Count > 0 ? " with the background picture" : string.Empty));
+		return backgrounds.Count > 0;
 	}
 
 	/// <summary>

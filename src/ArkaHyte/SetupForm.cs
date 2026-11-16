@@ -206,8 +206,8 @@ public sealed class SetupForm : Form
 		}
 		try
 		{
-			ConfigBackup.Export(dialog.FileName, _energy);
-			Post(new { type = "configExported", name = Path.GetFileName(dialog.FileName) });
+			var withBackground = ConfigBackup.Export(dialog.FileName, _energy);
+			Post(new { type = "configExported", name = Path.GetFileName(dialog.FileName), withBackground });
 		}
 		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
 		{

@@ -1307,7 +1307,7 @@
 				showFootStatus('Réglages enregistrés et appliqués');
 				break;
 			case 'configExported':
-				showFootStatus('Configuration exportée : ' + message.name);
+				showFootStatus('Configuration exportée' + (message.withBackground ? ', image de fond comprise' : '') + ' : ' + message.name);
 				break;
 			case 'configFailed':
 				showFootStatus(message.message, true);
