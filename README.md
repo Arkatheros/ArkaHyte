@@ -303,9 +303,10 @@ Paramètres › **Apparence** › **Thème** : le monde affiché, avec aperçu e
 
 | Thème | Couleur posée en le choisissant | Fourreau | Décor | Particules |
 |---|---|---|---|---|
-| **Sith** (`sith`, défaut) | rouge | Dark Vador | monde volcanique (`assets/background.jpg`) | braises, éruptions |
-| **Jedi** (`jedi`) | bleu | Obi-Wan | Tatooine (`assets/background-jedi.jpg`) | sable porté par le vent |
+| **Mustafar** (`sith`, défaut) | rouge | Dark Vador | monde volcanique (`assets/background.jpg`) | braises, éruptions |
+| **Tatooine** (`jedi`) | bleu | Obi-Wan | Tatooine (`assets/background-jedi.jpg`) | sable porté par le vent |
 | **Coruscant** (`coruscant`) | violet | Obi-Wan | la ville de nuit et le temple Jedi (`assets/background-coruscant.jpg`) | aucune |
+| **Dagobah** (`dagobah`) | vert | Obi-Wan | le marais sous la lune (`assets/background-dagobah.jpg`) | aucune |
 
 **Couleurs** (Paramètres › **Apparence**, avec aperçu en direct) : une des sept
 couleurs de sabres, quel que soit le thème. Choisir un thème pose sa couleur (rouge ou bleu), qu'on peut changer
@@ -317,7 +318,7 @@ orange, rouge sur jaune et blanc. Les couleurs sont des variables CSS (`console.
 
 Une image de fond de n'importe quelle taille est recadrée pour couvrir l'écran (idéalement en portrait, 682 × 2560).
 Un fond clair n'est pas assombri : l'écran s'y adapte (halo sombre sous les textes et icônes, chiffres épaissis,
-pistes de jauge foncées). C'est le cas du désert Jedi, de Coruscant (ses lumières derrière les chiffres) et d'une image personnelle dont la luminance moyenne dépasse
+pistes de jauge foncées). C'est le cas du désert de Tatooine, de Coruscant et Dagobah (lumières et brume derrière les chiffres) et d'une image personnelle dont la luminance moyenne dépasse
 0,28 (mesurée à l'affichage). Un désert dessiné par le code remplace l'image si elle manque.
 Aperçu sans changer le choix enregistré : `--theme jedi`, `--palette green` (avec `--screenshot`, `--menu-preview`),
 ou `index.html?theme=jedi&palette=green` dans un navigateur.

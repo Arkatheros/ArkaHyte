@@ -190,12 +190,13 @@ touche à l'étape : `previewBackground` (40 ms au plus) → `SetupForm.Backgrou
 tel quel, `{ end }` à la fermeture des Paramètres (retour au fond enregistré, avant le `CleanUp`). Tout sauf le rendu
 enregistré est effacé après enregistrement et à la fermeture des Paramètres (`CleanUp`) ; rendu exporté en base64 (`ConfigBackup`).
 **Thèmes, palettes, lisibilité** : trois attributs indépendants posés par `console.js` sur la racine.
-- `data-theme` (`Themes`, `sith` / `jedi` / `coruscant`, `Theme` dans `appsettings.json`, étape Apparence seulement, appliqué par `ReloadSettings`) :
+- `data-theme` (`Themes`, `sith` / `jedi` / `coruscant` / `dagobah`, affichés Mustafar / Tatooine / Coruscant / Dagobah (identifiants `sith` / `jedi` gardés pour les réglages existants), `Theme` dans `appsettings.json`, étape Apparence seulement, appliqué par `ReloadSettings`) :
   le monde. `THEMES` (`console.js`) : fond, particules, ombrage du ciel (`skyShade`), palette propre, clarté ;
   CSS : fourreau `.hilt-sith` en Sith, `.hilt-jedi` ailleurs ; voiles de fumée et taches de lave en Sith seulement
-  (masqués aussi sur un fond personnel, animation `animateBackground` arrêtée). Particules `none` (Coruscant) : `drawFx`
+  (masqués aussi sur un fond personnel, animation `animateBackground` arrêtée). Particules `none` (Coruscant, Dagobah) : `drawFx`
   ne dessine rien. Ajouter un thème : `Themes.All` (C#, avec sa palette), `THEMES` (`console.js`), `THEME_CARDS`
-  (`setup.js`), fond 682 × 2560 dans `assets/` (recadré au centre, JPEG ~250 Ko).
+  (`setup.js`), fond 682 × 2560 dans `assets/` (recadré au centre, JPEG ~250 Ko ; un point très clair derrière un texte, comme
+  la lune de Dagobah, voilé à la couleur des nuages autour au moment du recadrage).
 - `data-palette` (`Palettes`, 7 couleurs de sabres ; pas de « couleurs du thème » (choix du propriétaire) : choisir un
   thème pose sa palette (`Themes.PaletteOf`, rouge / bleu), qu'on change ensuite ; `Palette` absent ou inconnu =
   celle du thème, `EffectivePalette` ; étape Apparence seulement (le menu de l'icône en prend les couleurs) → `config` `{ palette }`,
@@ -209,7 +210,7 @@ enregistré est effacé après enregistrement et à la fermeture des Paramètres
   et couleurs du menu et des pastilles ; jeux complets de variables dans `console.css` seulement.
 - `data-bright` : fond clair → ne pas assombrir l'image (choix du propriétaire), rendre l'écran lisible (`--halo`
   hérité depuis `.frame`, `-webkit-text-stroke` sur les chiffres, `--track` foncé), dans le ton le plus sombre de
-  la palette. Thème : `THEMES.bright` (Jedi, Coruscant) ; image personnelle : luminance moyenne mesurée sur une copie 34 × 128
+  la palette. Thème : `THEMES.bright` (Jedi, Coruscant, Dagobah) ; image personnelle : luminance moyenne mesurée sur une copie 34 × 128
   (`isBrightPicture`, seuil 0,28, d'où `Allow` sur `hyte-user.local` et `crossOrigin`).
 
 ## Règles de performance de l'UI (impératives)

@@ -37,7 +37,9 @@
 		jedi: { background: 'assets/background-jedi.jpg', particles: 'sand', skyShade: 0, palette: 'blue', bright: true },
 		// The city at night: its sky is already dark, nothing drifts over its lights; the halo keeps the
 		// figures readable over the lit temple and streets
-		coruscant: { background: 'assets/background-coruscant.jpg', particles: 'none', skyShade: 0, palette: 'violet', bright: true }
+		coruscant: { background: 'assets/background-coruscant.jpg', particles: 'none', skyShade: 0, palette: 'violet', bright: true },
+		// Yoda's swamp under the moon: the moonlit clouds behind the clock are dimmed, the halo for the fog
+		dagobah: { background: 'assets/background-dagobah.jpg', particles: 'none', skyShade: 0.35, palette: 'green', bright: true }
 	};
 	const PALETTES = ['red', 'blue', 'green', 'violet', 'yellow', 'orange', 'white'];
 	// "r, g, b" triplets for the canvas drawings, read from the CSS when the palette changes

@@ -54,13 +54,15 @@ public static class Themes
 	public const string Sith = "sith";
 	public const string Jedi = "jedi";
 	public const string Coruscant = "coruscant";
+	public const string Dagobah = "dagobah";
 
 	/// <summary>Theme id, the name shown in the settings and the palette it sets when it is chosen.</summary>
 	public static readonly IReadOnlyList<(string Id, string Name, string Palette)> All =
 	[
-		(Sith, "Sith · volcan", Palettes.Red),
-		(Jedi, "Jedi · désert", Palettes.Blue),
-		(Coruscant, "Coruscant · ville", Palettes.Violet)
+		(Sith, "Mustafar · volcan", Palettes.Red),
+		(Jedi, "Tatooine · désert", Palettes.Blue),
+		(Coruscant, "Coruscant · ville", Palettes.Violet),
+		(Dagobah, "Dagobah · marais", Palettes.Green)
 	];
 
 	public static string Normalize(string? theme) => All.Any(t => t.Id == theme) ? theme! : Sith;
@@ -80,12 +82,13 @@ public static class Palettes
 	public const string Red = "red";
 	public const string Blue = "blue";
 	public const string Violet = "violet";
+	public const string Green = "green";
 
 	public static readonly IReadOnlyList<Palette> All =
 	[
 		new(Red, "Rouge", Color.FromArgb(255, 31, 51), Color.FromArgb(15, 6, 7), Color.FromArgb(58, 10, 16), Color.FromArgb(243, 233, 234)),
 		new(Blue, "Bleu", Color.FromArgb(40, 140, 255), Color.FromArgb(5, 10, 19), Color.FromArgb(10, 32, 62), Color.FromArgb(232, 239, 246)),
-		new("green", "Vert", Color.FromArgb(46, 214, 92), Color.FromArgb(5, 14, 8), Color.FromArgb(10, 46, 22), Color.FromArgb(236, 245, 238)),
+		new(Green, "Vert", Color.FromArgb(46, 214, 92), Color.FromArgb(5, 14, 8), Color.FromArgb(10, 46, 22), Color.FromArgb(236, 245, 238)),
 		new(Violet, "Violet", Color.FromArgb(166, 70, 255), Color.FromArgb(10, 5, 16), Color.FromArgb(38, 14, 60), Color.FromArgb(242, 236, 250)),
 		new("yellow", "Jaune", Color.FromArgb(255, 204, 34), Color.FromArgb(14, 12, 5), Color.FromArgb(52, 42, 8), Color.FromArgb(246, 242, 228)),
 		new("orange", "Orange", Color.FromArgb(255, 122, 26), Color.FromArgb(15, 8, 4), Color.FromArgb(58, 26, 6), Color.FromArgb(246, 238, 230)),

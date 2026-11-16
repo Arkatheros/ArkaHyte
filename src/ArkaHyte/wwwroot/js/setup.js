@@ -893,11 +893,12 @@
 	// The world shown: its picture for the card (y: the band shown, on the volcano and on the dunes), what it
 	// brings besides its colours
 	const THEME_CARDS = {
-		sith: { picture: 'assets/background.jpg', y: '40%', detail: 'Volcan, braises, sabre de Dark Vador' },
-		jedi: { picture: 'assets/background-jedi.jpg', y: '52%', detail: 'Désert, sable, sabre d’Obi-Wan' },
-		coruscant: { picture: 'assets/background-coruscant.jpg', y: '38%', detail: 'Ville de nuit, temple Jedi' }
+		sith: { picture: 'assets/background.jpg', y: '40%', detail: 'Volcan et braises' },
+		jedi: { picture: 'assets/background-jedi.jpg', y: '52%', detail: 'Désert et sable' },
+		coruscant: { picture: 'assets/background-coruscant.jpg', y: '38%', detail: 'Ville de nuit' },
+		dagobah: { picture: 'assets/background-dagobah.jpg', y: '45%', detail: 'Marais sous la lune' }
 	};
-	let themes = [{ id: 'sith', name: 'Sith · volcan' }, { id: 'jedi', name: 'Jedi · désert' }, { id: 'coruscant', name: 'Coruscant · ville' }];
+	let themes = [{ id: 'sith', name: 'Mustafar · volcan' }, { id: 'jedi', name: 'Tatooine · désert' }, { id: 'coruscant', name: 'Coruscant · ville' }, { id: 'dagobah', name: 'Dagobah · marais' }];
 
 	function renderThemes() {
 		const container = $('themeList');
@@ -912,8 +913,9 @@
 			// Absolute: a relative url() inside a custom property resolves against the stylesheet using it
 			button.style.setProperty('--picture', 'url("' + new URL(card.picture, location.href).href + '")');
 			button.style.setProperty('--picture-y', card.y || '50%');
+			// The world's name alone ("Mustafar · volcan" → "Mustafar"): the line below already describes it
 			const name = document.createElement('strong');
-			name.textContent = theme.name;
+			name.textContent = theme.name.split(' · ')[0];
 			const detail = document.createElement('span');
 			detail.textContent = card.detail || '';
 			button.append(name, detail);
@@ -931,7 +933,7 @@
 
 	// ---------- Appearance: palette ----------
 	// list: [{ id, name, color }] from the host; choice: one of them; themePalettes: the one each theme sets
-	const palettes = { list: [], choice: 'red', theme: 'sith', themePalettes: { sith: 'red', jedi: 'blue', coruscant: 'violet' } };
+	const palettes = { list: [], choice: 'red', theme: 'sith', themePalettes: { sith: 'red', jedi: 'blue', coruscant: 'violet', dagobah: 'green' } };
 
 	function renderPalettes() {
 		const container = $('paletteList');
@@ -1434,8 +1436,8 @@
 			],
 			energy: { pricePerKwh: 0.1952, otherWatts: 40, psuEfficiency: 90, show: true },
 			theme: new URLSearchParams(location.search).get('theme') || 'sith',
-			themes: [{ id: 'sith', name: 'Sith · volcan' }, { id: 'jedi', name: 'Jedi · désert' }, { id: 'coruscant', name: 'Coruscant · ville' }],
-			palette: new URLSearchParams(location.search).get('palette') || ({ jedi: 'blue', coruscant: 'violet' }[new URLSearchParams(location.search).get('theme')] || 'red'),
+			themes: [{ id: 'sith', name: 'Mustafar · volcan' }, { id: 'jedi', name: 'Tatooine · désert' }, { id: 'coruscant', name: 'Coruscant · ville' }, { id: 'dagobah', name: 'Dagobah · marais' }],
+			palette: new URLSearchParams(location.search).get('palette') || ({ jedi: 'blue', coruscant: 'violet', dagobah: 'green' }[new URLSearchParams(location.search).get('theme')] || 'red'),
 			palettes: [
 				{ id: 'red', name: 'Rouge', color: '#FF1F33' },
 				{ id: 'blue', name: 'Bleu', color: '#288CFF' },
@@ -1445,7 +1447,7 @@
 				{ id: 'orange', name: 'Orange', color: '#FF7A1A' },
 				{ id: 'white', name: 'Blanc', color: '#E2EAF6' }
 			],
-			themePalettes: { sith: 'red', jedi: 'blue', coruscant: 'violet' },
+			themePalettes: { sith: 'red', jedi: 'blue', coruscant: 'violet', dagobah: 'green' },
 			// "?background=<picture url>&saved=1": that picture as the saved rendering (see the picked one below)
 			background: new URLSearchParams(location.search).get('saved') === '1'
 				? { enabled: true, imageUrl: new URLSearchParams(location.search).get('background'), shade: 0.4, maxShade: 0.8, size: { width: 682, height: 2560 } }
