@@ -29,6 +29,8 @@
 	</svg>
 
 	<div class="frame ignite" id="frame">
+		<!-- Animated background (the user's video): under the background canvas, which then only adds shading and grain -->
+		<video class="layer" id="bgVideo" muted loop playsinline preload="auto" hidden></video>
 		<canvas class="layer" id="bg" width="682" height="2560"></canvas>
 		<!-- Drifting veils over the sky (smoke or haze) and breathing lava hot spots (Sith only, positions match background.jpg) -->
 		<div class="smoke" data-period="90" data-amplitude="160" style="top: 80px"></div>

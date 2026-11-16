@@ -588,7 +588,7 @@
 		add(background.enabled && !background.frame ? 'warn' : 'ok', !background.enabled
 			? 'Fond : <b>celui du thème</b>'
 			: background.frame
-				? 'Fond : <b>image personnelle</b>'
+				? 'Fond : <b>' + (background.video ? 'vidéo personnelle' : 'image personnelle') + '</b>'
 				: 'Fond : <b>aucune image choisie</b>, celui du thème reste affiché');
 		const weatherOn = $('weatherEnabled').checked;
 		add(!weatherOn || weatherPlace ? 'ok' : 'warn', weatherOn
@@ -978,11 +978,13 @@
 	// ---------- Appearance: custom background ----------
 	// Two states: a picture being cropped (source: its copy in the data folder, rendered at the next save then
 	// deleted) or the saved rendering alone (source null), shown as is, without a frame: re-cropping means
-	// choosing the picture again. pictureUrl: what the stage shows; natural: its upright size once loaded;
-	// frame: the area kept, in pixels of that picture, always at the screen's ratio
+	// choosing the picture again. A video is always being cropped: kept as chosen, its frame stays editable.
+	// pictureUrl: what the stage shows; natural: its upright size once loaded; frame: the area kept, in pixels
+	// of that picture, always at the screen's ratio
 	const background = {
 		enabled: false,
 		source: null,
+		video: false,
 		pictureUrl: null,
 		natural: null,
 		frame: null,
@@ -1073,7 +1075,7 @@
 		$('bgCustom').checked = background.enabled;
 		$('bgEditor').classList.toggle('off', !background.enabled);
 		$('pickBackground').classList.toggle('off', !background.enabled);
-		$('pickBackground').textContent = background.pictureUrl ? 'Changer d’image…' : 'Choisir une image…';
+		$('pickBackground').textContent = background.pictureUrl ? 'Changer…' : 'Choisir…';
 		const ready = Boolean(background.natural && background.frame);
 		$('cropPicture').hidden = !ready;
 		// The saved rendering: no frame to move
@@ -1114,12 +1116,36 @@
 		sendPreview();
 	}
 
+	/** Frame as fractions of the picture or video: what the host renders, cuts or sends to the case screen. */
+	function frameFractions() {
+		const { natural, frame } = background;
+		return { x: frame.x / natural.width, y: frame.y / natural.height, width: frame.width / natural.width, height: frame.height / natural.height };
+	}
+
 	/** The kept area at the screen's ratio, with the shading the display adds behind the clock. */
 	function renderPreview() {
 		const preview = $('bgPreview');
+		const previewVideo = $('bgPreviewVideo');
 		$('bgPreviewShade').style.setProperty('--shade', background.shade);
 		const frame = background.frame;
-		if (!frame || !background.natural || !preview.clientWidth) {
+		const ready = Boolean(frame && background.natural && preview.clientWidth);
+		// A video plays in the preview, cut like on the case screen
+		const video = ready && background.video;
+		previewVideo.hidden = !video;
+		if (video) {
+			if (previewVideo.getAttribute('src') !== background.pictureUrl) {
+				previewVideo.src = background.pictureUrl;
+				previewVideo.play().catch(() => {});
+			}
+			const crop = frameFractions();
+			previewVideo.style.setProperty('object-view-box',
+				`inset(${crop.y * 100}% ${(1 - crop.x - crop.width) * 100}% ${(1 - crop.y - crop.height) * 100}% ${crop.x * 100}%)`);
+		} else if (previewVideo.getAttribute('src')) {
+			previewVideo.pause();
+			previewVideo.removeAttribute('src');
+			previewVideo.load();
+		}
+		if (!ready || video) {
 			preview.style.backgroundImage = 'none';
 			return;
 		}
@@ -1143,36 +1169,67 @@
 		const frame = background.frame;
 		const size = Math.round(frame.width) + ' × ' + Math.round(frame.height);
 		const upscale = background.screen.width / frame.width;
+		const what = background.video ? 'de la vidéo' : 'de l’image';
 		if (upscale > SOFT_UPSCALE) {
 			showBackgroundStatus('Partie gardée de ' + size + ' pixels, agrandie ' + upscale.toFixed(1).replace('.', ',')
-				+ ' fois sur l’écran : elle sera floue. Agrandissez le cadre ou choisissez une image plus grande.', 'warn');
+				+ ' fois sur l’écran : elle sera floue. Agrandissez le cadre ou choisissez un fichier plus grand.', 'warn');
 		} else {
-			showBackgroundStatus('Partie gardée : ' + size + ' pixels de l’image, pour un écran de '
+			showBackgroundStatus('Partie gardée : ' + size + ' pixels ' + what + ', pour un écran de '
 				+ background.screen.width + ' × ' + background.screen.height + '.');
 		}
 	}
 
-	function loadPicture(url) {
+	/**
+	 * Shows a picture or a video in the stage. crop: a saved video's frame (fractions); otherwise the largest
+	 * frame, centred.
+	 */
+	function loadPicture(url, video, crop) {
 		background.pictureUrl = url;
+		background.video = Boolean(video);
 		background.natural = null;
 		background.frame = null;
 		const image = $('cropImage');
-		image.onload = () => {
-			// A newer pick replaced it meanwhile
-			if (image.getAttribute('src') !== url) {
-				return;
-			}
-			background.natural = { width: image.naturalWidth, height: image.naturalHeight };
-			background.frame = largestFrame();
+		const player = $('cropVideo');
+		image.hidden = background.video;
+		player.hidden = !background.video;
+		const ready = (width, height) => {
+			background.natural = { width, height };
+			background.frame = crop
+				? clampFrame({ x: crop.x * width, y: crop.y * height, width: 0, height: crop.height * height })
+				: largestFrame();
 			renderCrop();
 		};
-		image.onerror = () => {
+		const failed = () => {
 			background.source = null;
 			background.pictureUrl = null;
+			background.video = false;
 			renderCrop();
-			showBackgroundStatus('Image introuvable : choisissez-en une autre.', 'bad');
+			showBackgroundStatus('Fichier introuvable ou illisible : choisissez-en un autre.', 'bad');
 		};
-		image.src = url;
+		if (background.video) {
+			// The stage plays it too: the frame is chosen on the moving picture
+			image.removeAttribute('src');
+			player.onloadedmetadata = () => {
+				if (player.getAttribute('src') === url) {
+					ready(player.videoWidth, player.videoHeight);
+					player.play().catch(() => {});
+				}
+			};
+			player.onerror = failed;
+			player.src = url;
+		} else {
+			player.pause();
+			player.removeAttribute('src');
+			player.load();
+			image.onload = () => {
+				// A newer pick replaced it meanwhile
+				if (image.getAttribute('src') === url) {
+					ready(image.naturalWidth, image.naturalHeight);
+				}
+			};
+			image.onerror = failed;
+			image.src = url;
+		}
 		renderCrop();
 	}
 
@@ -1188,7 +1245,7 @@
 		background.enabled = true;
 		// Sent once the picture is laid out (placeFrame)
 		previewLive = true;
-		loadPicture(message.sourceUrl);
+		loadPicture(message.sourceUrl, message.video, null);
 	}
 
 	function startCropDrag(event, corner) {
@@ -1267,10 +1324,11 @@
 		previewChange();
 	});
 
-	/** The saved background (state, or after a save): its rendering alone, nothing being cropped. */
+	/** The saved background (state, or after a save): a picture's rendering alone, or a video with its frame. */
 	function showBackground(state) {
 		background.enabled = Boolean(state.enabled);
-		background.source = null;
+		// A saved video stays the source: its frame can be moved again
+		background.source = state.video ? state.source : null;
 		background.maxShade = Number.isFinite(state.maxShade) ? state.maxShade : background.maxShade;
 		background.shade = Number.isFinite(state.shade) ? Math.min(state.shade, background.maxShade) : background.shade;
 		if (state.size) {
@@ -1280,22 +1338,23 @@
 		$('bgShade').value = Math.round(background.shade * 100);
 		renderShade();
 		if (state.imageUrl) {
-			loadPicture(state.imageUrl);
+			loadPicture(state.imageUrl, state.video, state.video ? state.crop : null);
 		} else {
 			background.pictureUrl = null;
+			background.video = false;
 			background.natural = null;
 			background.frame = null;
 			renderCrop();
 		}
 	}
 
-	/** { enabled, shade, source?, crop? }: the picture and its frame (fractions) only while one is being cropped. */
+	/** { enabled, shade, source?, crop? }: the picture or video and its frame (fractions) while one is being cropped. */
 	function readBackground() {
 		const result = { enabled: background.enabled, shade: background.shade };
 		const { source, natural, frame } = background;
 		if (source && natural && frame) {
 			result.source = source;
-			result.crop = { x: frame.x / natural.width, y: frame.y / natural.height, width: frame.width / natural.width, height: frame.height / natural.height };
+			result.crop = frameFractions();
 		}
 		return result;
 	}
@@ -1488,7 +1547,7 @@
 		// "?background=<picture url>": that picture just picked, being cropped
 		const designPicture = new URLSearchParams(location.search).get('background');
 		if (designPicture && new URLSearchParams(location.search).get('saved') !== '1') {
-			dispatch({ type: 'pickedBackground', source: 'design.jpg', sourceUrl: designPicture });
+			dispatch({ type: 'pickedBackground', source: 'design', sourceUrl: designPicture, video: /\.(mp4|webm)$/i.test(designPicture) });
 		}
 	}
 })();

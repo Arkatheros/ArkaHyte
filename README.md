@@ -331,7 +331,16 @@ y remet le fond enregistré. À l'enregistrement, cette partie est rendue une fo
 respectée) et seule cette image reste dans le dossier : la copie de la photo est effacée, recadrer demande de la choisir
 à nouveau. Revenir au fond du thème vide le dossier. Seul réglage : l'assombrissement derrière
 l'horloge (0 à 80 %). Pas de braises ni de sable sur une image personnelle : ils naissent sur la lave et les dunes de
-l'image du thème. Réglage `Background` de `appsettings.json`. Aperçu dans un navigateur :
+l'image du thème. Réglage `Background` de `appsettings.json`.
+
+**Fond vidéo** (même étape, « Image ou vidéo ») : MP4 ou WebM, 1080p au plus (1920 × 1080 ou 1080 × 1920, 300 Mo au
+plus), décodé par la carte graphique et lu en boucle, sans son. Une vidéo ne se pré-rend pas : elle est gardée telle
+quelle avec son cadre, recadrable plus tard sans la re-choisir. Elle se met en pause écrans éteints, session verrouillée
+et **pendant les parties**, et n'est **pas comprise** dans l'export de la configuration (trop lourde : après un import,
+le fond du thème s'affiche jusqu'au prochain choix). Coût mesuré en 720p : environ +5 % d'un cœur, +3 % de GPU, +90 Mo.
+Les GIF et WebP animés ne sont pas acceptés (décodés par le processeur, image par image).
+
+Aperçu dans un navigateur :
 `index.html?background=<url d'une image>&shade=0.4[&crop=x,y,l,h]`, `setup.html?step=8&mode=settings&background=<url>[&saved=1]`.
 
 ## Icône de notification

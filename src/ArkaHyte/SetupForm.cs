@@ -166,7 +166,7 @@ public sealed class SetupForm : Form
 				PickScript(ReadId(root));
 				break;
 			case "pickBackground":
-				PickBackground();
+				_ = PickBackgroundAsync();
 				break;
 			case "previewAppearance":
 				if (_previewPath is null)
@@ -312,43 +312,61 @@ public sealed class SetupForm : Form
 	{
 		settings ??= new BackgroundSettings();
 		var imageUrl = BackgroundStore.ActiveUrl(settings);
+		// A video is kept as chosen: its frame can be moved again without picking it again
+		var video = imageUrl is not null && BackgroundStore.IsVideo(settings.Image);
 		return new
 		{
 			enabled = imageUrl is not null,
 			imageUrl,
+			video,
+			source = video ? settings.Image : null,
+			crop = video ? settings.Crop : null,
 			shade = settings.Shade,
 			maxShade = BackgroundSettings.MaxShade,
 			size = new { width = BackgroundStore.Width, height = BackgroundStore.Height }
 		};
 	}
 
-	/// <summary>Appearance step: a picture chosen with Windows' file dialog, copied to the data folder at once.</summary>
-	private void PickBackground()
+	/// <summary>Appearance step: a picture or a video chosen with Windows' file dialog, copied to the data folder at once.</summary>
+	private async Task PickBackgroundAsync()
 	{
 		if (_previewPath is not null)
 		{
 			return;
 		}
-		using var dialog = new OpenFileDialog
+		static string Patterns(IEnumerable<string> extensions) => string.Join(';', extensions.Select(e => "*" + e));
+		string path;
+		using (var dialog = new OpenFileDialog
 		{
-			Title = "Image de fond",
-			Filter = "Images (*.jpg, *.png, *.bmp)|" + string.Join(';', BackgroundStore.Extensions.Select(e => "*" + e)),
+			Title = "Image ou vidéo de fond",
+			Filter = $"Images et vidéos|{Patterns(BackgroundStore.Extensions.Concat(BackgroundStore.VideoExtensions))}"
+				+ $"|Images (*.jpg, *.png, *.bmp)|{Patterns(BackgroundStore.Extensions)}"
+				+ $"|Vidéos 1080p au plus (*.mp4, *.webm)|{Patterns(BackgroundStore.VideoExtensions)}",
 			InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
 			CheckFileExists = true
-		};
-		if (dialog.ShowDialog(this) != DialogResult.OK)
+		})
 		{
-			return;
+			if (dialog.ShowDialog(this) != DialogResult.OK)
+			{
+				return;
+			}
+			path = dialog.FileName;
 		}
 		try
 		{
-			var (name, width, height) = BackgroundStore.Import(dialog.FileName);
-			Post(new { type = "pickedBackground", source = name, sourceUrl = BackgroundStore.UrlOf(name), width, height });
+			var picked = await BackgroundStore.ImportAsync(path);
+			Post(new { type = "pickedBackground", source = picked.Name, sourceUrl = BackgroundStore.UrlOf(picked.Name), picked.Width, picked.Height, video = picked.IsVideo });
 		}
 		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
 		{
-			Log.Error("Background picture refused", exception);
-			Post(new { type = "backgroundFailed", message = "Image illisible ou trop grande : choisissez une photo JPEG, PNG ou BMP." });
+			Log.Error("Background refused", exception);
+			Post(new
+			{
+				type = "backgroundFailed",
+				message = exception is BackgroundRefusedException refused
+					? refused.UserMessage
+					: "Fichier illisible : choisissez une photo (JPEG, PNG, BMP) ou une vidéo (MP4, WebM)."
+			});
 		}
 	}
 

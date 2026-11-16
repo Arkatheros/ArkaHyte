@@ -609,6 +609,8 @@ public sealed class DisplayForm : Form
 			background = new
 			{
 				url = BackgroundStore.ActiveUrl(_settings.Background),
+				// A video's frame (a picture is already cut)
+				crop = _settings.Background?.Crop,
 				shade = Math.Clamp(_settings.Background?.Shade ?? BackgroundSettings.DefaultShade, 0, BackgroundSettings.MaxShade)
 			},
 			shortcuts = _dockButtons

@@ -182,10 +182,14 @@ cadre au ratio de l'écran dessiné dans `setup.js` (fractions de l'image redres
 (GDI+, orientation EXIF appliquée, 682 × 2560, `background-*.jpg` nouveau nom à chaque rendu) dans `Save`, seulement
 quand une image est en cours de recadrage. Réglage `Background` = `{ Enabled, Image, Shade }` : seul le rendu est gardé
 (choix du propriétaire), la copie de la photo effacée après enregistrement ; recadrer = la choisir à nouveau (l'étape
-montre le rendu seul, sans cadre, `.crop-stage.saved`). Fond du thème enregistré : dossier vidé. Les deux pages lisent ce dossier par l'hôte virtuel `hyte-user.local` (`DenyCors` : `img` et
-dessin sur canvas, rien d'autre) ; `config.background` `{ url, shade }` → `applyBackground` (`console.js`),
+montre le rendu seul, sans cadre, `.crop-stage.saved`). Fond du thème enregistré : dossier vidé. Vidéo (MP4 / WebM,
+1080p au plus vérifié par `GetVideoPropertiesAsync`, `ImportAsync`) : jamais rendue, gardée comme `Image` avec son
+`Crop` (recadrable sans la re-choisir), jouée par `#bgVideo` sous le canvas `#bg` (alors effacé, ombrage + grain seuls),
+cadre par `object-view-box`, pause si `document.hidden` ou jeu en cours (`updateVideoPlayback`), jamais exportée
+(choix du propriétaire). Les deux pages lisent ce dossier par l'hôte virtuel `hyte-user.local` (`Allow`, voir la
+lisibilité) ; `config.background` `{ url, shade, crop }` → `applyBackground` (`console.js`),
 jamais de particules sur un fond personnel (`drawFx` ne dessine plus rien ; option retirée, choix du propriétaire). Aperçu en direct sur l'écran du boîtier dès qu'on
-touche à l'étape : `previewBackground` (40 ms au plus) → `SetupForm.BackgroundPreviewChanged` → message `backgroundPreview`
+touche à l'étape : `previewAppearance` (thème, palette, fond ; 40 ms au plus) → `SetupForm.AppearancePreviewChanged` → message `appearancePreview`
 `{ url, crop, shade }`, cadre découpé dans l'original (`drawImage` source rect, image gardée chargée) ou rendu enregistré
 tel quel, `{ end }` à la fermeture des Paramètres (retour au fond enregistré, avant le `CleanUp`). Tout sauf le rendu
 enregistré est effacé après enregistrement et à la fermeture des Paramètres (`CleanUp`) ; rendu exporté en base64 (`ConfigBackup`).
@@ -228,6 +232,8 @@ L'écran tourne en permanence : cible ~16 % d'un cœur.
 - Seule exception à la boucle : effets ponctuels en Web Animations sur `transform` / `opacity` (compositeur),
   ex. changement de vue normale ↔ jeu (`switchView`, `GameView.Transition` : `morph` = FLIP des widgets
   communs + fondu des autres, `slide`, `fade`, `none` ; puis `refillGauges` remonte jauges et cadrans depuis 0).
+- Fond vidéo : hors boucle, décodé par le GPU et composité par Chromium ; mesuré à +5 % d'un cœur en 720p, d'où la
+  limite à 1080p et la pause en jeu.
 - Effets pilotés par variables CSS mises à jour en JS ; `will-change` sur les éléments animés.
 - Une variable animée se pose sur les éléments qui la lisent (`setVar(elements, …)`), jamais sur `.frame` :
   héritée par toute la page, elle forcerait un recalcul de style complet à chaque frame.

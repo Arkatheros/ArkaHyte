@@ -256,13 +256,14 @@
 				<h2>Couleurs</h2>
 				<div class="palettes" id="paletteList" role="radiogroup" aria-label="Couleurs"></div>
 				<h2>Fond</h2>
-				<p class="hint">Celui du thème, ou une de vos images : n'importe quelle photo convient, vous choisissez la
-					partie gardée, au format de l'écran (très haut et étroit).</p>
+				<p class="hint">Celui du thème, ou une de vos images ou vidéos (MP4, WebM, 1080p au plus) : vous choisissez la
+					partie gardée, au format de l'écran (très haut et étroit). Une vidéo tourne en boucle, se fige pendant les
+					parties et n'est pas comprise dans l'export de la configuration.</p>
 				<div class="bg-modes" role="radiogroup" aria-label="Fond d'écran">
 					<label class="switch"><input type="radio" name="bgMode" value="theme" id="bgTheme"><span>Fond du thème</span></label>
-					<label class="switch"><input type="radio" name="bgMode" value="custom" id="bgCustom"><span>Image personnelle</span></label>
+					<label class="switch"><input type="radio" name="bgMode" value="custom" id="bgCustom"><span>Image ou vidéo</span></label>
 					<!-- On the same line as the choice: always in view, the stage pushes anything below it out of the window -->
-					<button type="button" class="ghost bg-pick off" id="pickBackground">Choisir une image…</button>
+					<button type="button" class="ghost bg-pick off" id="pickBackground">Choisir…</button>
 				</div>
 				<div class="bg-editor" id="bgEditor">
 					<div class="crop-layout">
@@ -270,6 +271,7 @@
 						<div class="crop-stage" id="cropStage">
 							<div class="crop-picture" id="cropPicture" hidden>
 								<img id="cropImage" alt="" draggable="false">
+								<video id="cropVideo" muted loop playsinline hidden></video>
 								<!-- Dimming clipped to the picture; the frame above it is not, so its grips stay whole on the edges -->
 								<div class="crop-clip"><div class="crop-window" id="cropWindow"></div></div>
 								<div class="crop-frame" id="cropFrame">
@@ -280,11 +282,11 @@
 									<span class="crop-grip" data-corner="sw"></span>
 								</div>
 							</div>
-							<button type="button" class="crop-empty" id="cropEmpty">Choisir une image…</button>
+							<button type="button" class="crop-empty" id="cropEmpty">Choisir une image ou une vidéo…</button>
 						</div>
 						<div class="crop-side">
 							<span class="hint">Aperçu</span>
-							<div class="bg-preview" id="bgPreview"><span class="bg-preview-shade" id="bgPreviewShade"></span></div>
+							<div class="bg-preview" id="bgPreview"><video id="bgPreviewVideo" muted loop playsinline hidden></video><span class="bg-preview-shade" id="bgPreviewShade"></span></div>
 						</div>
 					</div>
 					<p class="hint" id="cropHint">Glisser le cadre pour le déplacer ; ses coins ou la molette pour l'agrandir ou le réduire.

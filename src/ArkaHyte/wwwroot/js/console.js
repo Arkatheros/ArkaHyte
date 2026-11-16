@@ -51,7 +51,7 @@
 	let shownPalette = null;
 	// The user's own picture (settings, Appearance step), already cropped to the frame by the host; null url:
 	// the theme's. Its shading replaces the theme's; the theme's particles belong to the theme's picture only
-	let customBackground = { url: null, shade: 0.4 };
+	let customBackground = { url: null, shade: 0.4, crop: null };
 	// Mean luminance (0 to 1) of the user's picture beyond which the readability aids come on: measured on
 	// the volcano (0.17), a dark wallpaper (0.21), a grey portrait (0.35), a pale sky (0.39), the desert (0.54)
 	const BRIGHT_PICTURE = 0.28;
@@ -239,9 +239,10 @@
 	probe.height = 128;
 	const probeCtx = probe.getContext('2d', { willReadFrequently: true });
 
-	/** Mean luminance of the part of the picture shown is high enough to need the readability aids. */
+	/** Mean luminance of the part of the picture (or video frame) shown is high enough to need the readability aids. */
 	function isBrightPicture(photo, crop) {
-		const { naturalWidth: width, naturalHeight: height } = photo;
+		const width = photo.naturalWidth || photo.videoWidth;
+		const height = photo.naturalHeight || photo.videoHeight;
 		// The frame being chosen, or the centred cover the display draws
 		const scale = Math.max(W / width, H / height);
 		const area = crop
@@ -269,10 +270,89 @@
 			: { url: theme.background, crop: null, shade: theme.skyShade, custom: false };
 	}
 
+	// ---------- Animated background: the user's video, under the background canvas ----------
+	// Decoded by the GPU and composited without the page loop; paused while the display is hidden
+	const bgVideo = $('bgVideo');
+	const isVideo = (url) => /\.(mp4|webm)(\?|$)/i.test(url || '');
+
+	function showVideo(url, crop) {
+		if (bgVideo.dataset.url !== url) {
+			bgVideo.dataset.url = url;
+			// Read back once (first frame) to measure its brightness, as for a picture
+			if (url.startsWith('https://')) {
+				bgVideo.crossOrigin = 'anonymous';
+			}
+			bgVideo.onloadeddata = () => {
+				customBright = isBrightPicture(bgVideo, videoCrop);
+				updateBright();
+			};
+			bgVideo.src = url;
+		}
+		videoCrop = crop;
+		// The frame chosen, as fractions of the video: inset(top right bottom left)
+		bgVideo.style.setProperty('object-view-box', crop
+			? `inset(${crop.y * 100}% ${(1 - crop.x - crop.width) * 100}% ${(1 - crop.y - crop.height) * 100}% ${crop.x * 100}%)`
+			: 'none');
+		bgVideo.hidden = false;
+		updateVideoPlayback();
+	}
+	let videoCrop = null;
+	// A game is running: the video holds its frame
+	let videoHeldForGame = false;
+
+	/** Plays only while the display is seen and no game runs. */
+	function updateVideoPlayback() {
+		if (!bgVideo.dataset.url) {
+			return;
+		}
+		if (document.hidden || videoHeldForGame) {
+			bgVideo.pause();
+		} else {
+			bgVideo.play().catch(() => {});
+		}
+	}
+
+	/** No video shown: its decoder and buffers released. */
+	function stopVideo() {
+		if (!bgVideo.dataset.url) {
+			return;
+		}
+		delete bgVideo.dataset.url;
+		bgVideo.pause();
+		bgVideo.removeAttribute('src');
+		bgVideo.load();
+		bgVideo.hidden = true;
+	}
+
+	// The host hides the WebView while the monitors sleep or the session is locked
+	document.addEventListener('visibilitychange', updateVideoPlayback);
+
+	/** Darkens the bright sky behind the clock so the digits keep their contrast. */
+	function addShade(ctx, level) {
+		if (level > 0) {
+			const shade = ctx.createLinearGradient(0, 0, 0, 560);
+			shade.addColorStop(0, `rgba(0, 0, 0, ${level})`);
+			shade.addColorStop(0.6, `rgba(0, 0, 0, ${level * 0.36})`);
+			shade.addColorStop(1, 'rgba(0, 0, 0, 0)');
+			ctx.fillStyle = shade;
+			ctx.fillRect(0, 0, W, 560);
+		}
+	}
+
 	function drawBackground() {
 		const token = ++backgroundToken;
 		const ctx = $('bg').getContext('2d');
 		let target = backgroundTarget();
+		// A video plays under the canvas: the canvas is cleared and only adds the shading and the grain
+		if (target.custom && isVideo(target.url)) {
+			showVideo(target.url, target.crop);
+			ctx.clearRect(0, 0, W, H);
+			addShade(ctx, target.shade);
+			addGrain(ctx);
+			updateBright();
+			return;
+		}
+		stopVideo();
 		// Drawn in one go once the picture is there: the previous background stays meanwhile
 		const paint = (photo) => {
 			ctx.fillStyle = `rgb(${palette.void})`;
@@ -291,15 +371,7 @@
 			} else if (theme.particles === 'sand') {
 				drawDesert(ctx);
 			}
-			// Darken the bright sky behind the clock so the digits keep their contrast
-			if (target.shade > 0) {
-				const shade = ctx.createLinearGradient(0, 0, 0, 560);
-				shade.addColorStop(0, `rgba(0, 0, 0, ${target.shade})`);
-				shade.addColorStop(0.6, `rgba(0, 0, 0, ${target.shade * 0.36})`);
-				shade.addColorStop(1, 'rgba(0, 0, 0, 0)');
-				ctx.fillStyle = shade;
-				ctx.fillRect(0, 0, W, 560);
-			}
+			addShade(ctx, target.shade);
 			addGrain(ctx);
 			if (target.custom && photo) {
 				customBright = isBrightPicture(photo, target.crop);
@@ -366,9 +438,12 @@
 	function applyBackground(config) {
 		const next = {
 			url: typeof config.url === 'string' && config.url ? config.url : null,
-			shade: Number.isFinite(config.shade) ? config.shade : customBackground.shade
+			shade: Number.isFinite(config.shade) ? config.shade : customBackground.shade,
+			// A video's frame (a picture comes already cut)
+			crop: config.crop || null
 		};
-		const redraw = next.url !== customBackground.url || (next.url && next.shade !== customBackground.shade);
+		const redraw = next.url !== customBackground.url || (next.url && next.shade !== customBackground.shade)
+			|| JSON.stringify(next.crop) !== JSON.stringify(customBackground.crop);
 		customBackground = next;
 		// Before the first theme the palette is not read yet: applyTheme draws it
 		if (redraw && themeName) {
@@ -2255,6 +2330,11 @@
 		const inGame = gameSession !== null;
 		const showGame = viewChoice ? viewChoice === 'game' : inGame && gameSession.view === 'game';
 		frame.classList.toggle('has-game', inGame);
+		// The GPU goes to the game: a video background stays on its frame until the game ends
+		if (inGame !== videoHeldForGame) {
+			videoHeldForGame = inGame;
+			updateVideoPlayback();
+		}
 		pageDots.forEach((dot) => dot.setAttribute('aria-current', String(dot.dataset.view === (showGame ? 'game' : 'normal'))));
 		if (showGame !== gameView) {
 			gameView = showGame;

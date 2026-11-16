@@ -112,7 +112,9 @@ public static class Palettes
 public sealed record BackgroundSettings(
 	bool Enabled = false,
 	string? Image = null,
-	double Shade = BackgroundSettings.DefaultShade)
+	double Shade = BackgroundSettings.DefaultShade,
+	// A video cannot be rendered once: it is played as chosen and cut to this frame by the display
+	CropFrame? Crop = null)
 {
 	public const double DefaultShade = 0.4;
 	public const double MaxShade = 0.8;

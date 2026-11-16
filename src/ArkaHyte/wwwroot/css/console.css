@@ -251,6 +251,11 @@ body {
 	width: 682px;
 	height: 2560px;
 }
+/* Fills the frame like a picture; the chosen frame is cut by object-view-box (set by console.js) */
+#bgVideo {
+	object-fit: cover;
+	pointer-events: none;
+}
 #fx {
 	left: 0;
 	top: 450px;

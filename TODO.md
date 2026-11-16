@@ -15,9 +15,6 @@ du non fait.
 ---
 
 # Liste des tâches
-- [ ] Fond animé : vidéo ou image animée (GIF / WebP animé)
-  - Mesurer d'abord le coût (`Measure-ArkaHyte.ps1`, cible ~16 % d'un cœur), décodage matériel de la vidéo
-  - En pause écrans éteints ou session verrouillée, comme le reste ; rognage au même cadre que l'image
 - [ ] Positionnement des widgets
   - Définir le modèle (emplacements prédéfinis, ordre des blocs, ou placement libre) avant de coder : les vues normale et jeu
     et le morph entre elles en dépendent

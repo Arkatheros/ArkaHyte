@@ -14,11 +14,21 @@ namespace ArkaHyte;
 /// </summary>
 public sealed record AppearancePreview(string? Url, CropFrame? Crop, double Shade, string Palette, string Theme);
 
+/// <summary>Picture or video copied for the settings window: its name, upright size and kind.</summary>
+public sealed record ImportedBackground(string Name, int Width, int Height, bool IsVideo);
+
+/// <summary>A file the settings window refuses, with the reason shown to the user (in French).</summary>
+public sealed class BackgroundRefusedException(string userMessage, string detail) : InvalidOperationException(detail)
+{
+	public string UserMessage { get; } = userMessage;
+}
+
 /// <summary>
 /// Files of the custom background, in <see cref="DataFolder.Backgrounds"/>: the picture chosen (source-*), only
 /// while it is being cropped, and the chosen frame rendered at the display size (background-*.jpg), under a new
-/// name each time so the browser cache never shows an old one. Once saved, only that rendering stays. Both pages
-/// read them from a virtual host of their own; the display never loads the original picture once saved.
+/// name each time so the browser cache never shows an old one. Once saved, only that rendering stays. A video
+/// cannot be rendered once: it is kept as chosen (source-*.mp4 / .webm) with its frame, which the display cuts.
+/// Both pages read them from a virtual host of their own; the display never loads the original picture once saved.
 /// </summary>
 public static class BackgroundStore
 {
@@ -30,6 +40,16 @@ public static class BackgroundStore
 
 	/// <summary>Pictures GDI+ decodes on every Windows; the file dialog offers these only.</summary>
 	public static readonly string[] Extensions = [".jpg", ".jpeg", ".png", ".bmp"];
+
+	/// <summary>Videos the GPU decodes (an animated GIF or WebP would be decoded by the processor, frame by frame).</summary>
+	public static readonly string[] VideoExtensions = [".mp4", ".webm"];
+
+	/// <summary>1080p at most: measured at about 5 % of a core in 720p, more beyond.</summary>
+	public const int MaxVideoShortSide = 1080;
+	public const int MaxVideoLongSide = 1920;
+	private const long MaxVideoBytes = 300L * 1024 * 1024;
+
+	public static bool IsVideo(string? name) => VideoExtensions.Contains(Path.GetExtension(name ?? string.Empty).ToLowerInvariant());
 
 	private const long MaxSourceBytes = 64L * 1024 * 1024;
 	// About 480 MB once decoded: beyond that the picture is refused rather than risk running out of memory
@@ -60,25 +80,54 @@ public static class BackgroundStore
 	private static bool IsOwnName(string? name) =>
 		!string.IsNullOrWhiteSpace(name) && name == Path.GetFileName(name) && name.IndexOfAny(Path.GetInvalidFileNameChars()) < 0;
 
-	/// <summary>Picture chosen in the settings window, checked then copied here: its name and upright size.</summary>
-	/// <exception cref="InvalidOperationException">Not a picture GDI+ reads, or too large.</exception>
-	public static (string Name, int Width, int Height) Import(string path)
+	/// <summary>Picture or video chosen in the settings window, checked then copied here.</summary>
+	/// <exception cref="InvalidOperationException">Unreadable or too large (<see cref="BackgroundRefusedException"/> says why).</exception>
+	public static async Task<ImportedBackground> ImportAsync(string path)
 	{
 		var extension = Path.GetExtension(path).ToLowerInvariant();
-		if (!Extensions.Contains(extension))
+		var video = VideoExtensions.Contains(extension);
+		if (!video && !Extensions.Contains(extension))
 		{
-			throw new InvalidOperationException($"Unsupported picture type: {path}");
+			throw new BackgroundRefusedException("Format non pris en charge : JPEG, PNG, BMP, MP4 ou WebM.", $"Unsupported background type: {path}");
 		}
-		if (new FileInfo(path).Length > MaxSourceBytes)
+		var bytes = new FileInfo(path).Length;
+		var maxBytes = video ? MaxVideoBytes : MaxSourceBytes;
+		if (bytes > maxBytes)
 		{
-			throw new InvalidOperationException($"Picture larger than {MaxSourceBytes / 1024 / 1024} MB: {path}");
+			throw new BackgroundRefusedException($"Fichier trop lourd : {maxBytes / 1024 / 1024} Mo au plus.", $"Background larger than {maxBytes / 1024 / 1024} MB: {path}");
 		}
-		var (width, height) = ReadUprightSize(path);
+		var (width, height) = video ? await ReadVideoSizeAsync(path) : ReadUprightSize(path);
 		Directory.CreateDirectory(DataFolder.Backgrounds);
 		var name = $"source-{Stamp()}{(extension == ".jpeg" ? ".jpg" : extension)}";
 		File.Copy(path, Path.Combine(DataFolder.Backgrounds, name));
-		Log.Info($"Background picture {path} ({width} × {height}) copied as {name}");
-		return (name, width, height);
+		Log.Info($"Background {(video ? "video" : "picture")} {path} ({width} × {height}) copied as {name}");
+		return new ImportedBackground(name, width, height, video);
+	}
+
+	/// <summary>
+	/// A video's size from its container, without decoding it (Windows' media properties); 1080p at most.
+	/// Zero when Windows cannot read it (a WebM without the codec pack): the page measures it then.
+	/// </summary>
+	private static async Task<(int Width, int Height)> ReadVideoSizeAsync(string path)
+	{
+		uint width = 0, height = 0;
+		try
+		{
+			var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(path);
+			var properties = await file.Properties.GetVideoPropertiesAsync();
+			(width, height) = (properties.Width, properties.Height);
+		}
+		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or COMException)
+		{
+			Log.Error($"Video size unreadable: {path}", exception);
+		}
+		if (Math.Min(width, height) > MaxVideoShortSide || Math.Max(width, height) > MaxVideoLongSide)
+		{
+			throw new BackgroundRefusedException(
+				$"Vidéo de {width} × {height} : 1080p au plus (1920 × 1080 ou 1080 × 1920), une plus grande coûterait trop à l'écran.",
+				$"Video of {width} × {height} is larger than 1080p: {path}");
+		}
+		return ((int)width, (int)height);
 	}
 
 	/// <summary>Size as shown (EXIF orientation applied), from the header only: nothing is decoded.</summary>
@@ -186,8 +235,8 @@ public static class BackgroundStore
 
 	/// <summary>
 	/// Writes the background chosen in the settings window: background { enabled, source?, crop? { x, y, width,
-	/// height }, shade? }. A picture being cropped (source) is rendered here; without one, the saved rendering
-	/// stays. The theme's background keeps no file.
+	/// height }, shade? }. A picture being cropped (source) is rendered here; a video becomes the background as
+	/// is, with its frame; without a source, the saved background stays. The theme's background keeps no file.
 	/// </summary>
 	/// <exception cref="InvalidOperationException">The rendering failed: nothing is written.</exception>
 	public static void Apply(JsonObject root, JsonElement message, BackgroundSettings? current)
@@ -204,12 +253,14 @@ public static class BackgroundStore
 		var enabled = background.TryGetProperty("enabled", out var enabledElement) && enabledElement.ValueKind == JsonValueKind.True;
 		if (enabled && ReadSource(background) is { } source && ReadCrop(background) is { } crop)
 		{
-			settings = settings with { Image = Render(source, crop) };
+			settings = IsVideo(source)
+				? settings with { Image = source, Crop = crop }
+				: settings with { Image = Render(source, crop), Crop = null };
 		}
 		// Files no longer named here are deleted after the save (CleanUp)
 		settings = enabled && Exists(settings.Image)
 			? settings with { Enabled = true }
-			: settings with { Enabled = false, Image = null };
+			: settings with { Enabled = false, Image = null, Crop = null };
 		root["Background"] = JsonSerializer.SerializeToNode(settings);
 	}
 
@@ -231,7 +282,7 @@ public static class BackgroundStore
 		var theme = Themes.Normalize(Text("theme"));
 		if (!message.TryGetProperty("background", out var background) || background.ValueKind != JsonValueKind.Object)
 		{
-			return new AppearancePreview(ActiveUrl(current), null, current?.Shade ?? BackgroundSettings.DefaultShade, palette, theme);
+			return new AppearancePreview(ActiveUrl(current), current?.Crop, current?.Shade ?? BackgroundSettings.DefaultShade, palette, theme);
 		}
 		var enabled = background.TryGetProperty("enabled", out var enabledElement) && enabledElement.ValueKind == JsonValueKind.True;
 		var shade = background.TryGetProperty("shade", out var shadeElement) && shadeElement.TryGetDouble(out var level) && double.IsFinite(level)
@@ -245,7 +296,7 @@ public static class BackgroundStore
 		{
 			return new AppearancePreview(UrlOf(source), crop, shade, palette, theme);
 		}
-		return new AppearancePreview(Exists(current?.Image) ? UrlOf(current!.Image!) : null, null, shade, palette, theme);
+		return new AppearancePreview(Exists(current?.Image) ? UrlOf(current!.Image!) : null, current?.Crop, shade, palette, theme);
 	}
 
 	private static CropFrame? ReadCrop(JsonElement background)
@@ -288,9 +339,12 @@ public static class BackgroundStore
 		}
 	}
 
-	/// <summary>Files the configuration export carries, with their content: the saved rendering.</summary>
+	/// <summary>
+	/// Files the configuration export carries, with their content: the saved rendering, never a video (too heavy;
+	/// after an import without it, the theme's background shows until another one is chosen).
+	/// </summary>
 	public static IEnumerable<string> FilesOf(BackgroundSettings? settings) =>
-		settings is { Enabled: true, Image: { } image } && Exists(image) ? [image] : [];
+		settings is { Enabled: true, Image: { } image } && Exists(image) && !IsVideo(image) ? [image] : [];
 
 	/// <summary>Writes a file of an imported configuration; names with a path are refused.</summary>
 	public static void Restore(string name, byte[] content)
