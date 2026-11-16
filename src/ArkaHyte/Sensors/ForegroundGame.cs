@@ -25,12 +25,21 @@ internal static partial class ForegroundGame
 	// Executables Windows flagged as games, one subkey each (MatchedExeFullPath)
 	private const string GameConfigStoreKey = @"System\GameConfigStore\Children";
 	private static readonly TimeSpan KnownGamesLifetime = TimeSpan.FromMinutes(1);
+	// Faster while an unrecognised window covers its monitor: likely a game launched for the first time
+	private static readonly TimeSpan KnownGamesFullscreenLifetime = TimeSpan.FromSeconds(10);
+	// A negative verdict is checked again: a game's first window may be a splash screen of another class
+	private static readonly TimeSpan NegativeVerdictLifetime = TimeSpan.FromSeconds(5);
 
-	// Only touched by the sampling thread: the verdict is kept while the same process stays in front
+	// Only touched by the sampling thread: the verdict is kept while the same window stays in front
 	private static HashSet<string> _knownGames = new(StringComparer.OrdinalIgnoreCase);
 	private static DateTime _knownGamesRead = DateTime.MinValue;
 	private static uint _lastProcessId;
+	private static IntPtr _lastWindow;
+	private static DateTime _lastChecked;
 	private static string? _lastGamePath;
+	private static string? _lastReason;
+	// Unrecognised fullscreen process already written to the log
+	private static uint _loggedUnknownId;
 
 	// Settings (GameView): games added by hand, keyed by executable name, and engine detection. Replaced
 	// whole by Configure (UI thread), read by the sampling thread; a new instance drops the cached verdict.
@@ -49,6 +58,7 @@ internal static partial class ForegroundGame
 	// Game being followed: its process handle tells when it exits
 	private static uint _trackedId;
 	private static IntPtr _trackedProcess;
+	private static string? _trackedPath;
 	private static GameData? _tracked;
 
 	public static void Configure(GameViewSettings settings)
@@ -72,19 +82,30 @@ internal static partial class ForegroundGame
 			return new Sample(false, TrackedGame(foreground: false));
 		}
 		var processId = ForegroundProcess(window);
-		var gamePath = KnownGamePath(processId, window);
+		var fullscreen = CoversMonitor(window, rect);
+		// A followed game stays one whatever its window (its open handle keeps the id from being reused)
+		var gamePath = processId != 0 && processId == _trackedId && _tracked is not null
+			? _trackedPath
+			: KnownGamePath(processId, window, fullscreen);
 		if (gamePath is not null)
 		{
 			Track(processId, gamePath, window);
 		}
-		return new Sample(gamePath is not null || CoversMonitor(window, rect), TrackedGame(processId == _trackedId));
+		else if (fullscreen && processId != _loggedUnknownId)
+		{
+			_loggedUnknownId = processId;
+			Log.Info($"Fullscreen window not recognised as a game: {ProcessPath(processId) ?? $"process {processId}"} ({ClassName(window)})");
+		}
+		return new Sample(gamePath is not null || fullscreen, TrackedGame(processId == _trackedId));
 	}
 
-	private static bool IsShellWindow(IntPtr window)
+	private static string ClassName(IntPtr window)
 	{
 		var className = new StringBuilder(64);
-		return GetClassName(window, className, className.Capacity) > 0 && ShellClasses.Contains(className.ToString());
+		return GetClassName(window, className, className.Capacity) > 0 ? className.ToString() : string.Empty;
 	}
+
+	private static bool IsShellWindow(IntPtr window) => ShellClasses.Contains(ClassName(window));
 
 	private static bool CoversMonitor(IntPtr window, Rect rect)
 	{
@@ -107,49 +128,54 @@ internal static partial class ForegroundGame
 	/// Executable path of the process when it is a game (Windows' list, added by hand, Unreal / Unity window),
 	/// null otherwise.
 	/// </summary>
-	private static string? KnownGamePath(uint processId, IntPtr window)
+	private static string? KnownGamePath(uint processId, IntPtr window, bool fullscreen)
 	{
 		if (processId == 0)
 		{
 			return null;
 		}
-		// A game freshly launched for the first time is added by Windows while it runs: refresh the list
-		// when a new process comes to the front, at most once a minute
-		var stale = DateTime.UtcNow - _knownGamesRead >= KnownGamesLifetime;
+		var now = DateTime.UtcNow;
 		var rules = _rules;
-		if (processId == _lastProcessId && !stale && rules == _lastRules)
+		var sameWindow = window == _lastWindow && processId == _lastProcessId && rules == _lastRules;
+		if (sameWindow && (_lastGamePath is not null || now - _lastChecked < NegativeVerdictLifetime))
 		{
 			return _lastGamePath;
 		}
-		if (stale)
+		// A game freshly launched for the first time is added by Windows while it runs
+		var listAge = now - _knownGamesRead;
+		if (listAge >= KnownGamesLifetime || (fullscreen && listAge >= KnownGamesFullscreenLifetime))
 		{
 			_knownGames = ReadKnownGames();
-			_knownGamesRead = DateTime.UtcNow;
+			_knownGamesRead = now;
 		}
 		var path = ProcessPath(processId);
 		_lastProcessId = processId;
+		_lastWindow = window;
+		_lastChecked = now;
 		_lastRules = rules;
-		_lastGamePath = path is not null && IsGame(path, window, rules) ? path : null;
+		_lastReason = path is null ? null : GameReason(path, window, rules);
+		_lastGamePath = _lastReason is null ? null : path;
 		return _lastGamePath;
 	}
 
-	private static bool IsGame(string path, IntPtr window, GameRules rules)
+	/// <summary>Why the executable counts as a game, null when it does not.</summary>
+	private static string? GameReason(string path, IntPtr window, GameRules rules)
 	{
 		if (_knownGames.Contains(path))
 		{
-			return true;
+			return "Game Bar list";
 		}
 		var exe = Path.GetFileName(path);
 		if (rules.Extra.ContainsKey(exe))
 		{
-			return true;
+			return "added by hand";
 		}
 		if (!rules.DetectEngines || EngineExclusions.Contains(exe))
 		{
-			return false;
+			return null;
 		}
-		var className = new StringBuilder(64);
-		return GetClassName(window, className, className.Capacity) > 0 && EngineClasses.Contains(className.ToString());
+		var className = ClassName(window);
+		return EngineClasses.Contains(className) ? $"{className} window" : null;
 	}
 
 	private static void Track(uint processId, string path, IntPtr window)
@@ -165,7 +191,9 @@ internal static partial class ForegroundGame
 			return;
 		}
 		_trackedId = processId;
+		_trackedPath = path;
 		_tracked = new GameData(GameName(path, window), RefreshRate(window));
+		Log.Info($"Game detected: {_tracked.Name} ({path}, {_lastReason ?? "already followed"})");
 	}
 
 	private static GameData? TrackedGame(bool foreground)
@@ -173,6 +201,7 @@ internal static partial class ForegroundGame
 		// Signalled handle: the process has exited
 		if (_tracked is not null && WaitForSingleObject(_trackedProcess, 0) == WAIT_OBJECT_0)
 		{
+			Log.Info($"Game exited: {_tracked.Name}");
 			Untrack();
 		}
 		return _tracked is null || _tracked.Foreground == foreground ? _tracked : _tracked = _tracked with { Foreground = foreground };
@@ -186,6 +215,7 @@ internal static partial class ForegroundGame
 		}
 		_trackedProcess = IntPtr.Zero;
 		_trackedId = 0;
+		_trackedPath = null;
 		_tracked = null;
 	}
 
