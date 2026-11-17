@@ -441,11 +441,14 @@ puis affiche une ligne par processus et le total :
 
 Pour le scénario chargé, activer le **mode démo** depuis l'icône de notification pendant la mesure.
 
+Derniers résultats (processeur, carte graphique, mémoire, réseau) : [docs/performances.md](docs/performances.md).
+
 ## Modifier l'interface
 
 Ouvrir `src/ArkaHyte/wwwroot/index.html` dans un navigateur : sans l'application, la page
 passe en **mode design** avec des données simulées. Republier ensuite avec `dotnet publish`.
 
-Performances mesurées (`Measure-ArkaHyte.ps1` sur 120 s, 10/11/2026, affichage normal) : ~7 % d'un
-cœur (≈ 0,4 % du CPU total), ~1 % de GPU, ~150 Mo de RAM stables (hôte .NET ~20-45 Mo, le reste
-pour WebView2). Écrans éteints ou session verrouillée : rendu et capteurs en pause.
+Performances mesurées (1.7.2, 17/11/2026, usage réel sur 5 min) : ~9 % d'un cœur (≈ 0,6 % du CPU
+total), ~1 % de GPU, ~220 Mo de RAM (hôte .NET ~40 Mo, le reste pour WebView2), ~8 Mo de réseau par jour.
+Détail : [docs/performances.md](docs/performances.md). Écrans éteints ou session verrouillée : rendu et
+capteurs en pause.
