@@ -60,7 +60,8 @@ Au premier lancement, une fenêtre s'ouvre sur l'écran principal (ensuite : men
 9. **Apparence** : thème, couleur de sabre et fond de l'écran du boîtier (celui du thème ou une image personnelle),
    suivis en direct sur l'écran (voir [Thèmes](#thèmes)).
 10. **Disposition** : ordre des blocs de chaque vue et ceux à afficher (voir [Disposition](#disposition)).
-11. **Terminer** : écrit `%LOCALAPPDATA%\ArkaHyte\appsettings.json` (`SetupCompleted: true`) et redémarre l'affichage.
+11. **Maison** : page Home Assistant (adresse, jeton, entités affichées ; voir [Maison](#maison-home-assistant)).
+12. **Terminer** : écrit `%LOCALAPPDATA%\ArkaHyte\appsettings.json` (`SetupCompleted: true`) et redémarre l'affichage.
 
 « Passer l'assistant » ne change rien d'autre que `SetupCompleted` ; fermer la fenêtre le repropose
 au prochain démarrage.
@@ -91,6 +92,40 @@ Unreal Engine ou Unity (lanceur Epic et éditeurs exclus ; `DetectEngines: false
 le désactiver, absent de l'interface).
 Animation du changement de vue : `Transition` = `morph` (les widgets communs glissent à leur place, défaut),
 `slide` (balayage latéral), `fade` (fondu) ou `none` ; jauges et compteurs repartent de 0 ensuite.
+
+### Maison (Home Assistant)
+
+Page à gauche de la vue normale (balayage vers la droite, ou le premier point en bas de l'écran), présente une fois
+Home Assistant réglé dans Paramètres › **Maison** : adresse (`http://…:8123`), jeton d'accès longue durée (profil
+Home Assistant › Sécurité), puis les entités à afficher, cochées dans la liste de Home Assistant (recherche, filtres
+par type) et rangées par glisser-déposer. L'écran du boîtier suit en direct pendant le réglage.
+
+- Groupes libres : un groupe « Maison » est créé au premier ajout ; ensuite créer, renommer, supprimer, déplacer
+  les groupes, choisir 1 à 3 tuiles par ligne pour chacun et la largeur de chaque tuile (1 à 3 colonnes). Une
+  entité se déplace dans son groupe ou vers un autre par glisser-déposer. « + Ajouter » au pied d'un groupe ouvre la
+  liste des entités de Home Assistant (recherche, filtres) : cocher une ou plusieurs entités, « Ajouter » les place dans
+  ce groupe (celles déjà sur la page sont grisées). Séparateurs entre les groupes (« + Séparateur ») : hauteur en pixels (8 à 600),
+  trait lumineux en option, déplacés comme un groupe.
+- Toucher une lumière, une prise ou un ventilateur l'allume ou l'éteint (d'après ce qu'affiche la tuile) ; un volet a
+  ses boutons monter / stop / descendre ; une scène (pastille ronde, icône d'après son nom) se lance au toucher ; − / +
+  sur la tuile du chauffage change la consigne d'un demi-degré.
+- Appui long : réglages de la lumière (luminosité au doigt ; en premier ses favoris par leur nom, les effets que
+  Home Assistant lui connaît, comme les scènes enregistrées d'un Nanoleaf ; pour un groupe de lumières, une section
+  par lumière qui en a, le favori n'étant envoyé qu'à elle ; puis blancs chauds à froids et couleurs
+  selon l'ampoule ; le favori en cours s'affiche sous le nom de la tuile), du
+  volet (position au doigt, monter / stop / descendre) ou du chauffage (consigne, modes, préréglages). Toucher un
+  capteur numérique : sa courbe des 24 dernières heures (min, moyenne, max), lue dans l'historique de Home Assistant.
+- Capteurs (valeur et unité), portes, fenêtres et mouvements (couleur d'alerte quand ouvert ou en mouvement, depuis
+  combien de temps).
+- Icône de chaque tuile au choix (bouton « auto » devant l'entité) parmi 119 icônes rangées par type d'équipement
+  (éclairage, énergie, chauffage, ouvertures et sécurité, multimédia, électroménager, extérieur, scènes) ;
+  « Automatique » : celle du type d'entité, qui suit son état.
+- Mises à jour en direct (connexion WebSocket, rien tant que rien ne change) ; tuiles grisées si Home Assistant ne
+  répond plus, reconnexion automatique.
+
+Le jeton est chiffré pour la session Windows (`%LOCALAPPDATA%\ArkaHyte\home-token.bin`), jamais exporté avec la
+configuration : à ressaisir après une réinstallation. Réglage `Home` de `appsettings.json` : `Enabled`, `Url`,
+`Groups` (`Name`, `Columns`, `Tiles` : `Id`, `Span`, `Icon` ; séparateur : `Separator` = hauteur, `Line`).
 
 ### Disposition
 

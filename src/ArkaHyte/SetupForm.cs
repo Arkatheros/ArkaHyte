@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using ArkaHyte.Home;
 using ArkaHyte.Native;
 using ArkaHyte.Sensors;
 using Microsoft.Web.WebView2.Core;
@@ -52,6 +53,14 @@ public sealed class SetupForm : Form
 	/// </summary>
 	public event Action<LayoutSettings?, string?>? LayoutPreviewChanged;
 	private bool _layoutPreviewed;
+
+	/// <summary>
+	/// Home Assistant page being set up (address, entities, the token typed or null for the saved one), shown live
+	/// on the case screen, brought to the front while the Maison step is open (focus); null when the window
+	/// closes (back to the saved settings).
+	/// </summary>
+	public event Action<HomeSettings?, string?, bool>? HomePreviewChanged;
+	private bool _homePreviewed;
 
 	/// <param name="previewPath">Diagnostics: capture the page to this PNG and quit, never saving anything.</param>
 	public SetupForm(AppSettings settings, int startStep = 0, string? previewPath = null, EnergyMeter? energy = null)
@@ -182,6 +191,16 @@ public sealed class SetupForm : Form
 					AppearancePreviewChanged?.Invoke(BackgroundStore.ReadPreview(root, _settings.Background));
 				}
 				break;
+			case "homeRead":
+				_ = ReadHomeAsync(ReadString(root, "url"), ReadString(root, "token"));
+				break;
+			case "previewHome":
+				if (_previewPath is null && SensorSettings.ReadHome(root) is { } home)
+				{
+					_homePreviewed = true;
+					HomePreviewChanged?.Invoke(home, NullIfBlank(ReadString(root, "token")), root.TryGetProperty("focus", out var focus) && focus.ValueKind == JsonValueKind.True);
+				}
+				break;
 			case "previewLayout":
 				if (_previewPath is null && SensorSettings.ReadLayout(root) is { } layout)
 				{
@@ -309,6 +328,14 @@ public sealed class SetupForm : Form
 			weather = _settings.Weather,
 			gameView = _settings.EffectiveGameView,
 			layout = _settings.EffectiveLayout,
+			// The token itself never goes back to the page: only whether one is saved
+			home = new
+			{
+				enabled = _settings.Home?.Enabled ?? false,
+				url = _settings.Home?.Url ?? string.Empty,
+				hasToken = HomeToken.Exists,
+				groups = _settings.Home?.EffectiveGroups ?? []
+			},
 			energy = _settings.EffectiveEnergy,
 			background = BackgroundState(_settings.Background),
 			// Appearance step: swatches, and what "the theme's colours" means now
@@ -389,6 +416,21 @@ public sealed class SetupForm : Form
 	public void GoToStep(int step) => Post(new { type = "goto", step });
 
 	private static string? ReadId(JsonElement message) => ReadString(message, "id");
+
+	private static string? NullIfBlank(string? text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+
+	/// <summary>Maison step: checks the address and token (the one typed, or the saved one) and lists the entities.</summary>
+	private async Task ReadHomeAsync(string? url, string? token)
+	{
+		token = NullIfBlank(token) ?? HomeToken.Load();
+		if (string.IsNullOrWhiteSpace(url) || token is null)
+		{
+			Post(new { type = "homeCatalog", ok = false, error = token is null ? "token" : "address" });
+			return;
+		}
+		var result = await Task.Run(() => HomeCatalog.ReadAsync(url, token));
+		Post(new { type = "homeCatalog", ok = result.Ok, version = result.Version, areas = result.Areas, entities = result.Entities, error = result.Error });
+	}
 
 	private static string? ReadString(JsonElement message, string name) =>
 		message.TryGetProperty(name, out var element) && element.ValueKind == JsonValueKind.String ? element.GetString() : null;
@@ -620,6 +662,12 @@ public sealed class SetupForm : Form
 			SensorSettings.ApplyWeather(root, message);
 			SensorSettings.ApplyGameView(root, message);
 			SensorSettings.ApplyLayout(root, message);
+			SensorSettings.ApplyHome(root, message);
+			// Encrypted beside the settings, only when typed (an empty field keeps the saved one)
+			if (NullIfBlank(ReadString(message, "homeToken")) is { } token)
+			{
+				HomeToken.Save(token);
+			}
 			SensorSettings.ApplyCustomActions(root, message);
 			SensorSettings.ApplyEnergy(root, message);
 			// The page sets the theme's palette when a theme is chosen; another one may be chosen after it
@@ -648,6 +696,10 @@ public sealed class SetupForm : Form
 		if (_layoutPreviewed)
 		{
 			LayoutPreviewChanged?.Invoke(null, null);
+		}
+		if (_homePreviewed)
+		{
+			HomePreviewChanged?.Invoke(null, null, false);
 		}
 		// Pictures picked but never saved, renderings replaced since
 		if (_previewPath is null)

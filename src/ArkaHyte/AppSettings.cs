@@ -215,6 +215,65 @@ public sealed record LayoutSettings(IReadOnlyList<LayoutBand>? Normal = null, IR
 
 public sealed record LayoutBand(string Id, bool Show = true);
 
+/// <summary>
+/// Home Assistant page (left of the normal view): server address and the groups of tiles, in order, each with
+/// its number of tiles per row (1 to 3) and its tiles (an entity and how many columns it spans, 1 to 3).
+/// Entities: the first format (a flat list), read once as a single "Maison" group. The access token is kept
+/// apart, encrypted for the Windows user (<see cref="Home.HomeToken"/>).
+/// </summary>
+public sealed record HomeSettings(bool Enabled = false, string Url = "", IReadOnlyList<HomeGroup>? Groups = null, IReadOnlyList<HomeEntity>? Entities = null)
+{
+	public const int MaxEntities = 120;
+	public const int MaxGroups = 20;
+	public const int MaxColumns = 3;
+	public const int MaxNameLength = 40;
+	public const string DefaultGroupName = "Maison";
+	public const int MinSeparator = 8;
+	public const int MaxSeparator = 600;
+
+	/// <summary>The groups as shown: columns and spans brought in range, each entity once, the old flat list as one group.</summary>
+	public IReadOnlyList<HomeGroup> EffectiveGroups
+	{
+		get
+		{
+			var source = Groups ?? (Entities is { Count: > 0 } legacy
+				? [new HomeGroup(DefaultGroupName, MaxColumns, legacy.Select(e => new HomeTile(e.Id, e.Wide ? 2 : 1)).ToList())]
+				: []);
+			var seen = new HashSet<string>();
+			var groups = new List<HomeGroup>();
+			foreach (var group in source.Take(MaxGroups))
+			{
+				// A separator: its height only (and its line), no name, no tiles
+				if (group.Separator is { } height)
+				{
+					groups.Add(new HomeGroup(string.Empty, 1, [], Math.Clamp(height, MinSeparator, MaxSeparator), group.Line));
+					continue;
+				}
+				var columns = Math.Clamp(group.Columns, 1, MaxColumns);
+				var tiles = (group.Tiles ?? [])
+					.Where(t => !string.IsNullOrWhiteSpace(t.Id) && seen.Count < MaxEntities && seen.Add(t.Id))
+					.Select(t => t with { Span = Math.Clamp(t.Span, 1, columns) })
+					.ToList();
+				var name = string.IsNullOrWhiteSpace(group.Name) ? DefaultGroupName : group.Name.Trim();
+				groups.Add(new HomeGroup(name.Length > MaxNameLength ? name[..MaxNameLength] : name, columns, tiles));
+			}
+			return groups;
+		}
+	}
+
+	/// <summary>Every entity shown, in page order.</summary>
+	public IEnumerable<string> EntityIds => EffectiveGroups.SelectMany(g => g.Tiles ?? []).Select(t => t.Id);
+}
+
+/// <summary>A group of tiles, or a separator (Separator: its height in pixels; Line: a rule drawn across it).</summary>
+public sealed record HomeGroup(string Name, int Columns = 3, IReadOnlyList<HomeTile>? Tiles = null, int? Separator = null, bool Line = false);
+
+/// <summary>A tile: its entity, the columns it spans, and an icon chosen in the settings (js/home-icons.js name; none: automatic).</summary>
+public sealed record HomeTile(string Id, int Span = 1, string? Icon = null);
+
+/// <summary>First format of the page's entities (one flat list), still read.</summary>
+public sealed record HomeEntity(string Id, string? Area = null, bool Wide = false);
+
 /// <summary>Game added by hand: executable file name ("TFTClient-Win64-Shipping.exe") and the name shown.</summary>
 public sealed record GameEntry(string Exe, string Name = "");
 
@@ -311,7 +370,8 @@ public sealed record AppSettings(
 	IReadOnlyList<CustomAction>? CustomActions = null,
 	EnergySettings? Energy = null,
 	BackgroundSettings? Background = null,
-	LayoutSettings? Layout = null)
+	LayoutSettings? Layout = null,
+	HomeSettings? Home = null)
 {
 	public GameViewSettings EffectiveGameView => GameView ?? new GameViewSettings();
 

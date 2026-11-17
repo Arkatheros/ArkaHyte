@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using ArkaHyte.Home;
 using ArkaHyte.Native;
 using ArkaHyte.Sensors;
 using Microsoft.Web.WebView2.Core;
@@ -38,6 +39,7 @@ public sealed class DisplayForm : Form
 	private readonly System.Windows.Forms.Timer _placementRetry = new() { Interval = 5000 };
 	private readonly SpeedTest _speedTest = new();
 	private readonly WeatherService _weather = new();
+	private readonly HomeAssistantClient _home = new();
 	// Volume, microphone and default output (audio controls of the now playing widget)
 	private readonly Audio.AudioService _audio = new();
 	private bool _audioStarted;
@@ -97,9 +99,11 @@ public sealed class DisplayForm : Form
 		}
 
 		_weather.Updated += data => PostToUiThread(() => PostWeather(data));
+		_home.Updated += json => PostToUiThread(() => PostJson(json));
 		if (options.ScreenshotPath is null)
 		{
 			_weather.Configure(settings.Weather);
+			_home.Configure(settings.Home, HomeToken.Load());
 		}
 
 		_placementRetry.Tick += (_, _) => PlaceOnCaseDisplay(showIfFound: true);
@@ -174,6 +178,14 @@ public sealed class DisplayForm : Form
 		_setup.LayoutPreviewChanged += (layout, view) => Post(layout is null
 			? new { type = "layoutPreview", end = true }
 			: (object)new { type = "layoutPreview", layout, view });
+		// Home Assistant page as set up in the Maison step; null: back to the saved settings
+		_setup.HomePreviewChanged += (home, token, focus) =>
+		{
+			_home.Configure(home ?? _settings.Home, token ?? HomeToken.Load());
+			Post(home is null
+				? new { type = "homePreview", end = true }
+				: (object)new { type = "homePreview", home = HomeConfig(home, token is not null || HomeToken.Exists), focus });
+		};
 		_setup.FormClosed += (_, _) => _setup = null;
 		_setup.Show();
 		_setup.Activate();
@@ -298,6 +310,7 @@ public sealed class DisplayForm : Form
 			return;
 		}
 		_hub.Paused = !active;
+		_home.Paused = !active;
 		_webView.Visible = active;
 		if (_webView.CoreWebView2 is { } core)
 		{
@@ -479,6 +492,12 @@ public sealed class DisplayForm : Form
 				_touchGuard.ReturnCursorNow();
 				OpenSetup(ReadString(root, "step") == "energy" ? SetupForm.EnergyStep : SetupForm.ShortcutsStep);
 				break;
+			case "homeCall":
+				_ = CallHomeAsync(root);
+				break;
+			case "homeHistory":
+				_ = SendHomeHistoryAsync(ReadString(root, "entityId") ?? string.Empty);
+				break;
 			case "energyHistory":
 				Post(_hub.Energy.History());
 				break;
@@ -540,6 +559,43 @@ public sealed class DisplayForm : Form
 		}
 	}
 
+	/// <summary>What the page needs to build the Maison page: shown or not, the groups and their tiles (states come by "home").</summary>
+	private static object HomeConfig(HomeSettings? home, bool hasToken) => new
+	{
+		enabled = home is { Enabled: true } && !string.IsNullOrWhiteSpace(home.Url) && hasToken && home.EntityIds.Any(),
+		groups = home?.EffectiveGroups ?? []
+	};
+
+	/// <summary>A sensor's curve asked for by its panel: the 24 h history, or { failed } when it cannot be read.</summary>
+	private async Task SendHomeHistoryAsync(string entityId)
+	{
+		var json = await _home.HistoryAsync(entityId);
+		if (json is null)
+		{
+			Post(new { type = "homeHistory", entityId, failed = true });
+		}
+		else
+		{
+			PostJson(json);
+		}
+	}
+
+	/// <summary>Tap on a Maison tile: { domain, service, entityId, data }; the result comes back through the subscription.</summary>
+	private async Task CallHomeAsync(JsonElement root)
+	{
+		var domain = ReadString(root, "domain") ?? string.Empty;
+		var service = ReadString(root, "service") ?? string.Empty;
+		var entityId = ReadString(root, "entityId") ?? string.Empty;
+		var data = root.TryGetProperty("data", out var dataElement) && dataElement.ValueKind == JsonValueKind.Object
+			? System.Text.Json.Nodes.JsonNode.Parse(dataElement.GetRawText())?.AsObject()
+			: null;
+		if (!await _home.CallAsync(domain, service, entityId, data))
+		{
+			Post(new { type = "homeCallFailed", entityId });
+			Post(new { type = "toast", text = "Commande refusée par Home Assistant" });
+		}
+	}
+
 	private static string? ReadString(JsonElement root, string name) =>
 		root.TryGetProperty(name, out var element) && element.ValueKind == JsonValueKind.String ? element.GetString() : null;
 
@@ -556,6 +612,7 @@ public sealed class DisplayForm : Form
 		SendConfig();
 		PostUpdateState(_updater.State);
 		PostWeather(_weather.Latest);
+		_home.SendAll();
 		_ = Task.Run(() =>
 		{
 			if (!_audioStarted)
@@ -606,6 +663,7 @@ public sealed class DisplayForm : Form
 			},
 			gameView = _settings.EffectiveGameView,
 			layout = _settings.EffectiveLayout,
+			home = HomeConfig(_settings.Home, HomeToken.Exists),
 			// Offered by the dock editor next to the system actions
 			customActions = (_settings.CustomActions ?? []).Select(a => new { id = a.Id, name = a.Name, kind = a.Kind }),
 			cpuDetails = _settings.CpuDetails,
@@ -692,6 +750,7 @@ public sealed class DisplayForm : Form
 		{
 			_weather.Configure(_settings.Weather);
 		}
+		_home.Configure(_settings.Home, HomeToken.Load());
 		_dockButtons = null;
 		SendConfig();
 	}
@@ -857,6 +916,7 @@ public sealed class DisplayForm : Form
 			Microsoft.Win32.SystemEvents.SessionSwitch -= OnSessionSwitch;
 			_speedTestRun?.Cancel();
 			_weather.Dispose();
+			_home.Dispose();
 			_audio.Dispose();
 			_tray?.Dispose();
 			_setup?.Dispose();

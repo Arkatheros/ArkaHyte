@@ -321,6 +321,72 @@ public static class SensorSettings
 		}
 	}
 
+	/// <summary>
+	/// home: { enabled, url, groups: [{ name, columns, tiles: [{ id, span }] }] } from the Maison step; null when
+	/// absent. Ranges and duplicates are settled by <see cref="HomeSettings.EffectiveGroups"/>. The token travels
+	/// beside it ("homeToken") and is stored encrypted, never here.
+	/// </summary>
+	public static HomeSettings? ReadHome(JsonElement message)
+	{
+		if (!message.TryGetProperty("home", out var home) || home.ValueKind != JsonValueKind.Object)
+		{
+			return null;
+		}
+		var url = home.TryGetProperty("url", out var urlElement) && urlElement.ValueKind == JsonValueKind.String ? urlElement.GetString()!.Trim() : string.Empty;
+		if (url.Length > 300 || (url.Length > 0 && !(Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https")))
+		{
+			url = string.Empty;
+		}
+		var groups = new List<HomeGroup>();
+		if (home.TryGetProperty("groups", out var list) && list.ValueKind == JsonValueKind.Array)
+		{
+			foreach (var group in list.EnumerateArray())
+			{
+				if (group.ValueKind != JsonValueKind.Object)
+				{
+					continue;
+				}
+				var name = group.TryGetProperty("name", out var nameElement) && nameElement.ValueKind == JsonValueKind.String ? nameElement.GetString()! : string.Empty;
+				var columns = group.TryGetProperty("columns", out var columnsElement) && columnsElement.TryGetInt32(out var c) ? c : HomeSettings.MaxColumns;
+				var tiles = new List<HomeTile>();
+				if (group.TryGetProperty("tiles", out var tileList) && tileList.ValueKind == JsonValueKind.Array)
+				{
+					foreach (var tile in tileList.EnumerateArray())
+					{
+						var id = tile.ValueKind == JsonValueKind.Object && tile.TryGetProperty("id", out var idElement) && idElement.ValueKind == JsonValueKind.String ? idElement.GetString()! : string.Empty;
+						// domain.object_id, as Home Assistant writes them
+						if (id.Length is 0 or > 255 || id.Count(ch => ch == '.') != 1)
+						{
+							continue;
+						}
+						var span = tile.TryGetProperty("span", out var spanElement) && spanElement.TryGetInt32(out var sp) ? sp : 1;
+						// An icon name of js/home-icons.js (lower case and dashes), or none for the automatic one
+						var icon = tile.TryGetProperty("icon", out var iconElement) && iconElement.ValueKind == JsonValueKind.String ? iconElement.GetString() : null;
+						if (icon is not null && (icon.Length > 40 || !icon.All(ch => ch is (>= 'a' and <= 'z') or (>= '0' and <= '9') or '-')))
+						{
+							icon = null;
+						}
+						tiles.Add(new HomeTile(id, span, string.IsNullOrEmpty(icon) ? null : icon));
+					}
+				}
+				// A separator ({ separator: height, line }) carries no name or tiles
+				int? separator = group.TryGetProperty("separator", out var separatorElement) && separatorElement.TryGetInt32(out var height) ? height : null;
+				var line = group.TryGetProperty("line", out var lineElement) && lineElement.ValueKind == JsonValueKind.True;
+				groups.Add(separator is null ? new HomeGroup(name, columns, tiles) : new HomeGroup(string.Empty, 1, [], separator, line));
+			}
+		}
+		var enabled = home.TryGetProperty("enabled", out var enabledElement) && enabledElement.ValueKind == JsonValueKind.True;
+		return new HomeSettings(enabled, url, new HomeSettings(Groups: groups).EffectiveGroups);
+	}
+
+	public static void ApplyHome(JsonObject root, JsonElement message)
+	{
+		if (ReadHome(message) is { } home)
+		{
+			root["Home"] = JsonSerializer.SerializeToNode(home);
+		}
+	}
+
 	public static void ApplyLayout(JsonObject root, JsonElement message)
 	{
 		if (ReadLayout(message) is { } layout)

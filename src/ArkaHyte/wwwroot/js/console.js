@@ -2048,25 +2048,34 @@
 		fade: { outMs: 260, inMs: 420 }
 	};
 
-	function switchView(showGame) {
+	// The pages in swipe order: Maison (when set up) on the left, the game view on the right
+	const VIEW_ORDER = ['home', 'normal', 'game'];
+	const shownView = () => (frame.classList.contains('game') ? 'game' : frame.classList.contains('home') ? 'home' : 'normal');
+
+	function setViewClasses(view) {
+		frame.classList.toggle('game', view === 'game');
+		frame.classList.toggle('home', view === 'home');
+	}
+
+	function switchView(view) {
 		cancelViewChange();
-		const wasGame = frame.classList.contains('game');
-		if (wasGame === showGame) {
+		const was = shownView();
+		if (was === view) {
 			return;
 		}
 		const kind = VIEW_TRANSITIONS[gameViewConfig.transition] ? gameViewConfig.transition : gameViewConfig.transition === 'none' ? 'none' : 'morph';
 		if (!motion || kind === 'none') {
-			frame.classList.toggle('game', showGame);
+			setViewClasses(view);
 			return;
 		}
 		const timing = VIEW_TRANSITIONS[kind];
-		// Slide: towards the game view the page goes left, back to the normal view it goes right
-		const direction = showGame ? 1 : -1;
+		// Slide: towards a page on the right the view goes left, towards one on the left it goes right
+		const direction = VIEW_ORDER.indexOf(view) > VIEW_ORDER.indexOf(was) ? 1 : -1;
 		const before = new Map(viewWidgets.filter(isShown).map((element) => [element, viewBox(element)]));
 		// Widgets the new view keeps: a trial switch, undone before anything is painted
-		frame.classList.toggle('game', showGame);
+		setViewClasses(view);
 		const kept = new Set(viewWidgets.filter(isShown));
-		frame.classList.toggle('game', wasGame);
+		setViewClasses(was);
 		const change = { timer: 0, animations: [] };
 		viewChange = change;
 		const leaving = kind === 'morph' ? [...before.keys()].filter((element) => !kept.has(element)) : [...before.keys()];
@@ -2079,7 +2088,7 @@
 		change.timer = setTimeout(() => {
 			change.animations.forEach((animation) => animation.cancel());
 			change.animations = [];
-			frame.classList.toggle('game', showGame);
+			setViewClasses(view);
 			for (const element of viewWidgets) {
 				if (!isShown(element)) {
 					continue;
@@ -2233,6 +2242,893 @@
 		applyView();
 	}
 
+	// ---------- Maison: Home Assistant page, left of the normal view ----------
+	// config.home { enabled, groups: [{ name, columns, tiles: [{ id, span }] }] } builds the groups of tiles,
+	// chosen and named in the settings (1 to 3 tiles per row, each tile 1 to 3 columns wide); "home" messages
+	// bring the states ({ status, full, entities: { id: { state, attrs, changed } }, removed }). Tiles are only
+	// written while the page shows: changes made meanwhile are marked and painted when it comes back. A tap
+	// sends homeCall; the tile stays dimmed until the new state comes back (3 s at most).
+	const HOME_PENDING_MS = 3000;
+	const HOME_TOGGLES = ['light', 'switch', 'fan', 'input_boolean'];
+	// Group heading icon, from its name
+	const HOME_GROUP_ICONS = [
+		[/sc[eè]ne|script|ambiance/i, 'h-scene'], [/chambre|bed|nuit/i, 'h-bed'], [/bureau|office|desk/i, 'h-desk'],
+		[/cuisine|kitchen/i, 'h-kitchen'], [/bain|douche|bath|wc|toilet/i, 'h-bath'], [/volet|store|shutter|blind/i, 'h-blinds'],
+		[/chauffage|climat|heat/i, 'h-thermo'], [/lumi[eè]re|[ée]clairage|light/i, 'h-bulb'],
+		[/entr[ée]e|hall|couloir|garage/i, 'h-key'], [/jardin|ext[ée]rieur|terrasse|garden|outdoor/i, 'h-tree']
+	];
+	const home = {
+		config: { enabled: false, groups: [] },
+		// Being set up in the settings (shown live)
+		preview: null,
+		status: 'off',
+		version: '',
+		states: new Map(),
+		tiles: new Map(),
+		dirty: new Set(),
+		built: '',
+		pending: new Map()
+	};
+	// The Maison step of the settings is open: the page shows meanwhile
+	let homeFocus = false;
+	const homeSetup = () => home.preview || home.config;
+	const homeEnabled = () => homeSetup().enabled === true;
+	const homeDomain = (id) => id.slice(0, id.indexOf('.'));
+	const homeShown = () => currentView === 'home';
+	const homeTileCount = () => homeSetup().groups.reduce((sum, group) => sum + (group.tiles || []).length, 0);
+	const readHomeSetup = (home_) => ({ enabled: home_.enabled === true, groups: Array.isArray(home_.groups) ? home_.groups : [] });
+
+	function applyHomeConfig(config) {
+		home.config = readHomeSetup(config);
+		if (!home.preview) {
+			homeChanged();
+		}
+	}
+
+	function applyHomePreview(message) {
+		if (message.end) {
+			home.preview = null;
+			homeFocus = false;
+		} else {
+			home.preview = readHomeSetup(message.home);
+			homeFocus = message.focus === true;
+		}
+		homeChanged();
+	}
+
+	// Setup changed: page dot, groups, and the view (the page goes when Home Assistant is no longer set up)
+	function homeChanged() {
+		$('homeDot').hidden = !homeEnabled();
+		buildHome();
+		applyView();
+	}
+
+	function onHomeMessage(message) {
+		const statusChanged = message.status !== home.status;
+		home.status = message.status || 'off';
+		home.version = message.version || '';
+		if (message.full) {
+			home.states.clear();
+			home.tiles.forEach((tile, id) => home.dirty.add(id));
+		}
+		for (const [id, state] of Object.entries(message.entities || {})) {
+			home.states.set(id, state);
+			home.dirty.add(id);
+			settleHomeCall(id);
+		}
+		for (const id of message.removed || []) {
+			home.states.delete(id);
+			home.dirty.add(id);
+		}
+		if (statusChanged || message.full) {
+			renderHomeStatus();
+		}
+		if (homeShown()) {
+			paintHome();
+		}
+		// The open panel follows its entity, and the lights of its group (their favourite playing)
+		const watched = homePanel.watch || new Set([homePanel.id]);
+		if (homePanel.id && (message.full || Object.keys(message.entities || {}).some((key) => watched.has(key)))) {
+			renderHomePanel();
+		}
+	}
+
+	function renderHomeStatus() {
+		const link = $('homeLink');
+		const [label, level] = {
+			connected: [`Home Assistant${home.version ? ' ' + home.version : ''} · connecté`, 'connected'],
+			connecting: ['Home Assistant · connexion…', ''],
+			offline: ['Home Assistant injoignable', 'alert'],
+			unauthorized: ['Jeton refusé par Home Assistant', 'alert']
+		}[home.status] || ['Home Assistant', ''];
+		text('homeLinkText', label);
+		link.classList.toggle('connected', level === 'connected');
+		link.classList.toggle('alert', level === 'alert');
+		$('homeBody').classList.toggle('stale', home.status !== 'connected');
+		const count = homeTileCount();
+		text('homeCount', count ? `${count} entité${count > 1 ? 's' : ''} suivie${count > 1 ? 's' : ''}` : ' ');
+	}
+
+	function svgUse(symbol) {
+		const svg = document.createElementNS(SVG_NS, 'svg');
+		const use = document.createElementNS(SVG_NS, 'use');
+		use.setAttribute('href', `#${symbol}`);
+		svg.append(use);
+		return svg;
+	}
+
+	function homeNode(tag, className, parent) {
+		const node = document.createElement(tag);
+		if (className) {
+			node.className = className;
+		}
+		parent?.append(node);
+		return node;
+	}
+
+	function homeButton(parent, content, onPress) {
+		const button = homeNode('button', '', parent);
+		button.type = 'button';
+		if (typeof content === 'string') {
+			button.textContent = content;
+		} else {
+			button.append(content);
+		}
+		button.addEventListener('click', (event) => {
+			event.stopPropagation();
+			onPress();
+		});
+		return button;
+	}
+
+	const groupIcon = (name) => (HOME_GROUP_ICONS.find(([pattern]) => pattern.test(name)) || [null, 'h-home'])[1];
+	// Scene icon, from its name (Home Assistant's own icons are not shipped)
+	const HOME_SCENE_ICONS = [
+		[/cin[eé]ma|film|t[eé]l[eé]|tv|movie/i, 'h-film'], [/nuit|night|dodo|coucher|sleep/i, 'h-moon'],
+		[/d[eé]part|absen|sortie|away|leave/i, 'h-out'], [/r[eé]veil|matin|morning|wake/i, 'h-sunrise']
+	];
+	const sceneIcon = (name) => (HOME_SCENE_ICONS.find(([pattern]) => pattern.test(name)) || [null, 'h-scene'])[1];
+
+	// Groups and tiles, rebuilt only when the setup changes
+	function buildHome() {
+		const groups = homeSetup().groups;
+		const key = JSON.stringify(groups);
+		if (key === home.built) {
+			return;
+		}
+		home.built = key;
+		const body = $('homeBody');
+		body.textContent = '';
+		home.tiles.clear();
+		if (!homeTileCount()) {
+			homeNode('div', 'home-empty', body).textContent = 'Aucune entité choisie (Paramètres › Maison)';
+			renderHomeStatus();
+			return;
+		}
+		for (const group of groups) {
+			// Separator: a space of its own height, a rule across it if asked
+			if (isNum(group.separator)) {
+				const separator = homeNode('div', `home-separator${group.line ? ' line' : ''}`, body);
+				separator.style.height = `${clamp(group.separator, 8, 600)}px`;
+				continue;
+			}
+			const tiles = group.tiles || [];
+			if (!tiles.length) {
+				continue;
+			}
+			const columns = clamp(Math.round(group.columns) || 3, 1, 3);
+			const section = homeNode('section', 'home-room', body);
+			const head = homeNode('div', 'home-room-head', section);
+			head.append(svgUse(groupIcon(group.name || '')));
+			homeNode('span', 'home-room-name', head).textContent = group.name || 'Maison';
+			homeNode('span', 'rule', head);
+			const grid = homeNode('div', 'home-tiles', section);
+			grid.style.setProperty('--cols', columns);
+			for (const entry of tiles) {
+				const span = clamp(Math.round(entry.span) || 1, 1, columns);
+				// Wide layout (name beside the icon, big reading) from two thirds of the row up
+				buildTile(grid, entry.id, span, span / columns >= 2 / 3, entry.icon);
+			}
+		}
+		home.tiles.forEach((tile, id) => home.dirty.add(id));
+		renderHomeStatus();
+		if (homeShown()) {
+			paintHome();
+		}
+	}
+
+	// Skeleton per kind: icon, value (top right), name, line under it; a bar for lights, buttons for shutters
+	// (up, stop, down) and heating (- / +). Wide tiles put the name beside the icon and a big reading under it.
+	function buildTile(grid, id, span, wide, iconName) {
+		const chosen = chosenIcon(iconName);
+		const domain = homeDomain(id);
+		const kind = domain === 'scene' || domain === 'script' ? 'scene'
+			: domain === 'climate' ? 'climate'
+				: domain === 'cover' ? 'cover'
+					: domain === 'sensor' ? 'sensor'
+						: domain === 'binary_sensor' ? 'binary'
+							: domain === 'light' ? 'light' : 'toggle';
+		if (kind === 'scene') {
+			const button = homeNode('div', 'home-scene', grid);
+			button.style.gridColumn = `span ${span}`;
+			const icon = chosen || svgUse('h-scene');
+			homeNode('span', 'disc', button).append(icon);
+			home.tiles.set(id, { id, domain, kind, element: button, icon: icon.firstChild, iconName: '', fixedIcon: Boolean(chosen), name: homeNode('span', 'label-text', button) });
+			button.addEventListener('click', () => callHome(id, 'turn_on'));
+			return;
+		}
+		const element = homeNode('div', `home-tile ${kind}${wide ? ' wide' : ''}`, grid);
+		element.style.gridColumn = `span ${span}`;
+		const top = homeNode('div', 'top', element);
+		const icon = chosen || svgUse('h-dot');
+		top.append(icon);
+		const tile = { id, domain, kind, wide, element, icon: icon.firstChild, iconName: '', fixedIcon: Boolean(chosen) };
+		if (wide) {
+			tile.name = homeNode('span', 'name', top);
+			tile.reading = homeNode('div', 'big-reading', element);
+			tile.readingValue = homeNode('span', '', tile.reading);
+			tile.readingUnit = homeNode('small', '', tile.reading);
+		} else {
+			const value = homeNode('span', 'value', top);
+			tile.valueNumber = homeNode('span', '', value);
+			tile.valueUnit = homeNode('small', '', value);
+			tile.name = homeNode('div', 'name', element);
+		}
+		if (kind === 'climate') {
+			// Wide: set point on the right under its caption; narrow: "- 21 °C +" under the name
+			const setpoint = homeNode('div', 'home-setpoint', element);
+			homeNode('span', 'caption', setpoint).textContent = 'CONSIGNE';
+			const target = homeNode('span', 'target', setpoint);
+			tile.targetNumber = homeNode('span', '', target);
+			tile.targetUnit = homeNode('small', '', target);
+			const steps = homeNode('div', 'home-steps', setpoint);
+			homeButton(steps, '−', () => stepTemperature(tile, -1)).classList.add('minus');
+			homeButton(steps, '+', () => stepTemperature(tile, 1)).classList.add('plus');
+			tile.mode = homeNode('div', 'home-mode', element);
+			tile.mode.append(svgUse('h-flame'));
+			tile.modeText = homeNode('span', '', tile.mode);
+		} else if (kind === 'cover') {
+			const actions = homeNode('div', 'home-actions', element);
+			homeButton(actions, svgUse('h-up'), () => callHome(id, 'open_cover')).setAttribute('aria-label', 'Ouvrir');
+			homeButton(actions, svgUse('h-stop'), () => callHome(id, 'stop_cover')).setAttribute('aria-label', 'Arrêter');
+			homeButton(actions, svgUse('h-down'), () => callHome(id, 'close_cover')).setAttribute('aria-label', 'Fermer');
+		} else {
+			tile.sub = homeNode('div', 'sub', element);
+		}
+		if (kind === 'light' && !wide) {
+			tile.bar = homeNode('b', '', homeNode('div', 'bar', element));
+		}
+		// Lights, shutters and heating open their settings on a long press; a sensor its curve on a tap
+		if (kind === 'light' || kind === 'cover' || kind === 'climate') {
+			attachLongPress(element, () => openHomePanel(id));
+		} else if (kind === 'sensor') {
+			element.classList.add('tappable');
+			element.addEventListener('click', () => openHomePanel(id));
+		}
+		if (HOME_TOGGLES.includes(domain)) {
+			element.classList.add('tappable');
+			// What the tile shows decides: off → turn on, on → turn off. A toggle would act on Home Assistant's
+			// idea of the state, which a device can contradict (a first tap then seemed to do nothing).
+			element.addEventListener('click', () => {
+				const entry = home.states.get(id);
+				callHome(id, entry && entry.state === 'on' ? 'turn_off' : 'turn_on');
+			});
+		}
+		home.tiles.set(id, tile);
+	}
+
+	function paintHome() {
+		for (const id of home.dirty) {
+			const tile = home.tiles.get(id);
+			if (tile) {
+				renderHomeTile(tile);
+			}
+		}
+		home.dirty.clear();
+	}
+
+	const homeNumber = (value, digits) => (isNum(value) ? (digits ? nf1.format(value) : nf0(value)) : '--');
+
+	// "· 12 min" style age of the last change, for doors, windows and motion
+	function homeAge(changed) {
+		if (!isNum(changed) || changed <= 0) {
+			return '';
+		}
+		const minutes = Math.max(0, Math.round((Date.now() / 1000 - changed) / 60));
+		return minutes < 1 ? ' · à l’instant' : minutes < 60 ? ` · ${minutes} min` : minutes < 1440 ? ` · ${Math.round(minutes / 60)} h` : '';
+	}
+
+	// Icon chosen in the settings (js/home-icons.js) drawn as is; null: the automatic one, set by state
+	function chosenIcon(name) {
+		const shape = name && (window.HOME_ICONS || {})[name];
+		if (!shape) {
+			return null;
+		}
+		const svg = document.createElementNS(SVG_NS, 'svg');
+		svg.setAttribute('viewBox', '0 0 24 24');
+		svg.innerHTML = shape;
+		return svg;
+	}
+
+	function setTileIcon(tile, name) {
+		if (tile.fixedIcon) {
+			return;
+		}
+		if (tile.iconName !== name) {
+			tile.iconName = name;
+			tile.icon.setAttribute('href', `#${name}`);
+		}
+	}
+
+	// The tile's main figure: big reading on a wide tile, top right otherwise
+	// words: a short text ("Monte…") rather than a figure, set smaller than the figures
+	function setTileValue(tile, value, unit, words = false) {
+		setText(tile.wide ? tile.readingValue : tile.valueNumber, value);
+		setText(tile.wide ? tile.readingUnit : tile.valueUnit, value === '' ? '' : unit);
+		(tile.wide ? tile.reading : tile.valueNumber.parentElement).classList.toggle('words', words);
+	}
+
+	function renderHomeTile(tile) {
+		const entry = home.states.get(tile.id);
+		const state = entry ? entry.state : 'unavailable';
+		const attrs = entry ? entry.attrs || {} : {};
+		const name = attrs.friendly_name || tile.id;
+		const missing = state === 'unavailable' || state === 'unknown';
+		const toggle = (element, className, on) => element.classList.toggle(className, on);
+		setText(tile.name, name);
+		toggle(tile.element, 'unavailable', missing);
+		if (tile.kind === 'scene') {
+			setTileIcon(tile, sceneIcon(name));
+			toggle(tile.element, 'running', tile.domain === 'script' && state === 'on');
+			return;
+		}
+		let on = false;
+		let alert = false;
+		const deviceClass = attrs.device_class || '';
+		switch (tile.kind) {
+			case 'light': {
+				const level = isNum(attrs.brightness) ? (attrs.brightness / 255) * 100 : null;
+				on = state === 'on';
+				setTileIcon(tile, 'h-bulb');
+				setTileValue(tile, on && isNum(level) ? `${Math.round(level)}` : '', '%');
+				if (tile.bar) {
+					setStyle(tile.bar, 'width', `${on ? (isNum(level) ? clamp(level, 0, 100) : 100) : 0}%`);
+				}
+				// The favourite playing, when there is one (Nanoleaf and other lights with effects)
+				const effect = on && typeof attrs.effect === 'string' && attrs.effect && !/^(none|solid)$/i.test(attrs.effect) ? attrs.effect : '';
+				setText(tile.sub, missing ? 'Indisponible' : on ? (effect || 'Allumée') : 'Éteinte');
+				break;
+			}
+			case 'cover': {
+				const position = attrs.current_position;
+				on = state === 'open' || state === 'opening' || (isNum(position) && position > 0);
+				// Down or up, as it stands
+				setTileIcon(tile, on ? 'h-shutter-open' : 'h-shutter-closed');
+				const words = { open: 'Ouvert', closed: 'Fermé', opening: 'Monte…', closing: 'Descend…' };
+				// Moving: says so; still: its position, or open / closed when it has none
+				const moving = state === 'opening' || state === 'closing';
+				if (missing || moving || !isNum(position)) {
+					setTileValue(tile, missing ? '--' : words[state] || state, '', !missing);
+				} else {
+					setTileValue(tile, `${Math.round(position)}`, '%');
+				}
+				break;
+			}
+			case 'toggle': {
+				on = state === 'on';
+				setTileIcon(tile, tile.domain === 'fan' ? 'h-fan' : tile.domain === 'input_boolean' ? 'h-toggle' : 'h-plug');
+				setTileValue(tile, tile.domain === 'fan' && on && isNum(attrs.percentage) ? `${Math.round(attrs.percentage)}` : '', '%');
+				setText(tile.sub, missing ? 'Indisponible' : on ? 'Allumé' : 'Éteint');
+				break;
+			}
+			case 'climate': {
+				const target = attrs.temperature;
+				setTileIcon(tile, 'h-thermo');
+				setTileValue(tile, homeNumber(attrs.current_temperature, true), '°C');
+				setText(tile.targetNumber, isNum(target) ? (Number.isInteger(target) ? nf0(target) : nf1.format(target)) : '--');
+				setText(tile.targetUnit, isNum(target) ? '°C' : '');
+				const action = attrs.hvac_action || '';
+				const heating = action === 'heating';
+				const modes = { heat: 'Chauffage', cool: 'Climatisation', auto: 'Auto', heat_cool: 'Auto', off: 'Arrêt', dry: 'Déshumidification', fan_only: 'Ventilation' };
+				setText(tile.modeText, missing ? 'Indisponible' : heating ? 'Chauffe' : action === 'idle' ? `${modes[state] || state} · à l’arrêt` : modes[state] || state);
+				toggle(tile.mode, 'heating', heating);
+				on = heating;
+				break;
+			}
+			case 'sensor': {
+				const value = Number(state);
+				const unit = attrs.unit_of_measurement || '';
+				const numeric = state !== '' && Number.isFinite(value);
+				const shown = numeric ? (Math.abs(value) < 100 && !Number.isInteger(value) ? nf1.format(value) : nf0(value)) : missing ? '--' : state;
+				setTileIcon(tile, deviceClass === 'temperature' ? 'h-thermo' : deviceClass === 'humidity' ? 'h-drop' : deviceClass === 'power' || deviceClass === 'energy' ? 'h-plug' : 'h-gauge');
+				toggle(tile.element, 'reading', !missing);
+				setTileValue(tile, shown, numeric ? unit : '');
+				setText(tile.sub, missing ? 'Indisponible' : 'Capteur');
+				break;
+			}
+			case 'binary': {
+				on = state === 'on';
+				const opening = ['door', 'garage_door', 'window', 'opening'].includes(deviceClass);
+				const motion = ['motion', 'occupancy', 'presence'].includes(deviceClass);
+				setTileIcon(tile, deviceClass === 'door' || deviceClass === 'garage_door' ? 'h-door' : opening ? 'h-window' : motion ? 'h-motion' : 'h-dot');
+				const feminine = deviceClass === 'door' || deviceClass === 'window' || deviceClass === 'garage_door';
+				const words = opening ? (on ? (feminine ? 'Ouverte' : 'Ouvert') : feminine ? 'Fermée' : 'Fermé')
+					: motion ? (on ? 'Mouvement' : 'Rien') : on ? 'Activé' : 'Désactivé';
+				setTileValue(tile, '', '');
+				setText(tile.sub, missing ? 'Indisponible' : words + homeAge(entry && entry.changed));
+				alert = on && (opening || motion);
+				on = false;
+				break;
+			}
+		}
+		toggle(tile.element, 'on', on && !missing);
+		toggle(tile.element, 'alert', alert && !missing);
+	}
+
+	// id: the tile; target: the entity commanded, the tile's own or one of its group's lights (a favourite it knows)
+	function callHome(id, service, data, target = id) {
+		const tile = home.tiles.get(id);
+		if (!tile || home.status !== 'connected' || home.pending.has(id)) {
+			return;
+		}
+		// A scene lights up for a moment; anything else dims until its new state comes back
+		tile.element.classList.add(tile.kind === 'scene' ? 'lit' : 'pending');
+		home.pending.set(id, setTimeout(() => settleHomeCall(id), HOME_PENDING_MS));
+		send({ type: 'homeCall', domain: homeDomain(target), service, entityId: target, data });
+		// A group's light answers for itself: the tile's own state may not move
+		if (target !== id) {
+			setTimeout(() => settleHomeCall(id), 1200);
+		}
+		// Scenes report no state of their own, nor does a shutter told to stop when already still
+		if (tile.kind === 'scene' || service === 'stop_cover') {
+			setTimeout(() => settleHomeCall(id), 1200);
+		}
+		if (!host) {
+			simulateHomeCall(id, service, data);
+		}
+	}
+
+	// Design mode: Home Assistant's answer to a tap, a moment later
+	function simulateHomeCall(id, service, data) {
+		const entry = home.states.get(id);
+		if (!entry) {
+			return;
+		}
+		const next = { ...entry, attrs: { ...entry.attrs }, changed: Date.now() / 1000 };
+		if (service === 'set_temperature') {
+			next.attrs.temperature = data.temperature;
+		} else if (service === 'open_cover' || service === 'close_cover') {
+			next.state = service === 'open_cover' ? 'open' : 'closed';
+			next.attrs.current_position = service === 'open_cover' ? 100 : 0;
+		} else if (service === 'toggle') {
+			next.state = entry.state === 'on' ? 'off' : 'on';
+		} else if ((service === 'turn_on' || service === 'turn_off') && homeDomain(id) !== 'scene' && homeDomain(id) !== 'script') {
+			next.state = service === 'turn_on' ? 'on' : 'off';
+		}
+		setTimeout(() => onHomeMessage({ status: 'connected', version: home.version, full: false, entities: { [id]: next }, removed: [] }), 250);
+	}
+
+	function settleHomeCall(id) {
+		const timer = home.pending.get(id);
+		if (timer !== undefined) {
+			clearTimeout(timer);
+			home.pending.delete(id);
+			home.tiles.get(id)?.element.classList.remove('pending', 'lit');
+		}
+	}
+
+	// - / + on a heating tile: half a degree (or its own step), within its range
+	function stepTemperature(tile, sign) {
+		const attrs = (home.states.get(tile.id) || {}).attrs || {};
+		if (!isNum(attrs.temperature)) {
+			return;
+		}
+		const step = isNum(attrs.target_temp_step) ? attrs.target_temp_step : 0.5;
+		const target = clamp(attrs.temperature + sign * step, isNum(attrs.min_temp) ? attrs.min_temp : 5, isNum(attrs.max_temp) ? attrs.max_temp : 30);
+		callHome(tile.id, 'set_temperature', { temperature: Math.round(target * 10) / 10 });
+	}
+
+	// ---------- Maison: settings of a tile on a long press ----------
+	// Light: brightness (drag) and tint (whites, colours, as the bulb supports); shutter: position (drag) and
+	// up / stop / down; heating: set point, modes and presets. Sent when the finger lifts; the values follow
+	// Home Assistant's answer. Closed by a tap outside, its button, or after a minute untouched.
+	const HOME_PANEL_AUTO_CLOSE_MS = 60000;
+	// Lights with long effect lists (WLED: about 180): the first ones only
+	const HOME_EFFECTS_MAX = 48;
+	// Favourites shown per light before "Afficher les … autres"
+	const HOME_EFFECTS_SHOWN = 3;
+	const HOME_WHITES = [2200, 2700, 3500, 4500, 6000];
+	const HOME_COLOURS = [[255, 40, 40], [255, 140, 0], [255, 220, 0], [40, 220, 80], [0, 210, 230], [40, 110, 255], [160, 70, 255], [255, 80, 180]];
+	const HOME_HVAC_MODES = { heat: 'Chauffage', cool: 'Clim.', heat_cool: 'Auto', auto: 'Auto', off: 'Arrêt', dry: 'Déshum.', fan_only: 'Ventilation' };
+	const HOME_PRESETS = { eco: 'Éco', comfort: 'Confort', away: 'Absent', home: 'Maison', sleep: 'Nuit', boost: 'Boost', none: 'Aucun', activity: 'Activité' };
+	const homePanel = { id: null, kind: '', closeTimer: 0, dragging: false, slider: null };
+
+	function armHomePanelClose() {
+		clearTimeout(homePanel.closeTimer);
+		homePanel.closeTimer = setTimeout(closeHomePanel, HOME_PANEL_AUTO_CLOSE_MS);
+	}
+
+	function openHomePanel(id) {
+		const tile = home.tiles.get(id);
+		if (!tile || !['light', 'cover', 'climate', 'sensor'].includes(tile.kind)) {
+			return;
+		}
+		homePanel.id = id;
+		homePanel.kind = tile.kind;
+		homePanel.toggle = null;
+		homePanel.effects = null;
+		homePanel.watch = null;
+		homePanel.chart = null;
+		homePanel.modes = null;
+		homePanel.presets = null;
+		homePanel.targetNumber = null;
+		const body = $('homePanelBody');
+		body.textContent = '';
+		homePanel.slider = null;
+		const icon = $('homePanelIcon');
+		icon.textContent = '';
+		icon.append(tile.icon.closest('svg').cloneNode(true));
+		text('homePanelSub', { light: 'Lumière', cover: 'Volet', climate: 'Chauffage', sensor: 'Capteur · 24 heures' }[tile.kind]);
+		if (tile.kind === 'light') {
+			buildLightPanel(body, id);
+		} else if (tile.kind === 'sensor') {
+			buildSensorPanel(body, id);
+		} else if (tile.kind === 'cover') {
+			buildCoverPanel(body, id);
+		} else {
+			buildClimatePanel(body, id);
+		}
+		$('homePanel').hidden = false;
+		renderHomePanel();
+		armHomePanelClose();
+	}
+
+	function closeHomePanel() {
+		clearTimeout(homePanel.closeTimer);
+		homePanel.id = null;
+		homePanel.slider = null;
+		$('homePanel').hidden = true;
+	}
+
+	function panelSection(body, title) {
+		const head = homeNode('div', 'cpu-section-title', body);
+		homeNode('span', 'label', head).textContent = title;
+		return homeNode('div', 'home-panel-section', body);
+	}
+
+	// A slider like the volume one: the value follows the finger, onSet(value 0-100) once it lifts
+	function panelSlider(parent, iconName, onSet) {
+		const box = homeNode('div', 'audio-volume', parent);
+		box.dataset.noSwipe = '';
+		box.append(svgUse(iconName));
+		const track = homeNode('div', 'audio-track', box);
+		const fill = homeNode('div', 'audio-fill', track);
+		const knob = homeNode('div', 'audio-knob', track);
+		const value = homeNode('span', 'audio-value', box);
+		const number = homeNode('span', '', value);
+		homeNode('small', '', value).textContent = '%';
+		const slider = {
+			show(percent) {
+				const shown = isNum(percent) ? clamp(percent, 0, 100) : 0;
+				setStyle(fill, 'width', `${shown}%`);
+				setStyle(knob, 'left', `${shown}%`);
+				setText(number, isNum(percent) ? `${Math.round(percent)}` : '--');
+			}
+		};
+		const at = (event) => {
+			const rect = track.getBoundingClientRect();
+			return clamp(Math.round(((event.clientX - rect.left) / rect.width) * 100), 0, 100);
+		};
+		box.addEventListener('pointerdown', (event) => {
+			homePanel.dragging = true;
+			box.setPointerCapture(event.pointerId);
+			slider.show(at(event));
+			armHomePanelClose();
+		});
+		box.addEventListener('pointermove', (event) => {
+			if (homePanel.dragging) {
+				slider.show(at(event));
+			}
+		});
+		['pointerup', 'pointercancel'].forEach((name) => box.addEventListener(name, (event) => {
+			if (homePanel.dragging) {
+				homePanel.dragging = false;
+				onSet(at(event));
+			}
+		}));
+		homePanel.slider = slider;
+		return slider;
+	}
+
+	function panelButtons(parent, className, items) {
+		const row = homeNode('div', className, parent);
+		return items.map(([label, onPress, icon]) => {
+			const button = homeButton(row, icon ? svgUse(icon) : label, () => {
+				onPress();
+				armHomePanelClose();
+			});
+			if (icon) {
+				button.append(document.createTextNode(label));
+			}
+			return button;
+		});
+	}
+
+	function buildLightPanel(body, id) {
+		panelSlider(panelSection(body, 'Luminosité'), 'h-bulb', (percent) => {
+			callHome(id, percent > 0 ? 'turn_on' : 'turn_off', percent > 0 ? { brightness_pct: percent } : undefined);
+		});
+		const attrs = (home.states.get(id) || {}).attrs || {};
+		// Favourites first: the light's effects by name (a Nanoleaf's saved scenes), before the plain tints. A light
+		// group lists them under each of its lights that knows them, sent to that light alone; otherwise one list.
+		const effectsOf = (list) => (Array.isArray(list) ? list.filter((name) => typeof name === 'string' && name && !/^(none|solid)$/i.test(name)) : []);
+		const members = Array.isArray(attrs.entity_id) ? attrs.entity_id : [];
+		const sources = members
+			.map((member) => ({ id: member, attrs: (home.states.get(member) || {}).attrs || {} }))
+			.filter((source) => effectsOf(source.attrs.effect_list).length);
+		if (!sources.length && effectsOf(attrs.effect_list).length) {
+			sources.push({ id, attrs, own: true });
+		}
+		homePanel.effects = [];
+		homePanel.watch = new Set([id, ...members]);
+		for (const source of sources) {
+			const effects = effectsOf(source.attrs.effect_list).slice(0, HOME_EFFECTS_MAX);
+			const title = source.own ? 'Favoris' : `Favoris · ${source.attrs.friendly_name || source.id}`;
+			const section = panelSection(body, title);
+			const buttons = panelButtons(section, 'home-modes home-effects',
+				effects.map((name) => [name, () => callHome(id, 'turn_on', { effect: name }, source.id)]));
+			buttons.forEach((button, i) => {
+				button.dataset.value = effects[i];
+				button.dataset.entity = source.id;
+				button.title = effects[i];
+				// The first ones only; the others behind "Afficher les … autres"
+				button.hidden = i >= HOME_EFFECTS_SHOWN;
+			});
+			if (buttons.length > HOME_EFFECTS_SHOWN) {
+				const rest = buttons.length - HOME_EFFECTS_SHOWN;
+				const label = () => (buttons[HOME_EFFECTS_SHOWN].hidden ? `Afficher ${rest === 1 ? 'l’autre' : `les ${rest} autres`}` : 'Afficher moins');
+				const more = homeButton(section, label(), () => {
+					const show = buttons[HOME_EFFECTS_SHOWN].hidden;
+					buttons.slice(HOME_EFFECTS_SHOWN).forEach((button) => {
+						button.hidden = !show;
+					});
+					more.textContent = label();
+					armHomePanelClose();
+				});
+				more.className = 'home-more-effects';
+			}
+			homePanel.effects.push(...buttons);
+		}
+		const modes = Array.isArray(attrs.supported_color_modes) ? attrs.supported_color_modes : [];
+		const whites = modes.includes('color_temp');
+		const colours = modes.some((mode) => ['hs', 'rgb', 'rgbw', 'rgbww', 'xy'].includes(mode));
+		if (whites || colours) {
+			const swatches = homeNode('div', 'home-swatches', panelSection(body, 'Teinte'));
+			if (whites) {
+				const low = isNum(attrs.min_color_temp_kelvin) ? attrs.min_color_temp_kelvin : 2000;
+				const high = isNum(attrs.max_color_temp_kelvin) ? attrs.max_color_temp_kelvin : 6500;
+				for (const kelvin of HOME_WHITES) {
+					const shown = clamp(kelvin, low, high);
+					const swatch = homeButton(swatches, '', () => {
+						callHome(id, 'turn_on', { color_temp_kelvin: shown });
+						armHomePanelClose();
+					});
+					swatch.className = 'swatch';
+					swatch.dataset.kelvin = shown;
+					swatch.style.background = kelvinColour(shown);
+				}
+			}
+			if (colours) {
+				for (const rgb of HOME_COLOURS) {
+					const swatch = homeButton(swatches, '', () => {
+						callHome(id, 'turn_on', { rgb_color: rgb });
+						armHomePanelClose();
+					});
+					swatch.className = 'swatch';
+					swatch.dataset.rgb = rgb.join(',');
+					swatch.style.background = `rgb(${rgb.join(',')})`;
+				}
+			}
+		}
+		homePanel.toggle = panelButtons(body, 'home-panel-actions', [['Éteindre', () => {
+			const entry = home.states.get(id);
+			callHome(id, entry && entry.state === 'on' ? 'turn_off' : 'turn_on');
+		}]])[0];
+	}
+
+	// A white's look on screen: warm (amber) to cold (bluish)
+	function kelvinColour(kelvin) {
+		const t = clamp((kelvin - 2200) / (6000 - 2200), 0, 1);
+		const mix = (a, b) => Math.round(a + (b - a) * t);
+		return `rgb(${mix(255, 220)}, ${mix(170, 232)}, ${mix(90, 255)})`;
+	}
+
+	function buildCoverPanel(body, id) {
+		panelSlider(panelSection(body, 'Position'), 'h-blinds', (percent) => callHome(id, 'set_cover_position', { position: percent }));
+		panelButtons(body, 'home-panel-actions', [
+			['Monter', () => callHome(id, 'open_cover'), 'h-up'],
+			['Stop', () => callHome(id, 'stop_cover'), 'h-stop'],
+			['Descendre', () => callHome(id, 'close_cover'), 'h-down']
+		]);
+	}
+
+	function buildClimatePanel(body, id) {
+		const section = panelSection(body, 'Consigne');
+		const row = homeNode('div', 'home-panel-setpoint', section);
+		const tile = home.tiles.get(id);
+		homeButton(row, '−', () => {
+			stepTemperature(tile, -1);
+			armHomePanelClose();
+		});
+		const target = homeNode('span', 'home-panel-target', row);
+		homePanel.targetNumber = homeNode('span', '', target);
+		homeNode('small', '', target).textContent = '°C';
+		homeButton(row, '+', () => {
+			stepTemperature(tile, 1);
+			armHomePanelClose();
+		});
+		const attrs = (home.states.get(id) || {}).attrs || {};
+		const hvac = Array.isArray(attrs.hvac_modes) ? attrs.hvac_modes : [];
+		if (hvac.length) {
+			homePanel.modes = panelButtons(panelSection(body, 'Mode'), 'home-modes',
+				hvac.map((mode) => [HOME_HVAC_MODES[mode] || mode, () => callHome(id, 'set_hvac_mode', { hvac_mode: mode })]));
+			homePanel.modes.forEach((button, i) => {
+				button.dataset.value = hvac[i];
+			});
+		}
+		const presets = Array.isArray(attrs.preset_modes) ? attrs.preset_modes : [];
+		if (presets.length) {
+			homePanel.presets = panelButtons(panelSection(body, 'Préréglage'), 'home-modes',
+				presets.map((preset) => [HOME_PRESETS[preset] || preset, () => callHome(id, 'set_preset_mode', { preset_mode: preset })]));
+			homePanel.presets.forEach((button, i) => {
+				button.dataset.value = presets[i];
+			});
+		}
+	}
+
+	// Sensor: its value now and the curve of the last 24 hours (homeHistory, asked when the panel opens)
+	const HOME_CHART = { width: 586, height: 260 };
+
+	function buildSensorPanel(body, id) {
+		const now = homeNode('div', 'home-panel-reading', body);
+		homePanel.readingValue = homeNode('span', '', now);
+		homePanel.readingUnit = homeNode('small', '', now);
+		const chart = homeNode('div', 'home-chart', body);
+		chart.innerHTML = `<svg viewBox="0 0 ${HOME_CHART.width} ${HOME_CHART.height}" preserveAspectRatio="none"><path class="area"/><path class="line"/></svg>`
+			+ '<span class="home-chart-max"></span><span class="home-chart-min"></span><span class="home-chart-note">Chargement…</span>';
+		const axis = homeNode('div', 'home-chart-axis', body);
+		['-24 h', '-18 h', '-12 h', '-6 h', 'maintenant'].forEach((label) => {
+			homeNode('span', '', axis).textContent = label;
+		});
+		const stats = homeNode('div', 'home-chart-stats', body);
+		homePanel.stats = ['Min', 'Moyenne', 'Max'].map((label) => {
+			const stat = homeNode('div', '', stats);
+			homeNode('span', 'label', stat).textContent = label;
+			return homeNode('span', 'home-chart-value', stat);
+		});
+		homePanel.chart = chart;
+		send({ type: 'homeHistory', entityId: id });
+		if (!host) {
+			setTimeout(() => onHomeHistory(designHistory(id)), 300);
+		}
+	}
+
+	function onHomeHistory(message) {
+		if (!homePanel.chart || message.entityId !== homePanel.id) {
+			return;
+		}
+		const chart = homePanel.chart;
+		const note = chart.querySelector('.home-chart-note');
+		const points = Array.isArray(message.points) ? message.points.filter((point) => isNum(point[0]) && isNum(point[1])) : [];
+		if (message.failed || points.length < 2) {
+			note.textContent = message.failed ? 'Historique indisponible' : 'Pas assez de mesures sur 24 heures';
+			return;
+		}
+		note.textContent = '';
+		// The last value holds until now
+		const last = points[points.length - 1];
+		points.push([message.end, last[1]]);
+		const values = points.map((point) => point[1]);
+		const min = Math.min(...values);
+		const max = Math.max(...values);
+		const span = max - min || 1;
+		const low = min - span * 0.1;
+		const high = max + span * 0.1;
+		const x = (t) => ((t - message.start) / (message.end - message.start)) * HOME_CHART.width;
+		const y = (v) => HOME_CHART.height - ((v - low) / (high - low)) * HOME_CHART.height;
+		const line = points.map((point, i) => `${i ? 'L' : 'M'}${x(point[0]).toFixed(1)} ${y(point[1]).toFixed(1)}`).join(' ');
+		chart.querySelector('.line').setAttribute('d', line);
+		chart.querySelector('.area').setAttribute('d', `${line} L${HOME_CHART.width} ${HOME_CHART.height} L${x(points[0][0]).toFixed(1)} ${HOME_CHART.height} Z`);
+		const unit = ((home.states.get(homePanel.id) || {}).attrs || {}).unit_of_measurement || '';
+		const format = (value) => `${Math.abs(value) < 100 && !Number.isInteger(value) ? nf1.format(value) : nf0(value)}${unit ? ' ' + unit : ''}`;
+		chart.querySelector('.home-chart-max').textContent = format(max);
+		chart.querySelector('.home-chart-min').textContent = format(min);
+		// Average weighted by how long each value held
+		let weighted = 0;
+		for (let i = 0; i < points.length - 1; i++) {
+			weighted += points[i][1] * (points[i + 1][0] - points[i][0]);
+		}
+		const mean = weighted / (points[points.length - 1][0] - points[0][0] || 1);
+		[min, mean, max].forEach((value, i) => setText(homePanel.stats[i], format(Math.round(value * 10) / 10)));
+	}
+
+	// Design mode: a day of a gently moving value around the current one
+	function designHistory(id) {
+		const value = Number((home.states.get(id) || {}).state) || 20;
+		const end = Date.now() / 1000;
+		const start = end - 86400;
+		const points = [];
+		for (let t = start; t < end; t += 300) {
+			const phase = (t - start) / 86400;
+			points.push([t, Math.round((value + Math.sin(phase * Math.PI * 2) * value * 0.06 + Math.sin(phase * 40) * value * 0.01) * 10) / 10]);
+		}
+		return { entityId: id, start, end, points };
+	}
+
+	// The open panel follows Home Assistant (not while a slider is held)
+	function renderHomePanel() {
+		const id = homePanel.id;
+		if (!id) {
+			return;
+		}
+		const entry = home.states.get(id);
+		const state = entry ? entry.state : 'unavailable';
+		const attrs = entry ? entry.attrs || {} : {};
+		text('homePanelTitle', attrs.friendly_name || id);
+		if (homePanel.kind === 'light') {
+			const on = state === 'on';
+			if (homePanel.slider && !homePanel.dragging) {
+				homePanel.slider.show(on ? (isNum(attrs.brightness) ? (attrs.brightness / 255) * 100 : 100) : 0);
+			}
+			if (homePanel.toggle) {
+				setText(homePanel.toggle, on ? 'Éteindre' : 'Allumer');
+			}
+			// Lit: the favourite playing on the light it belongs to
+			(homePanel.effects || []).forEach((button) => {
+				const source = button.dataset.entity === id ? entry : home.states.get(button.dataset.entity);
+				const playing = source && source.state === 'on' && (source.attrs || {}).effect === button.dataset.value;
+				button.classList.toggle('on', Boolean(playing));
+			});
+			$('homePanelBody').querySelectorAll('.swatch').forEach((swatch) => {
+				const kelvin = Number(swatch.dataset.kelvin);
+				const lit = on && (swatch.dataset.rgb
+					? attrs.color_mode !== 'color_temp' && Array.isArray(attrs.rgb_color) && attrs.rgb_color.join(',') === swatch.dataset.rgb
+					: attrs.color_mode === 'color_temp' && isNum(attrs.color_temp_kelvin) && Math.abs(attrs.color_temp_kelvin - kelvin) < 150);
+				swatch.classList.toggle('on', lit);
+			});
+		} else if (homePanel.kind === 'sensor') {
+			const value = Number(state);
+			const numeric = state !== '' && Number.isFinite(value);
+			setText(homePanel.readingValue, numeric ? (Math.abs(value) < 100 && !Number.isInteger(value) ? nf1.format(value) : nf0(value)) : '--');
+			setText(homePanel.readingUnit, numeric ? attrs.unit_of_measurement || '' : '');
+		} else if (homePanel.kind === 'cover') {
+			if (homePanel.slider && !homePanel.dragging) {
+				homePanel.slider.show(isNum(attrs.current_position) ? attrs.current_position : state === 'open' ? 100 : 0);
+			}
+		} else {
+			const target = attrs.temperature;
+			setText(homePanel.targetNumber, isNum(target) ? (Number.isInteger(target) ? nf0(target) : nf1.format(target)) : '--');
+			(homePanel.modes || []).forEach((button) => button.classList.toggle('on', button.dataset.value === state));
+			(homePanel.presets || []).forEach((button) => button.classList.toggle('on', button.dataset.value === attrs.preset_mode));
+		}
+	}
+
+	$('homePanelClose').addEventListener('click', closeHomePanel);
+	$('homePanel').addEventListener('click', (event) => {
+		if (event.target === $('homePanel')) {
+			closeHomePanel();
+		} else {
+			armHomePanelClose();
+		}
+	});
+
+	// Ages of doors, windows and motion move on while the page shows
+	setInterval(() => {
+		if (homeShown()) {
+			home.tiles.forEach((tile) => tile.kind === 'binary' && renderHomeTile(tile));
+		}
+	}, 30000);
+
 	// ---------- Game view: while a recognised game runs (snapshot.game) ----------
 	// The view stays 10 s after the game is gone (its process exited); a view picked with the switch
 	// holds until then. Values glide between samples and the graph scrolls in the 24 fps loop.
@@ -2246,6 +3142,8 @@
 	const DIAL_STEPS = [10, 20, 25, 30, 40, 50, 60, 75, 100, 120, 150, 200, 250, 300];
 	let gameSession = null;
 	let gameView = false;
+	// The page shown: 'normal', 'game' or 'home' (gameView: it is the game view)
+	let currentView = 'normal';
 	// Settings (setup wizard): back to the normal view while the game stays in the background
 	let gameViewConfig = { autoGame: true, autoNormal: true, autoNormalDelaySec: 20, transition: 'morph' };
 	const dial = { max: 0, ticks: [], blade: null, core: null, low: null };
@@ -2445,19 +3343,24 @@
 
 	function applyView() {
 		const inGame = gameSession !== null;
-		// The view whose layout is being edited in the settings comes first
-		const showGame = layoutPreviewView ? layoutPreviewView === 'game'
-			: viewChoice ? viewChoice === 'game' : inGame && gameSession.view === 'game';
+		// The view being edited in the settings comes first (layout, Maison), then a swipe, then the game
+		let view = layoutPreviewView || (homeFocus ? 'home' : null) || viewChoice || (inGame && gameSession.view === 'game' ? 'game' : 'normal');
+		// No Maison page until Home Assistant is set up
+		if (view === 'home' && !homeEnabled()) {
+			view = 'normal';
+		}
+		const showGame = view === 'game';
 		frame.classList.toggle('has-game', inGame);
 		// The GPU goes to the game: a video background stays on its frame until the game ends
 		if (inGame !== videoHeldForGame) {
 			videoHeldForGame = inGame;
 			updateVideoPlayback();
 		}
-		pageDots.forEach((dot) => dot.setAttribute('aria-current', String(dot.dataset.view === (showGame ? 'game' : 'normal'))));
-		if (showGame !== gameView) {
+		pageDots.forEach((dot) => dot.setAttribute('aria-current', String(dot.dataset.view === view)));
+		if (view !== currentView) {
+			currentView = view;
 			gameView = showGame;
-			if (!showGame) {
+			if (view === 'normal') {
 				CPU_SIDE_GLIDES.forEach(redrawGlide);
 			}
 			if (showGame && !inGame) {
@@ -2465,7 +3368,10 @@
 			} else if (showGame) {
 				paintGameView();
 			}
-			switchView(showGame);
+			if (view === 'home') {
+				paintHome();
+			}
+			switchView(view);
 		}
 	}
 
@@ -2631,29 +3537,69 @@
 	let swipeStart = null;
 	let swipedAt = 0;
 
-	frame.addEventListener('pointerdown', (event) => {
+	function beginSwipe(target, x, y, id) {
 		// Panels and horizontal controls of their own (the seek bar) are not swipes
-		const ignored = document.querySelector('.editor:not([hidden])') !== null || event.target.closest('[data-no-swipe]') !== null;
-		swipeStart = ignored ? null : { x: event.clientX, y: event.clientY, time: performance.now(), id: event.pointerId };
-	});
-	frame.addEventListener('pointerup', (event) => {
+		const ignored = document.querySelector('.editor:not([hidden])') !== null || target.closest('[data-no-swipe]') !== null;
+		swipeStart = ignored ? null : { x, y, time: performance.now(), id };
+	}
+
+	function endSwipe(x, y, id) {
 		const start = swipeStart;
 		swipeStart = null;
-		if (!start || event.pointerId !== start.id || performance.now() - start.time > SWIPE_MAX_MS) {
+		if (!start || id !== start.id || performance.now() - start.time > SWIPE_MAX_MS) {
 			return;
 		}
 		// Distances in frame pixels: the frame is scaled to fit the window
 		const scale = frame.getBoundingClientRect().width / W;
-		const dx = (event.clientX - start.x) / scale;
-		const dy = (event.clientY - start.y) / scale;
+		const dx = (x - start.x) / scale;
+		const dy = (y - start.y) / scale;
 		if (Math.abs(dx) < SWIPE_MIN_PX || Math.abs(dx) < Math.abs(dy) * 1.5) {
 			return;
 		}
 		swipedAt = performance.now();
-		showView(dx < 0 ? 'game' : 'normal');
-	});
-	frame.addEventListener('pointercancel', () => {
+		// Towards the left: the page on the right (Maison → normal → game), and back
+		const pages = VIEW_ORDER.filter((view) => view !== 'home' || homeEnabled());
+		const index = pages.indexOf(currentView);
+		const target = pages[clamp(index + (dx < 0 ? 1 : -1), 0, pages.length - 1)];
+		if (target !== currentView) {
+			showView(target);
+		}
+	}
+
+	// Fingers are followed by touch events: over a scrolling list (the Maison tiles) a stroke that starts
+	// slightly slanted makes the browser scroll and cancel the pointer, while touch events carry on to the end.
+	frame.addEventListener('touchstart', (event) => {
+		const touch = event.changedTouches[0];
+		if (event.touches.length > 1) {
+			swipeStart = null;
+		} else if (touch) {
+			beginSwipe(event.target, touch.clientX, touch.clientY, touch.identifier);
+		}
+	}, { passive: true });
+	frame.addEventListener('touchend', (event) => {
+		const touch = event.changedTouches[0];
+		if (touch) {
+			endSwipe(touch.clientX, touch.clientY, touch.identifier);
+		}
+	}, { passive: true });
+	frame.addEventListener('touchcancel', () => {
 		swipeStart = null;
+	}, { passive: true });
+	// Mouse and pen (design mode): pointer events
+	frame.addEventListener('pointerdown', (event) => {
+		if (event.pointerType !== 'touch') {
+			beginSwipe(event.target, event.clientX, event.clientY, `p${event.pointerId}`);
+		}
+	});
+	frame.addEventListener('pointerup', (event) => {
+		if (event.pointerType !== 'touch') {
+			endSwipe(event.clientX, event.clientY, `p${event.pointerId}`);
+		}
+	});
+	frame.addEventListener('pointercancel', (event) => {
+		if (event.pointerType !== 'touch') {
+			swipeStart = null;
+		}
 	});
 	frame.addEventListener('click', (event) => {
 		if (performance.now() - swipedAt < 400) {
@@ -2663,13 +3609,57 @@
 	}, true);
 	pageDots.forEach((dot) => dot.addEventListener('click', () => showView(dot.dataset.view)));
 
+	// ---------- Lost taps ----------
+	// Right after a quick stroke (a swipe), Chromium may take the next tap for one stopping a fling and
+	// drop its click, although the page saw a clean press and release. A short touch that did not move
+	// and brought no click is clicked here; a click the browser sends late for it is then ignored.
+	// A tap that really stopped a scroll (a list scrolled just before) is left alone.
+	const TAP_CLICK_WAIT_MS = 120;
+	const tapRepair = { down: null, clickAt: 0, scrollAt: 0, repairedAt: 0 };
+	document.addEventListener('scroll', () => {
+		tapRepair.scrollAt = performance.now();
+	}, { capture: true, passive: true });
+	window.addEventListener('pointerdown', (event) => {
+		tapRepair.down = event.pointerType === 'touch' && event.isPrimary
+			? { id: event.pointerId, x: event.clientX, y: event.clientY, time: performance.now(), target: event.target }
+			: null;
+	}, { capture: true, passive: true });
+	window.addEventListener('click', (event) => {
+		if (event.isTrusted && performance.now() - tapRepair.repairedAt < 500) {
+			event.stopImmediatePropagation();
+			event.preventDefault();
+			return;
+		}
+		tapRepair.clickAt = performance.now();
+	}, true);
+	window.addEventListener('pointerup', (event) => {
+		const down = tapRepair.down;
+		tapRepair.down = null;
+		if (!down || event.pointerId !== down.id) {
+			return;
+		}
+		const now = performance.now();
+		const moved = Math.hypot(event.clientX - down.x, event.clientY - down.y);
+		if (now - down.time >= LONG_PRESS_MS || moved > PRESS_MOVE_TOLERANCE || now - tapRepair.scrollAt < 300
+			|| !down.target.isConnected || down.target.closest('[data-no-swipe]')) {
+			return;
+		}
+		setTimeout(() => {
+			if (tapRepair.clickAt >= now || !down.target.isConnected) {
+				return;
+			}
+			tapRepair.repairedAt = performance.now();
+			down.target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window, clientX: event.clientX, clientY: event.clientY }));
+		}, TAP_CLICK_WAIT_MS);
+	}, { capture: true, passive: true });
+
 	// ---------- Processor details: clock and voltage beside the dial, detail panel on a tap ----------
 	// Side readouts glide like every number and draw nothing while hidden (game view, option off); the
 	// panel's values are only drawn while it is open, caught up at once when it opens.
 	const CPU_DETAIL_AUTO_CLOSE_MS = 60000;
 	const cpuDetail = { open: false, closeTimer: 0, layout: '', cores: 0, threads: 0 };
 	let cpuDetailsShown = true;
-	const CPU_SIDE_HIDDEN = () => !cpuDetailsShown || gameView;
+	const CPU_SIDE_HIDDEN = () => !cpuDetailsShown || currentView !== 'normal';
 	const CPU_PANEL_HIDDEN = () => !cpuDetail.open;
 	const CPU_SIDE_GLIDES = ['cpuSideClock', 'cpuSideMax', 'cpuSideVolt'];
 	const CPU_PANEL_GLIDES = ['cpuDetailClock', 'cpuDetailFastest', 'cpuDetailEffective', 'cpuDetailVolt', 'cpuDetailPpt', 'cpuDetailActive'];
@@ -3545,6 +4535,7 @@
 		if (config.thresholds) applyLimits(config.thresholds);
 		if (config.weather) weatherConfig = config.weather;
 		if (config.gameView) gameViewConfig = config.gameView;
+		if (config.home) applyHomeConfig(config.home);
 		if (config.layout) {
 			// Put in place at start; later (settings saved) the bands glide. While edited in the settings,
 			// the preview stays until the window closes.
@@ -3575,6 +4566,14 @@
 			applyAppearancePreview(message);
 		} else if (message.type === 'layoutPreview') {
 			applyLayoutPreview(message);
+		} else if (message.type === 'home') {
+			onHomeMessage(message);
+		} else if (message.type === 'homePreview') {
+			applyHomePreview(message);
+		} else if (message.type === 'homeHistory') {
+			onHomeHistory(message);
+		} else if (message.type === 'homeCallFailed') {
+			settleHomeCall(message.entityId);
 		} else if (message.type === 'toast') {
 			showToast(message.text);
 		} else if (message.type === 'update') {
@@ -4107,7 +5106,10 @@
 		stepGlides(now);
 		updateClock();
 		animateCss(now);
-		drawRing(now, progress);
+		// The CPU ring is not on the Maison page
+		if (currentView !== 'home') {
+			drawRing(now, progress);
+		}
 		// The FPS graph only shows in the game view
 		if (gameView) {
 			// Frozen at the end of its step: the newest point on the right edge
@@ -4149,6 +5151,52 @@
 		}
 		send({ type: 'update', action: 'install' });
 	});
+
+	// Sample house in design mode: what config.home and a full "home" message would bring
+	function startHomeDemo() {
+		const now = Date.now() / 1000;
+		const groups = [
+			['Scènes', 3, [['scene.cinema', 'Cinéma', 'scening', null, 1, 'popcorn'], ['scene.nuit', 'Nuit', 'scening'], ['script.reveil', 'Réveil', 'off']]],
+			['Salon', 3, [
+				['light.salon_plafonnier', 'Plafonnier', 'on', { brightness: 178, supported_color_modes: ['color_temp', 'hs'], color_mode: 'color_temp', color_temp_kelvin: 2700, min_color_temp_kelvin: 2200, max_color_temp_kelvin: 6500 }],
+				['light.nanoleaf', 'Éclairage bureau', 'on', { brightness: 140, supported_color_modes: ['color_temp', 'hs'], color_mode: 'hs', effect: 'Northern Lights', effect_list: ['Northern Lights', 'Feu de camp', 'Océan', 'Forêt', 'Coucher de soleil', 'Sith', 'Arc-en-ciel'], entity_id: ['light.nanoleaf_shapes', 'light.nanoleaf_lines', 'light.spot_bureau'] }],
+				['light.salon_lampe', 'Lampe d\u2019appoint', 'off'],
+				['switch.prise_tv', 'Prise TV', 'on'],
+				['cover.volet_salon', 'Volet salon', 'open', { current_position: 60 }],
+				['climate.salon', 'Thermostat', 'heat', { current_temperature: 21.4, temperature: 21, hvac_action: 'heating', target_temp_step: 0.5, hvac_modes: ['heat', 'auto', 'off'], preset_modes: ['comfort', 'eco', 'away'], preset_mode: 'comfort' }, 2],
+				['sensor.salon_humidite', 'Humidité salon', '52', { unit_of_measurement: '%', device_class: 'humidity' }, 2],
+				['sensor.salon_temperature', 'Temp. canapé', '21.8', { unit_of_measurement: '°C', device_class: 'temperature' }]
+			]],
+			{ separator: 48, line: true },
+			['Volets', 2, [
+				['cover.volet_chambre', 'Volet chambre', 'closed', { current_position: 0 }],
+				['cover.volet_bureau', 'Volet bureau', 'opening', { current_position: 30 }]
+			]],
+			['Bureau', 3, [
+				['light.bureau', 'Lumière bureau', 'on', { brightness: 255 }],
+				['sensor.prise_pc_power', 'Prise PC', '342', { unit_of_measurement: 'W', device_class: 'power' }, 2],
+				['climate.bureau', 'Radiateur', 'heat', { current_temperature: 20.1, temperature: 19, hvac_action: 'idle' }],
+				['binary_sensor.fenetre_bureau', 'Fenêtre', 'on', { device_class: 'window' }],
+				['fan.bureau', 'Ventilateur', 'off']
+			]],
+			['Entrée', 1, [['binary_sensor.porte_entree', 'Porte d\u2019entrée', 'off', { device_class: 'door' }]]]
+		];
+		applyHomeConfig({
+			enabled: true,
+			groups: groups.map((group) => (Array.isArray(group)
+				? { name: group[0], columns: group[1], tiles: group[2].map(([id, , , , span, icon]) => ({ id, span: span || 1, icon: icon || null })) }
+				: group))
+		});
+		const entities = {};
+		groups.filter(Array.isArray).forEach(([, , tiles]) => tiles.forEach(([id, name, state, attrs]) => {
+			entities[id] = { state, attrs: { friendly_name: name, ...(attrs || {}) }, changed: now - 12 * 60 };
+		}));
+		// The lights of the "Éclairage bureau" group (followed, no tile of their own)
+		entities['light.nanoleaf_shapes'] = { state: 'on', attrs: { friendly_name: 'Nanoleaf Shapes', effect: 'Northern Lights', effect_list: ['Northern Lights', 'Feu de camp', 'Océan', 'Sith'] }, changed: now };
+		entities['light.nanoleaf_lines'] = { state: 'on', attrs: { friendly_name: 'Nanoleaf Lines', effect: 'Forêt', effect_list: ['Forêt', 'Coucher de soleil', 'Arc-en-ciel'] }, changed: now };
+		entities['light.spot_bureau'] = { state: 'on', attrs: { friendly_name: 'Spot bureau' }, changed: now };
+		onHomeMessage({ status: 'connected', version: '2026.11', full: true, entities, removed: [] });
+	}
 
 	function send(message) {
 		if (host) {
@@ -4755,9 +5803,19 @@
 	if (!host || demo) {
 		startSimulator(demo || 'idle');
 	}
-	// "?view=game" starts on the game view, game or not (as a swipe would), for captures
-	if (new URLSearchParams(location.search).get('view') === 'game') {
-		setTimeout(() => showView('game'), 1200);
+	// Design mode: a sample house for the Maison page (the host sends the real one)
+	if (!host) {
+		startHomeDemo();
+	}
+	// "?homePanel=<entity id>" opens that tile's long-press panel at load (design mode), for captures
+	const homePanelParam = new URLSearchParams(location.search).get('homePanel');
+	if (homePanelParam) {
+		setTimeout(() => openHomePanel(homePanelParam), 1500);
+	}
+	// "?view=game" (or "home") starts on that page, as a swipe would, for captures
+	const viewParam = new URLSearchParams(location.search).get('view');
+	if (viewParam === 'game' || viewParam === 'home') {
+		setTimeout(() => showView(viewParam), 1200);
 	}
 	// "?audio=panel" opens the Audio panel at load, for captures
 	if (new URLSearchParams(location.search).get('audio') === 'panel') {

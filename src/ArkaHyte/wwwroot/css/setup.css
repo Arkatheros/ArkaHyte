@@ -134,6 +134,12 @@ body {
 .pages {
 	grid-area: pages;
 	overflow-y: auto;
+	/* Never a horizontal scroll: wide content shrinks or wraps */
+	overflow-x: hidden;
+	/* No scroll anchoring: rows moved by a drag would make Chromium shift the scroll back against the
+	   automatic scroll of the drag (back and forth) */
+	overflow-anchor: none;
+	min-width: 0;
 	padding: 22px 32px 12px 24px;
 }
 .page {
@@ -667,16 +673,410 @@ h2 {
 }
 .band-text {
 	flex: 1;
+	min-width: 0;
 	display: flex;
 	flex-direction: column;
 	gap: 2px;
 }
 .band-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 	font-weight: 600;
 }
 .band-detail {
 	font-size: 12px;
 	color: var(--ash);
+}
+
+/* ---------- Maison step: connection, entities of Home Assistant, those shown on the case screen ---------- */
+.home-connect {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+	gap: 12px;
+	align-items: end;
+	max-width: 900px;
+}
+.home-connect .field {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+.home-filters {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin: 10px 0;
+}
+.home-filters button {
+	padding: 4px 12px;
+	border: 1px solid var(--line);
+	background: none;
+	color: var(--ash);
+	font-size: 13px;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	cursor: pointer;
+}
+.home-filters button.on {
+	border-color: var(--blade);
+	color: var(--bone);
+	background: rgba(255, 31, 51, 0.12);
+}
+.home-entities {
+	max-height: 460px;
+	overflow-y: auto;
+	border: 1px solid var(--line);
+}
+.home-entity {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 8px 12px;
+	border-bottom: 1px solid rgba(255, 60, 75, 0.12);
+	background: #0d0507;
+	cursor: pointer;
+}
+.home-entity input {
+	width: 18px;
+	height: 18px;
+	flex: none;
+	accent-color: var(--blade);
+}
+.home-entity .n {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+}
+.home-entity .n b {
+	font-weight: 600;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.home-entity .n small {
+	font-family: var(--font-data, monospace);
+	font-size: 12px;
+	color: var(--ash);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.home-entity .state {
+	max-width: 35%;
+	font-size: 13px;
+	color: var(--ash);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.home-more {
+	padding: 10px 12px;
+	color: var(--ash);
+	font-size: 13px;
+}
+/* Groups of the Maison page: a card each (name, tiles per row, delete), its tiles below */
+.home-groups {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+.home-group {
+	position: relative;
+	border: 1px solid var(--line);
+	background: #0b0406;
+}
+.home-group.dragging {
+	z-index: 1;
+	border-color: var(--blade);
+	box-shadow: 0 6px 22px rgba(0, 0, 0, 0.7);
+}
+.home-group-head {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 8px 10px;
+	border-bottom: 1px solid var(--line);
+	cursor: grab;
+	touch-action: none;
+}
+.home-group-name {
+	flex: 1;
+	min-width: 0;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+}
+.home-group-items {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	min-height: 44px;
+	padding: 8px;
+}
+.home-group-items:empty::before {
+	content: "Vide : « Ajouter » ci-dessous, ou glisser une entité ici";
+	padding: 10px 4px;
+	font-size: 13px;
+	color: var(--ash);
+}
+.home-add-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	margin-top: 12px;
+}
+/* Separator: one line, its height and its rule */
+.home-group.separator {
+	border-style: dashed;
+	background: none;
+}
+.home-group.separator .home-group-head {
+	border-bottom: none;
+}
+.home-separator-label {
+	flex: 1;
+	min-width: 0;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	color: var(--ash);
+}
+.home-separator-height,
+.home-separator-line {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	flex: none;
+	cursor: pointer;
+}
+.home-separator-height small,
+.home-separator-line small {
+	font-size: 11px;
+	color: var(--ash);
+}
+.home-separator-height input {
+	width: 70px;
+	padding: 4px 6px;
+}
+.home-separator-height em {
+	font-size: 12px;
+	color: var(--ash);
+}
+.home-separator-line input {
+	width: 18px;
+	height: 18px;
+	accent-color: var(--blade);
+}
+.band-name small {
+	margin-left: 8px;
+	font-weight: 500;
+	font-size: 12px;
+	color: var(--ash);
+}
+/* "1 2 3": tiles per row (group), width (tile) */
+.home-seg {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	flex: none;
+}
+.home-seg small {
+	margin-right: 4px;
+	font-size: 11px;
+	color: var(--ash);
+}
+.home-seg button {
+	width: 26px;
+	height: 26px;
+	padding: 0;
+	border: 1px solid var(--line);
+	background: none;
+	color: var(--ash);
+	font-size: 13px;
+	font-weight: 700;
+	cursor: pointer;
+}
+.home-seg button.on {
+	border-color: var(--blade);
+	background: rgba(255, 31, 51, 0.18);
+	color: var(--bone);
+}
+.home-seg button:disabled {
+	opacity: 0.3;
+	cursor: default;
+}
+.home-remove {
+	padding: 3px 8px;
+	border: 1px solid var(--line);
+	background: none;
+	color: var(--ash);
+	font-size: 12px;
+	cursor: pointer;
+	flex: none;
+}
+.home-remove.confirm {
+	border-color: var(--blade);
+	color: var(--bone);
+}
+
+/* A tile's icon: its button in the list, and the picker over the page */
+.home-icon-button {
+	width: 34px;
+	height: 34px;
+	flex: none;
+	padding: 0;
+	display: grid;
+	place-items: center;
+	border: 1px solid var(--line);
+	background: none;
+	color: var(--ash);
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	cursor: pointer;
+}
+.home-icon-button.chosen {
+	border-color: var(--blade);
+	color: var(--bone);
+}
+.home-icon-button svg,
+.home-icon-grid svg {
+	width: 22px;
+	height: 22px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.8;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+.home-icon-picker {
+	position: fixed;
+	inset: 0;
+	z-index: 20;
+	display: grid;
+	place-items: center;
+	padding: 24px;
+	background: rgba(0, 0, 0, 0.65);
+}
+.home-icon-picker[hidden] {
+	display: none;
+}
+.home-icon-panel {
+	width: min(640px, 100%);
+	max-height: calc(100vh - 48px);
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	border: 1px solid var(--blade);
+	background: #0b0406;
+	box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+}
+.home-icon-head {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 12px 16px;
+	border-bottom: 1px solid var(--line);
+}
+.home-icon-head h2 {
+	flex: 1;
+	min-width: 0;
+	margin: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.home-icon-head .ghost.on {
+	background: rgba(255, 31, 51, 0.18);
+}
+.home-icon-groups {
+	overflow-y: auto;
+	padding: 6px 16px 16px;
+}
+.home-icon-family {
+	margin: 14px 0 8px;
+	font-weight: 700;
+	font-size: 12px;
+	letter-spacing: 0.22em;
+	text-transform: uppercase;
+	color: var(--ash);
+}
+.home-icon-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+	gap: 6px;
+}
+.home-icon-grid button {
+	height: 44px;
+	padding: 0;
+	display: grid;
+	place-items: center;
+	border: 1px solid var(--line);
+	background: #12070a;
+	color: var(--bone);
+	cursor: pointer;
+}
+.home-icon-grid button:hover {
+	border-color: rgba(255, 31, 51, 0.6);
+}
+.home-icon-grid button.on {
+	border-color: var(--blade);
+	background: rgba(255, 31, 51, 0.18);
+	color: var(--blade);
+}
+
+/* "+ Ajouter" at the foot of each group; the first one when there is no group */
+.home-group-add {
+	display: block;
+	width: calc(100% - 16px);
+	margin: 0 8px 8px;
+	padding: 8px;
+	border: 1px dashed var(--line);
+	background: none;
+	color: var(--ash);
+	font-weight: 700;
+	letter-spacing: 0.1em;
+	cursor: pointer;
+}
+.home-group-add:hover {
+	border-color: var(--blade);
+	color: var(--bone);
+}
+.home-first-add {
+	margin-top: 4px;
+}
+/* The list of entities to add, over the page: search and filters, the list, the count and the buttons */
+.home-add-panel {
+	width: min(760px, 100%);
+}
+.home-add-tools {
+	padding: 12px 16px 0;
+}
+.home-add-panel .home-entities {
+	flex: 1;
+	min-height: 0;
+	max-height: none;
+	margin: 0 16px;
+}
+.home-entity.placed {
+	opacity: 0.45;
+	cursor: default;
+}
+.home-add-foot {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 12px 16px;
+	border-top: 1px solid var(--line);
+}
+.home-add-foot .hint {
+	flex: 1;
+}
+.home-add-foot .primary:disabled {
+	opacity: 0.4;
+	cursor: default;
 }
 
 /* ---------- Weather step ---------- */
@@ -784,7 +1184,7 @@ body:not(.settings-mode) #exportConfig {
 /* Settings (opened from the tray once set up): free navigation, no summary step, saved in place */
 .settings-mode #back,
 .settings-mode #skip,
-.settings-mode .steps [data-step="10"] {
+.settings-mode .steps [data-step="11"] {
 	display: none;
 }
 

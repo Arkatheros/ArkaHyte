@@ -41,7 +41,7 @@ Pas de tests automatisés ni de linter. Vérification par les options one-shot d
 - `--screenshot out.png` : rend l'interface, capture, quitte. Moyen principal de valider un changement visuel.
 - `--dump out.json` : un échantillon de tous les capteurs + entrées HWiNFO disponibles.
 - `--demo stress|idle|game|desktop`, `--preview-speedtest [done]`, `--open-editor 0` : états à combiner avec `--screenshot`.
-- `--setup-preview out.png [--setup-step 0-10]` : capture de l'assistant, autonome (pas de mutex) et sans écriture.
+- `--setup-preview out.png [--setup-step 0-11]` : capture de l'assistant, autonome (pas de mutex) et sans écriture.
 - `--speedtest out.txt` : vrai test de débit (sature la connexion, ne pas lancer sans raison).
 - `--devtools` : F12.
 
@@ -108,7 +108,9 @@ Le jeu suivi
 (`ForegroundGame` → `Snapshot.Game` : nom, fréquence de l'écran). `console.js` (`renderGame`) passe alors
 `.frame` en `game` (+ `has-game` tant qu'un jeu tourne) : mêmes widgets GPU / CPU / réseau déplacés, dock gardé (lecture en cours masquée)
 par CSS, éléments `.game-only` (en-tête, cadran FPS en SVG, trio, courbe 60 s), retour 10 s après le jeu.
-Deux pages : balayage horizontal sur `.frame` (`touch-action: pan-y`, clic de fin de geste avalé) ou points
+Deux pages : balayage horizontal sur `.frame` (`touch-action: pan-y`, clic de fin de geste avalé ; doigt suivi par les
+événements `touch*`, pas `pointer*` : un défilement commencé, comme sur les tuiles Maison, annule le pointeur ; après un geste rapide Chromium
+peut avaler le clic de l'appui suivant : appui court sans clic → clic produit par la page, `tapRepair`) ou points
 `#pageDots` → `viewChoice` (gardé jusqu'à la fin du jeu, ou jusqu'au prochain jeu sans partie en cours) ;
 vue jeu sans jeu possible (`renderNoGame`). Jeu en arrière-plan
 (`GameData.Foreground` faux) ou sans FPS : valeurs et courbe figées en gris (`.stale`) ; sans choix manuel,
@@ -176,7 +178,7 @@ n'installe que sur clic du menu. `AppSettings.Load()` préfère `%LOCALAPPDATA%\
 **Démarrage (dev)** : tâche planifiée `Arka Hyte` (AtLogOn) → `scripts/Start-ArkaHyte.ps1` → `bin\ArkaHyte\ArkaHyte.exe`.
 Sous PowerShell 5.1, ne pas utiliser `$PSScriptRoot` dans les valeurs par défaut de `param()` (vide).
 
-**Disposition** (étape « Disposition », `data-page="9"`, « Terminer » = 10). Chaque vue = pile de bandes pleine largeur
+**Disposition** (étape « Disposition », `data-page="9"`, puis « Maison » = 10, « Terminer » = 11). Chaque vue = pile de bandes pleine largeur
 (`LAYOUT_VIEWS` dans `console.js` : haut d'origine, widgets de la bande ; hauteur = jusqu'au haut de la suivante), dock fixe.
 Réglage `Layout` (`LayoutSettings` : `Normal` / `Game` = `[{ Id, Show }]`, ids aussi dans `BANDS` de `setup.js` ;
 `EffectiveLayout` normalisé) → `config.layout` → `placeBands` : décalage par `margin-top` (`--dy` / `--dy-game`, posés
@@ -185,6 +187,36 @@ sur les widgets, jamais `top` ni `transform`, laissés aux animations), classes 
 une bande ou créer une bande (les trois listes). Aperçu en direct : `previewLayout { layout, view }` → `SetupForm.LayoutPreviewChanged`
 → message `layoutPreview` (`view` force la vue affichée, `applyView` ; null en quittant l'étape ; `{ end }` à la fermeture),
 déplacements animés (`arrangeBands`, FLIP).
+**Maison** (Home Assistant, [étude](docs/etude-home-assistant.md)) : troisième page à gauche de la vue normale
+(`VIEW_ORDER` home · normal · game dans `console.js`, `currentView`, classes `.frame.home` / `.game` posées par
+`setViewClasses` ; balayage et points `#pageDots` sur les trois, Maison absente tant que `config.home.enabled` est faux).
+`Home/HomeAssistantClient` (C#) : WebSocket `/api/websocket` (`HomeSocket` : auth par jeton, requêtes numérotées,
+abonnements), `subscribe_entities` limité aux entités choisies (format compressé `a` / `c` / `r`, non documenté, celui
+du frontend HA), attributs filtrés (`KeptAttributes`), changements regroupés 150 ms → message `home` (JSON texte)
+`{ status, version, areas, full, entities: { id: { state, attrs, changed } }, removed }` ; reconnexion 2 → 60 s, arrêt
+sur `auth_invalid` ; muet en pause (`Paused`, tout renvoyé à la reprise) ; buffer de réception réutilisé (mémoire de l'hôte).
+Commandes `homeCall { domain, service, entityId, data }` limitées à `AllowedServices` et aux entités suivies, échec →
+`homeCallFailed` + toast. Jeton : `HomeToken` (DPAPI utilisateur, `home-token.bin`, jamais dans appsettings ni
+exporté ni renvoyé aux pages). Réglage `Home` `{ Enabled, Url, Groups: [{ Name, Columns 1-3, Tiles: [{ Id, Span 1-3 }] }] }`,
+séparateur = entrée de `Groups` avec `Separator` (hauteur 8-600 px) et `Line` (`.home-separator`, jamais cible des ajouts),
+(groupes de l'utilisateur, pas les pièces de HA ; `EffectiveGroups` borne et dédoublonne, l'ancien `Entities` plat
+lu comme un groupe « Maison »), `config.home` (`HomeConfig`). Page : `buildHome` (un groupe = titre + grille
+`--cols`, tuile `grid-column: span`, mise en page large dès 2/3 de la ligne ; scènes en pastilles rondes, icône
+d'après le nom `sceneIcon` ; icône choisie par tuile `Tiles[].Icon` = nom de `js/home-icons.js` (sélection Lucide
+générée par familles d'équipement, `HOME_ICONS` / `HOME_ICON_GROUPS`, `chosenIcon`, sinon automatique selon le type
+et l'état) ; volets : boutons haut / stop / bas ; chauffage : − / +, compact si étroit ; toucher = `turn_on` /
+`turn_off` d'après l'état affiché, jamais `toggle` ; appui long `attachLongPress` → `#homePanel` (`openHomePanel` :
+lumière / volet / chauffage, curseurs à la `audio-volume` envoyés au lâcher) ; toucher un capteur → courbe 24 h
+(`homeHistory` → `HomeAssistantClient.HistoryAsync`, `history/history_during_period` réduit à un point par 5 min)),
+`renderHomeTile` seulement page affichée (`home.dirty` sinon), anneau CPU non dessiné sur cette page. Étape
+« Maison » des Paramètres : groupes créés / renommés / supprimés (second clic) / déplacés (`startRowDrag` sur
+l'en-tête), entités déplacées entre groupes (`startTileDrag`), ajout par « + Ajouter » au pied d'un groupe
+(`openHomeAdd` → `#homeAddPicker` : cases cochées dans `homeSetup.adding.picked`, `confirmHomeAdd` ; entités déjà
+placées grisées, une seule fois sur la page ; sans groupe, « + Ajouter des éléments » crée « Maison ») ; glisser-déposer suivi au niveau de la fenêtre (`followPointer` : une ligne
+déplacée dans le DOM perd sa capture du pointeur). `homeRead` → `HomeCatalog.ReadAsync` (`get_states` + registres
+zones / entités / appareils, pièce affichée dans la liste seulement) → `homeCatalog` ; aperçu
+`previewHome { home, token, focus }` → `SetupForm.HomePreviewChanged` → `homePreview` (`focus` affiche la page Maison).
+Mode design : maison simulée (`startHomeDemo`, `?view=home`), réponses aux commandes simulées.
 **Fond personnel** (étape « Apparence » des Paramètres, `data-page="8"`). `BackgroundStore` :
 image choisie (`pickBackground` → `OpenFileDialog`, copiée aussitôt en `source-*` dans `DataFolder.Backgrounds`),
 cadre au ratio de l'écran dessiné dans `setup.js` (fractions de l'image redressée), rendu une seule fois en C#

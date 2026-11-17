@@ -28,7 +28,8 @@
 			<button type="button" data-step="7"><span class="step-dot"></span>Énergie</button>
 			<button type="button" data-step="8"><span class="step-dot"></span>Apparence</button>
 			<button type="button" data-step="9"><span class="step-dot"></span>Disposition</button>
-			<button type="button" data-step="10"><span class="step-dot"></span>Terminer</button>
+			<button type="button" data-step="10"><span class="step-dot"></span>Maison</button>
+			<button type="button" data-step="11"><span class="step-dot"></span>Terminer</button>
 		</nav>
 
 		<main class="pages">
@@ -322,8 +323,65 @@
 				</div>
 			</section>
 
-			<!-- Summary -->
+			<!-- Maison: Home Assistant page on the case screen -->
 			<section class="page" data-page="10">
+				<h1>Maison</h1>
+				<p class="lead">Une page Home Assistant à gauche de la vue normale (balayage vers la droite) : lumières,
+					prises, volets, chauffage, capteurs et scènes, pilotés au toucher. L'écran suit en direct ; rien n'est
+					gardé avant Enregistrer.</p>
+				<label class="switch"><input type="checkbox" id="homeEnabled"><span>Afficher la page Maison</span></label>
+				<h2>Connexion</h2>
+				<div class="home-connect">
+					<label class="field"><span class="hint">Adresse de Home Assistant</span>
+						<input id="homeUrl" placeholder="http://homeassistant.local:8123" spellcheck="false"></label>
+					<label class="field"><span class="hint">Jeton d'accès longue durée</span>
+						<input id="homeToken" type="password" autocomplete="off" spellcheck="false"></label>
+					<button type="button" class="ghost" id="homeConnect">Se connecter</button>
+				</div>
+				<p class="hint">Le jeton se crée dans Home Assistant : profil › Sécurité › Jetons d'accès longue durée. Il est
+					chiffré pour votre session Windows, jamais exporté ni affiché.</p>
+				<p class="status" id="homeStatus"></p>
+				<h2>Sur l'écran du boîtier</h2>
+				<p class="hint">Vos groupes, dans l'ordre de la page. « Ajouter » ouvre la liste des entités de Home Assistant :
+					cochez-en une ou plusieurs, elles rejoignent ce groupe. Glisser un groupe par son en-tête, une entité dans son
+					groupe ou vers un autre ; « par ligne » : tuiles par ligne du groupe, « largeur » : colonnes prises par la tuile.</p>
+				<div id="homeChosen"></div>
+			</section>
+
+			<!-- Entities of Home Assistant to add to a group, over the page -->
+			<div class="home-icon-picker" id="homeAddPicker" hidden>
+				<div class="home-icon-panel home-add-panel" role="dialog" aria-modal="true" aria-labelledby="homeAddTitle">
+					<div class="home-icon-head">
+						<h2 id="homeAddTitle">Ajouter</h2>
+						<button type="button" class="home-remove" id="homeAddClose" title="Fermer">✕</button>
+					</div>
+					<div class="home-add-tools">
+						<input id="homeSearch" placeholder="Rechercher (nom, pièce, identifiant)…" spellcheck="false">
+						<div class="home-filters" id="homeFilters"></div>
+					</div>
+					<div class="home-entities" id="homeEntities"></div>
+					<div class="home-add-foot">
+						<span class="hint" id="homeAddCount"></span>
+						<button type="button" class="ghost" id="homeAddCancel">Annuler</button>
+						<button type="button" class="primary" id="homeAddConfirm">Ajouter</button>
+					</div>
+				</div>
+			</div>
+
+			<!-- Icon picker of the Maison step (a tile's icon), over the page -->
+			<div class="home-icon-picker" id="homeIconPicker" hidden>
+				<div class="home-icon-panel" role="dialog" aria-modal="true" aria-labelledby="homeIconTitle">
+					<div class="home-icon-head">
+						<h2 id="homeIconTitle">Icône</h2>
+						<button type="button" class="ghost" id="homeIconAuto">Automatique</button>
+						<button type="button" class="home-remove" id="homeIconClose" title="Fermer">✕</button>
+					</div>
+					<div class="home-icon-groups" id="homeIconGroups"></div>
+				</div>
+			</div>
+
+			<!-- Summary -->
+			<section class="page" data-page="11">
 				<h1>Terminer</h1>
 				<p class="lead">Les réglages sont enregistrés dans votre dossier de données, puis l'affichage
 					du boîtier redémarre pour les appliquer. L'assistant reste accessible depuis le menu de l'icône.</p>
@@ -361,6 +419,7 @@
 			</div>
 		</footer>
 	</div>
+	<script src="js/home-icons.js"></script>
 	<script src="js/setup.js"></script>
 </body>
 </html>

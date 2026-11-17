@@ -15,8 +15,7 @@ du non fait.
 ---
 
 # Liste des tâches
-- [ ] intégration de home assistant dans un page, via api
- 
+
 
 # En attente — uniquement sur demande explicite du propriétaire
 

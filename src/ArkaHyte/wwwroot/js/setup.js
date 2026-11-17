@@ -5,10 +5,11 @@
 	'use strict';
 
 	const host = window.chrome && window.chrome.webview ? window.chrome.webview : null;
-	const LAST_STEP = 10;
+	const LAST_STEP = 11;
 	const GAME_VIEW_STEP = 5;
 	const APPEARANCE_STEP = 8;
 	const LAYOUT_STEP = 9;
+	const HOME_STEP = 10;
 
 	/* Widgets fed by HWiNFO. Suggestions: entries of the right unit whose sensor matches, label
 	   patterns tried in order (English and French HWiNFO names). */
@@ -59,6 +60,10 @@
 		if (model.step === LAYOUT_STEP && step !== LAYOUT_STEP && layoutTouched) {
 			previewLayout(null);
 		}
+		// Leaving the Maison step: the case screen goes back to its usual view, the page set up kept
+		if (model.step === HOME_STEP && step !== HOME_STEP && homeSetup.touched) {
+			previewHome(false);
+		}
 		model.step = Math.max(0, Math.min(last, step));
 		pages.forEach((page, index) => page.classList.toggle('current', index === model.step));
 		stepButtons.forEach((button, index) => {
@@ -83,6 +88,10 @@
 		// The crop stage, like the map, is measured from its box
 		if (model.step === APPEARANCE_STEP) {
 			renderCrop();
+		}
+		// Maison: the entities are read when the step opens (address and token already saved)
+		if (model.step === HOME_STEP && !homeSetup.catalog && !homeSetup.reading && homeSetup.url && homeSetup.hasToken) {
+			readHomeCatalog();
 		}
 	}
 
@@ -582,6 +591,7 @@
 		const transition = $('gameTransition');
 		add('ok', 'Changement de vue : <b>' + escapeHtml(transition.options[transition.selectedIndex].text.split(' :')[0]) + '</b>');
 		add('ok', layoutSummary());
+		add(...homeSummary());
 		add('ok', 'Jeux ajoutés : <b>' + (extraGames.length ? extraGames.map(g => escapeHtml(g.name || g.exe)).join(', ') : 'aucun') + '</b>');
 		add('ok', $('energyShow').checked
 			? 'Énergie : <b>' + escapeHtml(formatPrice($('energyPrice').value)) + ' €/kWh</b>, reste du PC ' + energyPartsTotal() + ' W, alimentation ' + escapeHtml($('energyEfficiency').value || '?') + ' %'
@@ -621,6 +631,8 @@
 			extraGames
 		};
 		message.layout = layout;
+		message.home = readHome();
+		message.homeToken = $('homeToken').value.trim();
 		message.energy = readEnergy();
 		message.background = readBackground();
 		message.palette = palettes.choice;
@@ -804,7 +816,7 @@
 					entry.show = box.checked;
 					changeLayout(view);
 				});
-				row.addEventListener('pointerdown', event => startBandDrag(event, view, row));
+				row.addEventListener('pointerdown', event => startRowDrag(event, row, (from, to) => moveBand(view, from, to)));
 				row.addEventListener('keydown', event => {
 					const step = event.key === 'ArrowUp' ? -1 : event.key === 'ArrowDown' ? 1 : 0;
 					if (event.altKey && step && index + step >= 0 && index + step < layout[view].length) {
@@ -829,8 +841,8 @@
 	// theirs; the new order is kept (and shown on the case screen) on release. Positions are taken in the
 	// list (offsetTop, .bands positioned) against its place on screen read each time, so a scroll during the
 	// drag keeps the row under the pointer.
-	function startBandDrag(event, view, row) {
-		if (event.button !== 0 || event.target.closest('input')) {
+	function startRowDrag(event, row, onDrop) {
+		if (event.button !== 0 || event.target.closest('input, button')) {
 			return;
 		}
 		event.preventDefault();
@@ -840,7 +852,6 @@
 		// Where the row was grabbed, from its top edge
 		const grab = event.clientY - row.getBoundingClientRect().top;
 		let pointerY = event.clientY;
-		row.setPointerCapture(event.pointerId);
 		row.classList.add('dragging');
 		list.classList.add('dragging');
 
@@ -860,28 +871,70 @@
 			}
 			row.style.transform = `translateY(${top - row.offsetTop}px)`;
 		};
-		const onMove = (moveEvent) => {
-			pointerY = moveEvent.clientY;
+		const stop = followPointer(event.pointerId, (y) => {
+			pointerY = y;
 			follow();
-		};
-		// Scroll events do not bubble: caught on the way down
-		document.addEventListener('scroll', follow, true);
-		const onEnd = () => {
-			document.removeEventListener('scroll', follow, true);
-			row.removeEventListener('pointermove', onMove);
-			row.removeEventListener('pointerup', onEnd);
-			row.removeEventListener('pointercancel', onEnd);
+		}, () => {
 			row.classList.remove('dragging');
 			list.classList.remove('dragging');
 			row.style.transform = '';
 			const to = rows().indexOf(row);
 			if (to !== from) {
-				moveBand(view, from, to);
+				onDrop(from, to);
+			}
+		});
+		// Scroll events do not bubble: caught on the way down
+		document.addEventListener('scroll', follow, true);
+		stop.then(() => document.removeEventListener('scroll', follow, true));
+	}
+
+	// Follows one pointer over the whole window until it lifts: the dragged element moves in the DOM, which
+	// would drop a pointer capture set on it. onMove(clientY); onEnd() once; resolves after onEnd. Held near
+	// the top or bottom of the pages, it scrolls them (faster nearer the edge), so a row can reach a place out
+	// of view; the scroll moves the row through the callers' scroll listener.
+	const AUTO_SCROLL_EDGE = 70;
+	const AUTO_SCROLL_MAX = 22;
+
+	function followPointer(pointerId, onMove, onEnd) {
+		const pages = document.querySelector('.pages');
+		let pointerY = null;
+		const scroll = () => {
+			if (pointerY === null) {
+				return;
+			}
+			const box = pages.getBoundingClientRect();
+			const above = box.top + AUTO_SCROLL_EDGE - pointerY;
+			const below = pointerY - (box.bottom - AUTO_SCROLL_EDGE);
+			const depth = Math.max(above, below);
+			if (depth > 0) {
+				const step = Math.ceil(AUTO_SCROLL_MAX * Math.min(1, depth / AUTO_SCROLL_EDGE));
+				pages.scrollTop += above > 0 ? -step : step;
 			}
 		};
-		row.addEventListener('pointermove', onMove);
-		row.addEventListener('pointerup', onEnd);
-		row.addEventListener('pointercancel', onEnd);
+		// A timer rather than animation frames: steady whatever the window's refresh
+		const timer = setInterval(scroll, 16);
+		return new Promise(resolve => {
+			const move = (event) => {
+				if (event.pointerId === pointerId) {
+					pointerY = event.clientY;
+					onMove(event.clientY);
+				}
+			};
+			const end = (event) => {
+				if (event.pointerId !== pointerId) {
+					return;
+				}
+				clearInterval(timer);
+				window.removeEventListener('pointermove', move);
+				window.removeEventListener('pointerup', end);
+				window.removeEventListener('pointercancel', end);
+				onEnd();
+				resolve();
+			};
+			window.addEventListener('pointermove', move);
+			window.addEventListener('pointerup', end);
+			window.addEventListener('pointercancel', end);
+		});
 	}
 
 	function changeLayout(view) {
@@ -911,6 +964,614 @@
 		const hidden = Object.keys(BANDS).flatMap(view => layout[view].filter(entry => !entry.show)
 			.map(entry => BANDS[view].find(b => b.id === entry.id).name + (view === 'game' ? ' (vue jeu)' : '')));
 		return 'Disposition : <b>personnalisée</b>' + (hidden.length ? ', masqués : ' + escapeHtml(hidden.join(', ')) : '');
+	}
+
+	// ---------- Maison: Home Assistant page on the case screen ----------
+	// The host checks the address and token (homeRead → homeCatalog: version, entities with their room).
+	// What the page shows is the user's groups ({ name, columns: 1-3, tiles: [{ id, span: 1-3 }] }): created,
+	// renamed, deleted and moved here; tiles move within a group or to another one by drag and drop. An entity
+	// ticked in the list goes to the selected group (a first "Maison" group is made when there is none). The
+	// token typed is only sent with the save (and the preview, to the host process); the saved one never comes
+	// back to this page.
+	const HOME_FILTERS = [
+		['all', 'Tout', null],
+		['picked', 'Cochées', null],
+		['light', 'Lumières', ['light']],
+		['switch', 'Prises', ['switch', 'input_boolean', 'fan']],
+		['sensor', 'Capteurs', ['sensor', 'binary_sensor']],
+		['climate', 'Chauffage', ['climate']],
+		['cover', 'Volets', ['cover']],
+		['scene', 'Scènes', ['scene', 'script']]
+	];
+	const HOME_KINDS = { light: 'lumière', switch: 'prise', input_boolean: 'interrupteur', fan: 'ventilateur', sensor: 'capteur', binary_sensor: 'détecteur', climate: 'chauffage', cover: 'volet', scene: 'scène', script: 'script' };
+	const HOME_LIST_MAX = 300;
+	const HOME_DEFAULT_GROUP = 'Maison';
+	// adding: the list opened from a group ({ group: its index, null for a first "Maison" group; picked: ids })
+	const homeSetup = { enabled: false, url: '', hasToken: false, groups: [], catalog: null, filter: 'all', touched: false, reading: false, adding: null };
+	const homeDomainOf = id => id.slice(0, id.indexOf('.'));
+	const homeChosenIds = () => new Set(homeSetup.groups.flatMap(group => group.tiles.map(tile => tile.id)));
+	// A separator sits among the groups: a height and an optional rule, no name, no tiles
+	const isHomeSeparator = group => typeof group.separator === 'number';
+	const HOME_SEPARATOR_DEFAULT = 40;
+
+	function showHome(home) {
+		homeSetup.enabled = Boolean(home && home.enabled);
+		homeSetup.url = (home && home.url) || '';
+		homeSetup.hasToken = Boolean(home && home.hasToken);
+		homeSetup.groups = ((home && home.groups) || []).map(group => (typeof group.separator === 'number'
+			? { separator: group.separator, line: Boolean(group.line), tiles: [] }
+			: {
+				name: group.name || HOME_DEFAULT_GROUP,
+				columns: group.columns || 3,
+				tiles: (group.tiles || []).map(tile => ({ id: tile.id, span: tile.span || 1, icon: tile.icon || null }))
+			}));
+		$('homeEnabled').checked = homeSetup.enabled;
+		$('homeUrl').value = homeSetup.url;
+		$('homeToken').value = '';
+		$('homeToken').placeholder = homeSetup.hasToken ? 'Enregistré (laisser vide pour le garder)' : 'Coller le jeton ici';
+		renderHomeFilters();
+		renderHomeGroups();
+	}
+
+	function showHomeStatus(text, level) {
+		const status = $('homeStatus');
+		status.className = 'status' + (level ? ' ' + level : '');
+		status.textContent = text;
+	}
+
+	function readHomeCatalog() {
+		const url = $('homeUrl').value.trim();
+		if (!url) {
+			showHomeStatus('Indiquez l’adresse de Home Assistant, par exemple http://homeassistant.local:8123.', 'warn');
+			return;
+		}
+		homeSetup.reading = true;
+		$('homeConnect').disabled = true;
+		showHomeStatus('Connexion à Home Assistant…', 'warn');
+		send({ type: 'homeRead', url, token: $('homeToken').value.trim() });
+		if (!host) {
+			setTimeout(() => onHomeCatalog(designHomeCatalog()), 600);
+		}
+	}
+
+	function onHomeCatalog(message) {
+		homeSetup.reading = false;
+		$('homeConnect').disabled = false;
+		if (!message.ok) {
+			const errors = {
+				unauthorized: 'Jeton refusé par Home Assistant : vérifiez-le ou créez-en un nouveau.',
+				unreachable: 'Home Assistant injoignable à cette adresse (adresse, port, Home Assistant lancé ?).',
+				address: 'Adresse invalide : elle commence par http:// ou https://.',
+				token: 'Collez un jeton d’accès longue durée (profil Home Assistant › Sécurité).'
+			};
+			showHomeStatus(errors[message.error] || 'Connexion impossible.', 'bad');
+			return;
+		}
+		homeSetup.catalog = message.entities || [];
+		showHomeStatus('Connecté à Home Assistant ' + (message.version || '') + ' · ' + homeSetup.catalog.length + ' entités utilisables, ' + (message.areas || 0) + ' pièces.', '');
+		// Names shown in the groups; the list, when it waited for them
+		renderHomeGroups();
+		if (homeSetup.adding) {
+			renderHomeEntities();
+		}
+	}
+
+	function renderHomeFilters() {
+		const bar = $('homeFilters');
+		bar.textContent = '';
+		for (const [key, label] of HOME_FILTERS) {
+			const button = document.createElement('button');
+			button.type = 'button';
+			button.textContent = label;
+			button.classList.toggle('on', homeSetup.filter === key);
+			button.addEventListener('click', () => {
+				homeSetup.filter = key;
+				renderHomeFilters();
+				renderHomeEntities();
+			});
+			bar.append(button);
+		}
+	}
+
+	function homeName(id) {
+		const known = homeSetup.catalog && homeSetup.catalog.find(e => e.id === id);
+		return known ? known.name : id;
+	}
+
+	function renderHomeEntities() {
+		const list = $('homeEntities');
+		list.textContent = '';
+		const adding = homeSetup.adding;
+		if (!adding) {
+			return;
+		}
+		if (!homeSetup.catalog) {
+			const wait = document.createElement('div');
+			wait.className = 'home-more';
+			wait.textContent = homeSetup.reading
+				? 'Connexion à Home Assistant…'
+				: 'Indiquez l\u2019adresse et le jeton de Home Assistant, puis « Se connecter ».';
+			list.append(wait);
+			return;
+		}
+		const query = $('homeSearch').value.trim().toLowerCase();
+		const [, , domains] = HOME_FILTERS.find(([key]) => key === homeSetup.filter) || HOME_FILTERS[0];
+		// Where each entity already shown sits
+		const placed = new Map();
+		homeSetup.groups.forEach(group => group.tiles.forEach(tile => placed.set(tile.id, group.name)));
+		const matches = homeSetup.catalog.filter(entity =>
+			(homeSetup.filter !== 'picked' || adding.picked.has(entity.id))
+			&& (!domains || domains.includes(entity.domain))
+			&& (!query || [entity.name, entity.id, entity.areaName || ''].some(text => text.toLowerCase().includes(query))));
+		for (const entity of matches.slice(0, HOME_LIST_MAX)) {
+			const row = document.createElement('label');
+			row.className = 'home-entity';
+			row.innerHTML = '<input type="checkbox"><span class="n"><b></b><small></small></span><span class="state"></span>';
+			const box = row.querySelector('input');
+			const where = placed.get(entity.id);
+			row.querySelector('b').textContent = entity.name;
+			row.querySelector('small').textContent = where !== undefined
+				? 'déjà dans « ' + where + ' »'
+				: entity.id + (entity.areaName ? ' · ' + entity.areaName : '');
+			row.querySelector('.state').textContent = entity.state + (entity.unit ? ' ' + entity.unit : '');
+			if (where !== undefined) {
+				// On the page once only: moved between groups by drag and drop, not added again
+				box.checked = true;
+				box.disabled = true;
+				row.classList.add('placed');
+			} else {
+				box.checked = adding.picked.has(entity.id);
+				box.addEventListener('change', () => {
+					if (box.checked) {
+						adding.picked.add(entity.id);
+					} else {
+						adding.picked.delete(entity.id);
+					}
+					renderHomeAddCount();
+				});
+			}
+			list.append(row);
+		}
+		if (matches.length > HOME_LIST_MAX || !matches.length) {
+			const more = document.createElement('div');
+			more.className = 'home-more';
+			more.textContent = matches.length ? (matches.length - HOME_LIST_MAX) + ' autres : affinez la recherche.' : 'Aucune entité ne correspond.';
+			list.append(more);
+		}
+	}
+
+	// The list of entities opened from a group (null: no group yet, a "Maison" one is made on confirmation)
+	function openHomeAdd(groupIndex) {
+		const group = groupIndex === null ? null : homeSetup.groups[groupIndex];
+		homeSetup.adding = { group: groupIndex, picked: new Set() };
+		$('homeAddTitle').textContent = 'Ajouter à « ' + (group ? group.name : HOME_DEFAULT_GROUP) + ' »';
+		$('homeSearch').value = '';
+		homeSetup.filter = 'all';
+		renderHomeFilters();
+		renderHomeEntities();
+		renderHomeAddCount();
+		$('homeAddPicker').hidden = false;
+		$('homeSearch').focus();
+		// Not read yet: read now (address and token saved, or typed)
+		if (!homeSetup.catalog && !homeSetup.reading && $('homeUrl').value.trim() && (homeSetup.hasToken || $('homeToken').value.trim())) {
+			readHomeCatalog();
+			renderHomeEntities();
+		}
+	}
+
+	function renderHomeAddCount() {
+		const count = homeSetup.adding ? homeSetup.adding.picked.size : 0;
+		$('homeAddCount').textContent = count ? count + ' entité' + (count > 1 ? 's' : '') + ' cochée' + (count > 1 ? 's' : '') : 'Cochez une ou plusieurs entités';
+		$('homeAddConfirm').disabled = count === 0;
+		$('homeAddConfirm').textContent = count > 1 ? 'Ajouter les ' + count : 'Ajouter';
+	}
+
+	function closeHomeAdd() {
+		homeSetup.adding = null;
+		$('homeAddPicker').hidden = true;
+	}
+
+	// The entities ticked join the group, in the list's order
+	function confirmHomeAdd() {
+		const adding = homeSetup.adding;
+		if (!adding || !adding.picked.size) {
+			return;
+		}
+		let group = adding.group === null ? null : homeSetup.groups[adding.group];
+		if (!group || isHomeSeparator(group)) {
+			group = { name: HOME_DEFAULT_GROUP, columns: 3, tiles: [] };
+			homeSetup.groups.push(group);
+		}
+		const catalog = homeSetup.catalog || [];
+		for (const entity of catalog.filter(e => adding.picked.has(e.id))) {
+			// Heating reads best two columns wide (- / + beside the reading)
+			group.tiles.push({ id: entity.id, span: entity.domain === 'climate' ? Math.min(2, group.columns) : 1 });
+		}
+		closeHomeAdd();
+		changeHome(false);
+	}
+
+	$('homeAddConfirm').addEventListener('click', confirmHomeAdd);
+	$('homeAddCancel').addEventListener('click', closeHomeAdd);
+	$('homeAddClose').addEventListener('click', closeHomeAdd);
+	$('homeAddPicker').addEventListener('click', event => event.target === $('homeAddPicker') && closeHomeAdd());
+	document.addEventListener('keydown', event => event.key === 'Escape' && !$('homeAddPicker').hidden && closeHomeAdd());
+
+	// "1 2 3" choice: the value, the highest allowed, what to do with a new one
+	function homeSegments(parent, label, value, max, onPick) {
+		const box = document.createElement('span');
+		box.className = 'home-seg';
+		box.title = label;
+		const caption = document.createElement('small');
+		caption.textContent = label;
+		box.append(caption);
+		for (let n = 1; n <= 3; n++) {
+			const button = document.createElement('button');
+			button.type = 'button';
+			button.textContent = n;
+			button.disabled = n > max;
+			button.classList.toggle('on', n === value);
+			button.addEventListener('click', () => onPick(n));
+			box.append(button);
+		}
+		parent.append(box);
+	}
+
+	function renderHomeGroups() {
+		const box = $('homeChosen');
+		box.textContent = '';
+		const groups = document.createElement('div');
+		groups.className = 'home-groups';
+		homeSetup.groups.forEach((group, index) => groups.append(isHomeSeparator(group) ? homeSeparatorCard(group, index) : homeGroupCard(group, index)));
+		box.append(groups);
+		// No group yet: the first entities make a "Maison" group
+		if (!homeSetup.groups.some(group => !isHomeSeparator(group))) {
+			const first = document.createElement('button');
+			first.type = 'button';
+			first.className = 'ghost home-first-add';
+			first.textContent = '+ Ajouter des éléments';
+			first.addEventListener('click', () => openHomeAdd(null));
+			box.append(first);
+		}
+		const actions = document.createElement('div');
+		actions.className = 'home-add-row';
+		const add = document.createElement('button');
+		add.type = 'button';
+		add.className = 'ghost';
+		add.textContent = '+ Nouveau groupe';
+		add.addEventListener('click', () => {
+			const count = homeSetup.groups.filter(group => !isHomeSeparator(group)).length;
+			homeSetup.groups.push({ name: 'Groupe ' + (count + 1), columns: 3, tiles: [] });
+			changeHome();
+			// Named at once
+			const inputs = $('homeChosen').querySelectorAll('.home-group-name');
+			inputs[inputs.length - 1].select();
+		});
+		const separator = document.createElement('button');
+		separator.type = 'button';
+		separator.className = 'ghost';
+		separator.textContent = '+ Séparateur';
+		separator.addEventListener('click', () => {
+			homeSetup.groups.push({ separator: HOME_SEPARATOR_DEFAULT, line: false, tiles: [] });
+			changeHome();
+		});
+		actions.append(add, separator);
+		box.append(actions);
+	}
+
+	// A group or separator moved by its header
+	function moveHomeEntry(from, to) {
+		const [moved] = homeSetup.groups.splice(from, 1);
+		homeSetup.groups.splice(to, 0, moved);
+		changeHome();
+	}
+
+	// Separator: its height in pixels and whether a rule crosses it; moved and deleted like a group
+	function homeSeparatorCard(group, index) {
+		const card = document.createElement('div');
+		card.className = 'home-group separator';
+		const head = document.createElement('div');
+		head.className = 'home-group-head';
+		head.title = 'Glisser pour déplacer le séparateur';
+		head.innerHTML = '<span class="band-grip" aria-hidden="true"></span><span class="home-separator-label">Séparateur</span>';
+		const height = document.createElement('label');
+		height.className = 'home-separator-height';
+		height.innerHTML = '<small>hauteur</small><input type="number" min="8" max="600" step="4"><em>px</em>';
+		const input = height.querySelector('input');
+		input.value = group.separator;
+		input.addEventListener('change', () => {
+			group.separator = Math.max(8, Math.min(600, Math.round(Number(input.value) || HOME_SEPARATOR_DEFAULT)));
+			input.value = group.separator;
+			previewHome(model.step === HOME_STEP);
+		});
+		const line = document.createElement('label');
+		line.className = 'home-separator-line';
+		line.innerHTML = '<input type="checkbox"><small>trait</small>';
+		const box = line.querySelector('input');
+		box.checked = group.line;
+		box.addEventListener('change', () => {
+			group.line = box.checked;
+			previewHome(model.step === HOME_STEP);
+		});
+		const remove = document.createElement('button');
+		remove.type = 'button';
+		remove.className = 'home-remove';
+		remove.textContent = '✕';
+		remove.title = 'Supprimer le séparateur';
+		remove.addEventListener('click', () => {
+			homeSetup.groups.splice(index, 1);
+			changeHome();
+		});
+		head.append(height, line, remove);
+		head.addEventListener('pointerdown', event => startRowDrag(event, card, moveHomeEntry));
+		card.append(head);
+		return card;
+	}
+
+	function homeGroupCard(group, index) {
+		const card = document.createElement('div');
+		card.className = 'home-group';
+		const head = document.createElement('div');
+		head.className = 'home-group-head';
+		head.title = 'Glisser pour déplacer le groupe';
+		head.innerHTML = '<span class="band-grip" aria-hidden="true"></span>';
+		const name = document.createElement('input');
+		name.className = 'home-group-name';
+		name.value = group.name;
+		name.maxLength = 40;
+		name.spellcheck = false;
+		name.addEventListener('input', () => {
+			group.name = name.value;
+			previewHome(model.step === HOME_STEP);
+		});
+		name.addEventListener('change', () => {
+			group.name = name.value.trim() || HOME_DEFAULT_GROUP;
+			name.value = group.name;
+			previewHome(model.step === HOME_STEP);
+		});
+		head.append(name);
+		homeSegments(head, 'par ligne', group.columns, 3, n => {
+			group.columns = n;
+			group.tiles.forEach(tile => {
+				tile.span = Math.min(tile.span, n);
+			});
+			changeHome();
+		});
+		// Deleted on a second click, with its tiles
+		const remove = document.createElement('button');
+		remove.type = 'button';
+		remove.className = 'home-remove';
+		remove.textContent = '✕';
+		remove.title = 'Supprimer le groupe';
+		remove.addEventListener('click', () => {
+			if (!remove.classList.contains('confirm') && group.tiles.length) {
+				remove.classList.add('confirm');
+				remove.textContent = 'Supprimer ?';
+				setTimeout(() => {
+					remove.classList.remove('confirm');
+					remove.textContent = '✕';
+				}, 3000);
+				return;
+			}
+			homeSetup.groups.splice(index, 1);
+			changeHome();
+		});
+		head.append(remove);
+		head.addEventListener('pointerdown', event => startRowDrag(event, card, moveHomeEntry));
+		card.append(head);
+		const items = document.createElement('div');
+		items.className = 'home-group-items';
+		// Read back after a tile drag (separators have no list: the index says which group it is)
+		items.dataset.group = index;
+		group.tiles.forEach(tile => items.append(homeTileRow(group, tile)));
+		card.append(items);
+		// The list of Home Assistant's entities, to tick some for this group
+		const add = document.createElement('button');
+		add.type = 'button';
+		add.className = 'home-group-add';
+		add.textContent = '+ Ajouter';
+		add.addEventListener('click', () => openHomeAdd(index));
+		card.append(add);
+		return card;
+	}
+
+	function homeTileRow(group, tile) {
+		const domain = homeDomainOf(tile.id);
+		const row = document.createElement('div');
+		row.className = 'band-row';
+		row.dataset.id = tile.id;
+		row.title = 'Glisser pour déplacer, dans ce groupe ou vers un autre';
+		row.innerHTML = '<span class="band-grip" aria-hidden="true"></span><span class="band-text"><span class="band-name"><span></span><small></small></span></span>';
+		row.querySelector('.band-name span').textContent = homeName(tile.id);
+		row.querySelector('.band-name small').textContent = HOME_KINDS[domain] || domain;
+		// Its icon: the one chosen, or "auto" (from its kind and state on the case screen)
+		const iconButton = document.createElement('button');
+		iconButton.type = 'button';
+		iconButton.className = 'home-icon-button' + (tile.icon ? ' chosen' : '');
+		iconButton.title = 'Choisir l\u2019icône';
+		if (tile.icon && (window.HOME_ICONS || {})[tile.icon]) {
+			iconButton.innerHTML = '<svg viewBox="0 0 24 24">' + window.HOME_ICONS[tile.icon] + '</svg>';
+		} else {
+			iconButton.textContent = 'auto';
+		}
+		iconButton.addEventListener('click', () => openHomeIconPicker(tile));
+		row.insertBefore(iconButton, row.querySelector('.band-text'));
+		homeSegments(row, 'largeur', tile.span, group.columns, n => {
+			tile.span = n;
+			changeHome();
+		});
+		const remove = document.createElement('button');
+		remove.type = 'button';
+		remove.className = 'home-remove';
+		remove.textContent = '✕';
+		remove.title = 'Retirer';
+		remove.addEventListener('click', () => {
+			group.tiles = group.tiles.filter(t => t !== tile);
+			changeHome();
+		});
+		row.append(remove);
+		row.addEventListener('pointerdown', event => startTileDrag(event, row));
+		return row;
+	}
+
+	// A tile dragged anywhere among the groups: it goes into the group under the pointer (the nearest one),
+	// before the first tile whose middle is below its own; the groups are read back from the page on release
+	function startTileDrag(event, row) {
+		if (event.button !== 0 || event.target.closest('input, button')) {
+			return;
+		}
+		event.preventDefault();
+		event.stopPropagation();
+		const lists = () => [...$('homeChosen').querySelectorAll('.home-group-items')];
+		const grab = event.clientY - row.getBoundingClientRect().top;
+		let pointerY = event.clientY;
+		row.classList.add('dragging');
+		const follow = () => {
+			row.style.transform = '';
+			const middle = pointerY - grab + row.offsetHeight / 2;
+			let target = null;
+			let best = Infinity;
+			for (const list of lists()) {
+				const box = list.getBoundingClientRect();
+				const distance = middle < box.top ? box.top - middle : middle > box.bottom ? middle - box.bottom : 0;
+				if (distance < best) {
+					best = distance;
+					target = list;
+				}
+			}
+			const before = [...target.children].find(other => other !== row && middle < other.getBoundingClientRect().top + other.offsetHeight / 2) || null;
+			if (row.parentElement !== target || row.nextElementSibling !== before) {
+				target.insertBefore(row, before);
+			}
+			row.style.transform = `translateY(${pointerY - grab - row.getBoundingClientRect().top}px)`;
+		};
+		const stop = followPointer(event.pointerId, y => {
+			pointerY = y;
+			follow();
+		}, () => {
+			row.classList.remove('dragging');
+			row.style.transform = '';
+			const tiles = new Map(homeSetup.groups.flatMap(group => group.tiles).map(tile => [tile.id, tile]));
+			lists().forEach(list => {
+				const group = homeSetup.groups[Number(list.dataset.group)];
+				group.tiles = [...list.children].map(child => tiles.get(child.dataset.id)).filter(Boolean);
+				group.tiles.forEach(tile => {
+					tile.span = Math.min(tile.span, group.columns);
+				});
+			});
+			changeHome();
+		});
+		document.addEventListener('scroll', follow, true);
+		stop.then(() => document.removeEventListener('scroll', follow, true));
+	}
+
+	function readHome() {
+		return {
+			enabled: $('homeEnabled').checked,
+			url: $('homeUrl').value.trim(),
+			groups: homeSetup.groups.map(group => (isHomeSeparator(group)
+				? { separator: group.separator, line: group.line }
+				: { name: group.name.trim() || HOME_DEFAULT_GROUP, columns: group.columns, tiles: group.tiles.map(tile => ({ id: tile.id, span: tile.span, icon: tile.icon || null })) }))
+		};
+	}
+
+	function changeHome(refreshList = true) {
+		renderHomeGroups();
+		if (refreshList) {
+			renderHomeEntities();
+		}
+		previewHome(model.step === HOME_STEP);
+	}
+
+	// The case screen follows, on the Maison page while the step is open (focus)
+	function previewHome(focus) {
+		homeSetup.touched = true;
+		send({ type: 'previewHome', home: readHome(), token: $('homeToken').value.trim(), focus });
+	}
+
+	// Icon picker: the families of js/home-icons.js, "Automatique" for none
+	let homeIconTile = null;
+
+	function openHomeIconPicker(tile) {
+		homeIconTile = tile;
+		$('homeIconTitle').textContent = 'Icône · ' + homeName(tile.id);
+		const box = $('homeIconGroups');
+		box.textContent = '';
+		for (const group of window.HOME_ICON_GROUPS || []) {
+			const title = document.createElement('div');
+			title.className = 'home-icon-family';
+			title.textContent = group.label;
+			box.append(title);
+			const grid = document.createElement('div');
+			grid.className = 'home-icon-grid';
+			for (const name of group.icons) {
+				const button = document.createElement('button');
+				button.type = 'button';
+				button.title = name;
+				button.classList.toggle('on', tile.icon === name);
+				button.innerHTML = '<svg viewBox="0 0 24 24">' + window.HOME_ICONS[name] + '</svg>';
+				button.addEventListener('click', () => pickHomeIcon(name));
+				grid.append(button);
+			}
+			box.append(grid);
+		}
+		$('homeIconAuto').classList.toggle('on', !tile.icon);
+		$('homeIconPicker').hidden = false;
+	}
+
+	function pickHomeIcon(name) {
+		if (homeIconTile) {
+			homeIconTile.icon = name;
+		}
+		closeHomeIconPicker();
+		changeHome(false);
+	}
+
+	function closeHomeIconPicker() {
+		$('homeIconPicker').hidden = true;
+		homeIconTile = null;
+	}
+
+	$('homeIconAuto').addEventListener('click', () => pickHomeIcon(null));
+	$('homeIconClose').addEventListener('click', closeHomeIconPicker);
+	$('homeIconPicker').addEventListener('click', event => event.target === $('homeIconPicker') && closeHomeIconPicker());
+	document.addEventListener('keydown', event => event.key === 'Escape' && !$('homeIconPicker').hidden && closeHomeIconPicker());
+
+	$('homeConnect').addEventListener('click', readHomeCatalog);
+	$('homeToken').addEventListener('keydown', event => event.key === 'Enter' && readHomeCatalog());
+	$('homeUrl').addEventListener('keydown', event => event.key === 'Enter' && readHomeCatalog());
+	$('homeSearch').addEventListener('input', renderHomeEntities);
+	$('homeEnabled').addEventListener('change', () => previewHome(true));
+
+	function homeSummary() {
+		const home = readHome();
+		const count = homeChosenIds().size;
+		if (!home.enabled) {
+			return ['ok', 'Maison : <b>page non affichée</b>'];
+		}
+		if (!home.url || (!homeSetup.hasToken && !$('homeToken').value.trim())) {
+			return ['warn', 'Maison : <b>connexion incomplète</b>, la page ne s’affichera pas'];
+		}
+		const groups = homeSetup.groups.filter(group => !isHomeSeparator(group)).length;
+		return [count ? 'ok' : 'warn', 'Maison : <b>' + count + ' entité' + (count > 1 ? 's' : '') + '</b> en ' + groups + ' groupe' + (groups > 1 ? 's' : '') + ', ' + escapeHtml(home.url)];
+	}
+
+	// Design mode: a small house, as homeCatalog would bring it
+	function designHomeCatalog() {
+		const rows = [
+			['scene.cinema', 'Cinéma', null, null, 'scening'], ['scene.nuit', 'Nuit', null, null, ''], ['script.reveil', 'Réveil', null, null, 'off'],
+			['light.salon_plafonnier', 'Plafonnier', 'salon', 'Salon', 'on'], ['light.salon_lampe', 'Lampe d’appoint', 'salon', 'Salon', 'off'],
+			['switch.prise_tv', 'Prise TV', 'salon', 'Salon', 'on'], ['sensor.prise_tv_power', 'Prise TV · puissance', 'salon', 'Salon', '85', 'W'],
+			['cover.volet_salon', 'Volet salon', 'salon', 'Salon', 'open'], ['climate.salon', 'Thermostat', 'salon', 'Salon', 'heat'],
+			['sensor.salon_humidite', 'Humidité salon', 'salon', 'Salon', '52', '%'], ['light.chambre_chevet', 'Lampe chevet', 'chambre', 'Chambre', 'off'],
+			['binary_sensor.fenetre_chambre', 'Fenêtre', 'chambre', 'Chambre', 'on'], ['light.bureau', 'Lumière bureau', 'bureau', 'Bureau', 'on']
+		];
+		return {
+			ok: true,
+			version: '2026.11',
+			areas: 3,
+			entities: rows.map(([id, name, area, areaName, state, unit]) => ({ id, name, domain: homeDomainOf(id), area, areaName, state, unit: unit || null }))
+		};
 	}
 
 	// ---------- Game view ----------
@@ -1557,6 +2218,7 @@
 			showGameView(state.gameView);
 		}
 		showLayout(state.layout);
+		showHome(state.home);
 		if (state.energy) {
 			showEnergy(state.energy);
 		}
@@ -1629,6 +2291,9 @@
 			case 'backgroundFailed':
 				showBackgroundStatus(message.message, 'bad');
 				break;
+			case 'homeCatalog':
+				onHomeCatalog(message);
+				break;
 			case 'processes':
 				openProcesses = message.processes || [];
 				renderProcessPick();
@@ -1642,6 +2307,12 @@
 					showBackground(message.background);
 				}
 				$('next').disabled = false;
+				// A token typed is now the saved one
+				if ($('homeToken').value.trim()) {
+					homeSetup.hasToken = true;
+					$('homeToken').value = '';
+					$('homeToken').placeholder = 'Enregistré (laisser vide pour le garder)';
+				}
 				showFootStatus('Réglages enregistrés et appliqués');
 				break;
 			case 'configExported':
