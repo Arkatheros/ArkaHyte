@@ -331,15 +331,21 @@
 					gardé avant Enregistrer.</p>
 				<label class="switch"><input type="checkbox" id="homeEnabled"><span>Afficher la page Maison</span></label>
 				<h2>Connexion</h2>
-				<div class="home-connect">
+				<!-- Connected (token saved or connection made): the address and "Se déconnecter" only -->
+				<div class="home-linked" id="homeLinked" hidden>
+					<span class="hint">Adresse de Home Assistant</span>
+					<span class="home-linked-url" id="homeLinkedUrl"></span>
+					<button type="button" class="ghost" id="homeDisconnect">Se déconnecter</button>
+				</div>
+				<div class="home-connect" id="homeConnectForm">
 					<label class="field"><span class="hint">Adresse de Home Assistant</span>
 						<input id="homeUrl" placeholder="http://homeassistant.local:8123" spellcheck="false"></label>
 					<label class="field"><span class="hint">Jeton d'accès longue durée</span>
 						<input id="homeToken" type="password" autocomplete="off" spellcheck="false"></label>
 					<button type="button" class="ghost" id="homeConnect">Se connecter</button>
 				</div>
-				<p class="hint">Le jeton se crée dans Home Assistant : profil › Sécurité › Jetons d'accès longue durée. Il est
-					chiffré pour votre session Windows, jamais exporté ni affiché.</p>
+				<p class="hint" id="homeTokenHint">Le jeton se crée dans Home Assistant : profil › Sécurité › Jetons d'accès longue durée.
+					Il est chiffré pour votre session Windows, jamais exporté ni affiché.</p>
 				<p class="status" id="homeStatus"></p>
 				<h2>Sur l'écran du boîtier</h2>
 				<p class="hint">Vos groupes, dans l'ordre de la page. « Ajouter » ouvre la liste des entités de Home Assistant :

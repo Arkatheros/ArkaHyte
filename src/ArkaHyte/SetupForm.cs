@@ -192,13 +192,15 @@ public sealed class SetupForm : Form
 				}
 				break;
 			case "homeRead":
-				_ = ReadHomeAsync(ReadString(root, "url"), ReadString(root, "token"));
+				_ = ReadHomeAsync(ReadString(root, "url"), ReadString(root, "token"), IsTrue(root, "forget"));
 				break;
 			case "previewHome":
 				if (_previewPath is null && SensorSettings.ReadHome(root) is { } home)
 				{
 					_homePreviewed = true;
-					HomePreviewChanged?.Invoke(home, NullIfBlank(ReadString(root, "token")), root.TryGetProperty("focus", out var focus) && focus.ValueKind == JsonValueKind.True);
+					// Disconnected in the step: an empty token, the saved one is not used any more
+					var previewToken = NullIfBlank(ReadString(root, "token")) ?? (IsTrue(root, "forget") ? string.Empty : null);
+					HomePreviewChanged?.Invoke(home, previewToken, IsTrue(root, "focus"));
 				}
 				break;
 			case "previewLayout":
@@ -419,10 +421,16 @@ public sealed class SetupForm : Form
 
 	private static string? NullIfBlank(string? text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
 
-	/// <summary>Maison step: checks the address and token (the one typed, or the saved one) and lists the entities.</summary>
-	private async Task ReadHomeAsync(string? url, string? token)
+	private static bool IsTrue(JsonElement message, string name) =>
+		message.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.True;
+
+	/// <summary>
+	/// Maison step: checks the address and token (the one typed, or the saved one unless disconnected) and lists
+	/// the entities.
+	/// </summary>
+	private async Task ReadHomeAsync(string? url, string? token, bool forget)
 	{
-		token = NullIfBlank(token) ?? HomeToken.Load();
+		token = NullIfBlank(token) ?? (forget ? null : HomeToken.Load());
 		if (string.IsNullOrWhiteSpace(url) || token is null)
 		{
 			Post(new { type = "homeCatalog", ok = false, error = token is null ? "token" : "address" });
@@ -664,9 +672,15 @@ public sealed class SetupForm : Form
 			SensorSettings.ApplyLayout(root, message);
 			SensorSettings.ApplyHome(root, message);
 			// Encrypted beside the settings, only when typed (an empty field keeps the saved one)
+			// Disconnected in the Maison step: the saved one is deleted
 			if (NullIfBlank(ReadString(message, "homeToken")) is { } token)
 			{
 				HomeToken.Save(token);
+			}
+			else if (IsTrue(message, "homeForget"))
+			{
+				HomeToken.Delete();
+				Log.Info("Home Assistant token deleted (disconnected in the settings)");
 			}
 			SensorSettings.ApplyCustomActions(root, message);
 			SensorSettings.ApplyEnergy(root, message);

@@ -633,6 +633,8 @@
 		message.layout = layout;
 		message.home = readHome();
 		message.homeToken = $('homeToken').value.trim();
+		// Disconnected: the saved token is deleted (a token typed since replaces it instead)
+		message.homeForget = homeSetup.forget;
 		message.energy = readEnergy();
 		message.background = readBackground();
 		message.palette = palettes.choice;
@@ -987,7 +989,7 @@
 	const HOME_LIST_MAX = 300;
 	const HOME_DEFAULT_GROUP = 'Maison';
 	// adding: the list opened from a group ({ group: its index, null for a first "Maison" group; picked: ids })
-	const homeSetup = { enabled: false, url: '', hasToken: false, groups: [], catalog: null, filter: 'all', touched: false, reading: false, adding: null };
+	const homeSetup = { enabled: false, url: '', hasToken: false, groups: [], catalog: null, filter: 'all', touched: false, reading: false, adding: null, forget: false };
 	const homeDomainOf = id => id.slice(0, id.indexOf('.'));
 	const homeChosenIds = () => new Set(homeSetup.groups.flatMap(group => group.tiles.map(tile => tile.id)));
 	// A separator sits among the groups: a height and an optional rule, no name, no tiles
@@ -998,6 +1000,7 @@
 		homeSetup.enabled = Boolean(home && home.enabled);
 		homeSetup.url = (home && home.url) || '';
 		homeSetup.hasToken = Boolean(home && home.hasToken);
+		homeSetup.forget = false;
 		homeSetup.groups = ((home && home.groups) || []).map(group => (typeof group.separator === 'number'
 			? { separator: group.separator, line: Boolean(group.line), tiles: [] }
 			: {
@@ -1009,6 +1012,7 @@
 		$('homeUrl').value = homeSetup.url;
 		$('homeToken').value = '';
 		$('homeToken').placeholder = homeSetup.hasToken ? 'Enregistré (laisser vide pour le garder)' : 'Coller le jeton ici';
+		renderHomeDisconnect();
 		renderHomeFilters();
 		renderHomeGroups();
 	}
@@ -1017,6 +1021,42 @@
 		const status = $('homeStatus');
 		status.className = 'status' + (level ? ' ' + level : '');
 		status.textContent = text;
+	}
+
+	// Connected (token saved or connection made): the address and "Se déconnecter" only; otherwise the form
+	function renderHomeDisconnect() {
+		const linked = homeSetup.hasToken || Boolean(homeSetup.catalog);
+		$('homeLinked').hidden = !linked;
+		$('homeConnectForm').hidden = linked;
+		$('homeTokenHint').hidden = linked;
+		$('homeLinkedUrl').textContent = $('homeUrl').value.trim();
+		const button = $('homeDisconnect');
+		button.classList.remove('confirm');
+		button.textContent = 'Se déconnecter';
+	}
+
+	// Second click: the token is forgotten (deleted on Save), the case screen stops following Home Assistant at once.
+	// Address and groups stay, for a new token.
+	let homeDisconnectTimer = 0;
+
+	function disconnectHome() {
+		const button = $('homeDisconnect');
+		if (!button.classList.contains('confirm')) {
+			button.classList.add('confirm');
+			button.textContent = 'Confirmer ?';
+			clearTimeout(homeDisconnectTimer);
+			homeDisconnectTimer = setTimeout(renderHomeDisconnect, 3000);
+			return;
+		}
+		clearTimeout(homeDisconnectTimer);
+		homeSetup.forget = true;
+		homeSetup.hasToken = false;
+		homeSetup.catalog = null;
+		$('homeToken').value = '';
+		$('homeToken').placeholder = 'Coller le jeton ici';
+		renderHomeDisconnect();
+		showHomeStatus('Déconnecté de Home Assistant : le jeton sera effacé à l’enregistrement. L’adresse et les groupes sont gardés.', 'warn');
+		changeHome();
 	}
 
 	function readHomeCatalog() {
@@ -1028,7 +1068,7 @@
 		homeSetup.reading = true;
 		$('homeConnect').disabled = true;
 		showHomeStatus('Connexion à Home Assistant…', 'warn');
-		send({ type: 'homeRead', url, token: $('homeToken').value.trim() });
+		send({ type: 'homeRead', url, token: $('homeToken').value.trim(), forget: homeSetup.forget });
 		if (!host) {
 			setTimeout(() => onHomeCatalog(designHomeCatalog()), 600);
 		}
@@ -1039,7 +1079,9 @@
 		$('homeConnect').disabled = false;
 		if (!message.ok) {
 			const errors = {
-				unauthorized: 'Jeton refusé par Home Assistant : vérifiez-le ou créez-en un nouveau.',
+				unauthorized: homeSetup.hasToken && !$('homeToken').value.trim()
+					? 'Jeton enregistré refusé par Home Assistant : « Se déconnecter » puis collez un nouveau jeton.'
+					: 'Jeton refusé par Home Assistant : vérifiez-le ou créez-en un nouveau.',
 				unreachable: 'Home Assistant injoignable à cette adresse (adresse, port, Home Assistant lancé ?).',
 				address: 'Adresse invalide : elle commence par http:// ou https://.',
 				token: 'Collez un jeton d’accès longue durée (profil Home Assistant › Sécurité).'
@@ -1048,6 +1090,7 @@
 			return;
 		}
 		homeSetup.catalog = message.entities || [];
+		renderHomeDisconnect();
 		showHomeStatus('Connecté à Home Assistant ' + (message.version || '') + ' · ' + homeSetup.catalog.length + ' entités utilisables, ' + (message.areas || 0) + ' pièces.', '');
 		// Names shown in the groups; the list, when it waited for them
 		renderHomeGroups();
@@ -1486,7 +1529,7 @@
 	// The case screen follows, on the Maison page while the step is open (focus)
 	function previewHome(focus) {
 		homeSetup.touched = true;
-		send({ type: 'previewHome', home: readHome(), token: $('homeToken').value.trim(), focus });
+		send({ type: 'previewHome', home: readHome(), token: $('homeToken').value.trim(), forget: homeSetup.forget, focus });
 	}
 
 	// Icon picker: the families of js/home-icons.js, "Automatique" for none
@@ -1538,6 +1581,7 @@
 	document.addEventListener('keydown', event => event.key === 'Escape' && !$('homeIconPicker').hidden && closeHomeIconPicker());
 
 	$('homeConnect').addEventListener('click', readHomeCatalog);
+	$('homeDisconnect').addEventListener('click', disconnectHome);
 	$('homeToken').addEventListener('keydown', event => event.key === 'Enter' && readHomeCatalog());
 	$('homeUrl').addEventListener('keydown', event => event.key === 'Enter' && readHomeCatalog());
 	$('homeSearch').addEventListener('input', renderHomeEntities);
@@ -2313,6 +2357,8 @@
 					$('homeToken').value = '';
 					$('homeToken').placeholder = 'Enregistré (laisser vide pour le garder)';
 				}
+				homeSetup.forget = false;
+				renderHomeDisconnect();
 				showFootStatus('Réglages enregistrés et appliqués');
 				break;
 			case 'configExported':

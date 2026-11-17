@@ -197,7 +197,9 @@ du frontend HA), attributs filtrés (`KeptAttributes`), changements regroupés 1
 sur `auth_invalid` ; muet en pause (`Paused`, tout renvoyé à la reprise) ; buffer de réception réutilisé (mémoire de l'hôte).
 Commandes `homeCall { domain, service, entityId, data }` limitées à `AllowedServices` et aux entités suivies, échec →
 `homeCallFailed` + toast. Jeton : `HomeToken` (DPAPI utilisateur, `home-token.bin`, jamais dans appsettings ni
-exporté ni renvoyé aux pages). Réglage `Home` `{ Enabled, Url, Groups: [{ Name, Columns 1-3, Tiles: [{ Id, Span 1-3 }] }] }`,
+exporté ni renvoyé aux pages ; connecté (jeton enregistré ou catalogue lu) : adresse + « Se déconnecter » seuls
+(`#homeLinked`, formulaire `#homeConnectForm` masqué, `renderHomeDisconnect`) ; `homeSetup.forget` → aperçu `forget` (jeton vide, le
+jeton enregistré ignoré aussi par `homeRead`) puis `homeForget` à l'enregistrement → `HomeToken.Delete`). Réglage `Home` `{ Enabled, Url, Groups: [{ Name, Columns 1-3, Tiles: [{ Id, Span 1-3 }] }] }`,
 séparateur = entrée de `Groups` avec `Separator` (hauteur 8-600 px) et `Line` (`.home-separator`, jamais cible des ajouts),
 (groupes de l'utilisateur, pas les pièces de HA ; `EffectiveGroups` borne et dédoublonne, l'ancien `Entities` plat
 lu comme un groupe « Maison »), `config.home` (`HomeConfig`). Page : `buildHome` (un groupe = titre + grille

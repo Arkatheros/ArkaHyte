@@ -178,13 +178,14 @@ public sealed class DisplayForm : Form
 		_setup.LayoutPreviewChanged += (layout, view) => Post(layout is null
 			? new { type = "layoutPreview", end = true }
 			: (object)new { type = "layoutPreview", layout, view });
-		// Home Assistant page as set up in the Maison step; null: back to the saved settings
+		// Home Assistant page as set up in the Maison step; null: back to the saved settings. Token: null = the saved
+		// one, empty = disconnected in the step
 		_setup.HomePreviewChanged += (home, token, focus) =>
 		{
 			_home.Configure(home ?? _settings.Home, token ?? HomeToken.Load());
 			Post(home is null
 				? new { type = "homePreview", end = true }
-				: (object)new { type = "homePreview", home = HomeConfig(home, token is not null || HomeToken.Exists), focus });
+				: (object)new { type = "homePreview", home = HomeConfig(home, token is null ? HomeToken.Exists : token.Length > 0), focus });
 		};
 		_setup.FormClosed += (_, _) => _setup = null;
 		_setup.Show();

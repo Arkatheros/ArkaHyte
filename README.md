@@ -124,7 +124,8 @@ par type) et rangées par glisser-déposer. L'écran du boîtier suit en direct 
   répond plus, reconnexion automatique.
 
 Le jeton est chiffré pour la session Windows (`%LOCALAPPDATA%\ArkaHyte\home-token.bin`), jamais exporté avec la
-configuration : à ressaisir après une réinstallation. Réglage `Home` de `appsettings.json` : `Enabled`, `Url`,
+configuration : à ressaisir après une réinstallation. « Se déconnecter » (confirmé par un second clic) coupe aussitôt
+la page Maison et efface le jeton à l'enregistrement ; l'adresse et les groupes restent pour un nouveau jeton. Réglage `Home` de `appsettings.json` : `Enabled`, `Url`,
 `Groups` (`Name`, `Columns`, `Tiles` : `Id`, `Span`, `Icon` ; séparateur : `Separator` = hauteur, `Line`).
 
 ### Disposition
