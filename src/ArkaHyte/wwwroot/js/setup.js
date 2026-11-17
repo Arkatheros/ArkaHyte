@@ -5,9 +5,10 @@
 	'use strict';
 
 	const host = window.chrome && window.chrome.webview ? window.chrome.webview : null;
-	const LAST_STEP = 9;
+	const LAST_STEP = 10;
 	const GAME_VIEW_STEP = 5;
 	const APPEARANCE_STEP = 8;
+	const LAYOUT_STEP = 9;
 
 	/* Widgets fed by HWiNFO. Suggestions: entries of the right unit whose sensor matches, label
 	   patterns tried in order (English and French HWiNFO names). */
@@ -54,6 +55,10 @@
 
 	function goTo(step) {
 		const last = model.settingsMode ? LAST_STEP - 1 : LAST_STEP;
+		// Leaving the Layout step: the case screen goes back to its usual view, the edited layout kept
+		if (model.step === LAYOUT_STEP && step !== LAYOUT_STEP && layoutTouched) {
+			previewLayout(null);
+		}
 		model.step = Math.max(0, Math.min(last, step));
 		pages.forEach((page, index) => page.classList.toggle('current', index === model.step));
 		stepButtons.forEach((button, index) => {
@@ -576,6 +581,7 @@
 				: 'Vue jeu : automatique, <b>gardée</b> quand le jeu passe en arrière-plan');
 		const transition = $('gameTransition');
 		add('ok', 'Changement de vue : <b>' + escapeHtml(transition.options[transition.selectedIndex].text.split(' :')[0]) + '</b>');
+		add('ok', layoutSummary());
 		add('ok', 'Jeux ajoutés : <b>' + (extraGames.length ? extraGames.map(g => escapeHtml(g.name || g.exe)).join(', ') : 'aucun') + '</b>');
 		add('ok', $('energyShow').checked
 			? 'Énergie : <b>' + escapeHtml(formatPrice($('energyPrice').value)) + ' €/kWh</b>, reste du PC ' + energyPartsTotal() + ' W, alimentation ' + escapeHtml($('energyEfficiency').value || '?') + ' %'
@@ -614,6 +620,7 @@
 			transition: $('gameTransition').value,
 			extraGames
 		};
+		message.layout = layout;
 		message.energy = readEnergy();
 		message.background = readBackground();
 		message.palette = palettes.choice;
@@ -726,6 +733,185 @@
 	energyParts().forEach((input) => input.addEventListener('input', showEnergyTotal));
 
 	const formatPrice = (value) => String(Number(String(value).replace(',', '.'))).replace('.', ',');
+
+	// ---------- Layout: the case screen's bands per view, top to bottom ----------
+	// Ids shared with console.js (LAYOUT_VIEWS) and LayoutSettings (C#), in their default order
+	const BANDS = {
+		normal: [
+			{ id: 'clock', name: 'Horloge', detail: 'date, heure, météo' },
+			{ id: 'cpu', name: 'Processeur', detail: 'compteur, fréquence, coût du jour, température' },
+			{ id: 'gpu', name: 'Carte graphique', detail: 'charge, mémoire vidéo, température' },
+			{ id: 'memory', name: 'Mémoire et disques', detail: 'mémoire vive, espace libre' },
+			{ id: 'network', name: 'Réseau', detail: 'Wi-Fi, débits, test de débit' },
+			{ id: 'media', name: 'Lecture en cours', detail: 'pochette, commandes' }
+		],
+		game: [
+			{ id: 'header', name: 'Horloge et jeu', detail: 'heure, nom du jeu, durée' },
+			{ id: 'fps', name: 'FPS', detail: 'cadran, 1 % low, courbe de 60 s' },
+			{ id: 'gpu', name: 'Carte graphique', detail: 'charge, mémoire vidéo, température' },
+			{ id: 'cpu', name: 'Processeur', detail: 'compteur, température' },
+			{ id: 'network', name: 'Réseau', detail: 'Wi-Fi, débits' }
+		]
+	};
+	const LAYOUT_LISTS = { normal: 'layoutNormal', game: 'layoutGame' };
+	// [{ id, show }] per view; touched: the case screen shows the edited layout (and view)
+	let layout = defaultLayout();
+	let layoutTouched = false;
+
+	function defaultLayout() {
+		return {
+			normal: BANDS.normal.map(band => ({ id: band.id, show: true })),
+			game: BANDS.game.map(band => ({ id: band.id, show: true }))
+		};
+	}
+
+	// As saved: known bands in its order, the ones it lacks last
+	function showLayout(saved) {
+		const fresh = defaultLayout();
+		for (const view of Object.keys(BANDS)) {
+			const list = (saved && Array.isArray(saved[view]) ? saved[view] : [])
+				.filter(entry => BANDS[view].some(band => band.id === entry.id))
+				.map(entry => ({ id: entry.id, show: entry.show !== false }));
+			fresh[view].forEach(entry => {
+				if (!list.some(e => e.id === entry.id)) {
+					list.push(entry);
+				}
+			});
+			layout[view] = list;
+		}
+		renderLayout();
+	}
+
+	function renderLayout() {
+		for (const view of Object.keys(BANDS)) {
+			const list = $(LAYOUT_LISTS[view]);
+			list.textContent = '';
+			layout[view].forEach((entry, index) => {
+				const band = BANDS[view].find(b => b.id === entry.id);
+				const row = document.createElement('div');
+				row.className = 'band-row' + (entry.show ? '' : ' off');
+				// Focusable: Alt+↑ / Alt+↓ move it without the mouse
+				row.tabIndex = 0;
+				row.title = 'Glisser pour déplacer';
+				row.innerHTML = '<span class="band-grip" aria-hidden="true"></span><input type="checkbox">'
+					+ '<span class="band-text"><span class="band-name"></span><span class="band-detail"></span></span>';
+				const box = row.querySelector('input');
+				box.checked = entry.show;
+				box.title = entry.show ? 'Affiché (décocher pour masquer)' : 'Masqué (cocher pour afficher)';
+				row.querySelector('.band-name').textContent = band.name;
+				row.querySelector('.band-detail').textContent = band.detail;
+				box.addEventListener('change', () => {
+					entry.show = box.checked;
+					changeLayout(view);
+				});
+				row.addEventListener('pointerdown', event => startBandDrag(event, view, row));
+				row.addEventListener('keydown', event => {
+					const step = event.key === 'ArrowUp' ? -1 : event.key === 'ArrowDown' ? 1 : 0;
+					if (event.altKey && step && index + step >= 0 && index + step < layout[view].length) {
+						event.preventDefault();
+						moveBand(view, index, index + step);
+						$(LAYOUT_LISTS[view]).children[index + step].focus();
+					}
+				});
+				list.append(row);
+			});
+		}
+	}
+
+	function moveBand(view, from, to) {
+		const list = layout[view];
+		const [entry] = list.splice(from, 1);
+		list.splice(to, 0, entry);
+		changeLayout(view);
+	}
+
+	// Drag and drop: the row follows the pointer within its list, the others make room as its edge passes
+	// theirs; the new order is kept (and shown on the case screen) on release. Positions are taken in the
+	// list (offsetTop, .bands positioned) against its place on screen read each time, so a scroll during the
+	// drag keeps the row under the pointer.
+	function startBandDrag(event, view, row) {
+		if (event.button !== 0 || event.target.closest('input')) {
+			return;
+		}
+		event.preventDefault();
+		const list = row.parentElement;
+		const rows = () => [...list.children];
+		const from = rows().indexOf(row);
+		// Where the row was grabbed, from its top edge
+		const grab = event.clientY - row.getBoundingClientRect().top;
+		let pointerY = event.clientY;
+		row.setPointerCapture(event.pointerId);
+		row.classList.add('dragging');
+		list.classList.add('dragging');
+
+		const follow = () => {
+			const top = Math.max(0, Math.min(list.clientHeight - row.offsetHeight, pointerY - grab - list.getBoundingClientRect().top));
+			// The dragged row's leading edge against the neighbour's middle (whatever their heights, held
+			// against an end of the list it reaches the last place, or the first)
+			let next = row.nextElementSibling;
+			while (next && top + row.offsetHeight >= next.offsetTop + next.offsetHeight / 2) {
+				list.insertBefore(next, row);
+				next = row.nextElementSibling;
+			}
+			let previous = row.previousElementSibling;
+			while (previous && top <= previous.offsetTop + previous.offsetHeight / 2) {
+				list.insertBefore(row, previous);
+				previous = row.previousElementSibling;
+			}
+			row.style.transform = `translateY(${top - row.offsetTop}px)`;
+		};
+		const onMove = (moveEvent) => {
+			pointerY = moveEvent.clientY;
+			follow();
+		};
+		// Scroll events do not bubble: caught on the way down
+		document.addEventListener('scroll', follow, true);
+		const onEnd = () => {
+			document.removeEventListener('scroll', follow, true);
+			row.removeEventListener('pointermove', onMove);
+			row.removeEventListener('pointerup', onEnd);
+			row.removeEventListener('pointercancel', onEnd);
+			row.classList.remove('dragging');
+			list.classList.remove('dragging');
+			row.style.transform = '';
+			const to = rows().indexOf(row);
+			if (to !== from) {
+				moveBand(view, from, to);
+			}
+		};
+		row.addEventListener('pointermove', onMove);
+		row.addEventListener('pointerup', onEnd);
+		row.addEventListener('pointercancel', onEnd);
+	}
+
+	function changeLayout(view) {
+		renderLayout();
+		previewLayout(view);
+	}
+
+	// The case screen follows, on the view being set (null: back to the usual view, the edited layout kept)
+	function previewLayout(view) {
+		layoutTouched = true;
+		send({ type: 'previewLayout', layout, view });
+	}
+
+	$('layoutReset').addEventListener('click', () => {
+		layout = defaultLayout();
+		renderLayout();
+		previewLayout(null);
+	});
+
+	const isDefaultLayout = () => Object.keys(BANDS).every(view =>
+		layout[view].every((entry, index) => entry.show && entry.id === BANDS[view][index].id));
+
+	function layoutSummary() {
+		if (isDefaultLayout()) {
+			return 'Disposition : <b>d\'origine</b>';
+		}
+		const hidden = Object.keys(BANDS).flatMap(view => layout[view].filter(entry => !entry.show)
+			.map(entry => BANDS[view].find(b => b.id === entry.id).name + (view === 'game' ? ' (vue jeu)' : '')));
+		return 'Disposition : <b>personnalisée</b>' + (hidden.length ? ', masqués : ' + escapeHtml(hidden.join(', ')) : '');
+	}
 
 	// ---------- Game view ----------
 
@@ -1370,6 +1556,7 @@
 		if (state.gameView) {
 			showGameView(state.gameView);
 		}
+		showLayout(state.layout);
 		if (state.energy) {
 			showEnergy(state.energy);
 		}

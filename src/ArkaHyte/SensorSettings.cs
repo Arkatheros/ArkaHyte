@@ -292,6 +292,43 @@ public static class SensorSettings
 		}
 	}
 
+	/// <summary>layout: { normal: [{ id, show }], game: [...] } as the Layout step sends it; null when absent.</summary>
+	public static LayoutSettings? ReadLayout(JsonElement message)
+	{
+		if (!message.TryGetProperty("layout", out var layout) || layout.ValueKind != JsonValueKind.Object)
+		{
+			return null;
+		}
+		return new LayoutSettings(
+			LayoutSettings.Normalize(ReadBands(layout, "normal"), LayoutSettings.NormalBands),
+			LayoutSettings.Normalize(ReadBands(layout, "game"), LayoutSettings.GameBands));
+	}
+
+	private static IEnumerable<LayoutBand> ReadBands(JsonElement layout, string view)
+	{
+		if (!layout.TryGetProperty(view, out var bands) || bands.ValueKind != JsonValueKind.Array)
+		{
+			yield break;
+		}
+		foreach (var band in bands.EnumerateArray())
+		{
+			if (band.ValueKind == JsonValueKind.Object
+				&& band.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.String)
+			{
+				var show = !band.TryGetProperty("show", out var shown) || shown.ValueKind != JsonValueKind.False;
+				yield return new LayoutBand(id.GetString()!, show);
+			}
+		}
+	}
+
+	public static void ApplyLayout(JsonObject root, JsonElement message)
+	{
+		if (ReadLayout(message) is { } layout)
+		{
+			root["Layout"] = JsonSerializer.SerializeToNode(layout);
+		}
+	}
+
 	private static JsonObject? ToSelector(JsonElement choice) =>
 		choice.ValueKind == JsonValueKind.Object
 			? new JsonObject

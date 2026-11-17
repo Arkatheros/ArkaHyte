@@ -183,6 +183,38 @@ public sealed record GameViewSettings(
 	public static readonly string[] Transitions = ["morph", "slide", "fade", "none"];
 }
 
+/// <summary>
+/// Case screen layout: the full-width bands of each view, top to bottom, each shown or hidden (settings,
+/// Layout step). The dock stays at the bottom. Bands left out (added by a later version) come last, shown;
+/// unknown ones are dropped (<see cref="Normalized"/>). The pages know each band's place and height.
+/// </summary>
+public sealed record LayoutSettings(IReadOnlyList<LayoutBand>? Normal = null, IReadOnlyList<LayoutBand>? Game = null)
+{
+	/// <summary>Bands of the normal view in their default order (ids shared with console.js and setup.js).</summary>
+	public static readonly string[] NormalBands = ["clock", "cpu", "gpu", "memory", "network", "media"];
+
+	/// <summary>Bands of the game view in their default order.</summary>
+	public static readonly string[] GameBands = ["header", "fps", "gpu", "cpu", "network"];
+
+	public LayoutSettings Normalized() => new(Normalize(Normal, NormalBands), Normalize(Game, GameBands));
+
+	public static IReadOnlyList<LayoutBand> Normalize(IEnumerable<LayoutBand>? bands, string[] known)
+	{
+		var result = new List<LayoutBand>();
+		foreach (var band in bands ?? [])
+		{
+			if (band is not null && known.Contains(band.Id) && !result.Any(b => b.Id == band.Id))
+			{
+				result.Add(band);
+			}
+		}
+		result.AddRange(known.Where(id => !result.Any(b => b.Id == id)).Select(id => new LayoutBand(id)));
+		return result;
+	}
+}
+
+public sealed record LayoutBand(string Id, bool Show = true);
+
 /// <summary>Game added by hand: executable file name ("TFTClient-Win64-Shipping.exe") and the name shown.</summary>
 public sealed record GameEntry(string Exe, string Name = "");
 
@@ -278,9 +310,13 @@ public sealed record AppSettings(
 	bool CpuDetails = true,
 	IReadOnlyList<CustomAction>? CustomActions = null,
 	EnergySettings? Energy = null,
-	BackgroundSettings? Background = null)
+	BackgroundSettings? Background = null,
+	LayoutSettings? Layout = null)
 {
 	public GameViewSettings EffectiveGameView => GameView ?? new GameViewSettings();
+
+	/// <summary>Every band of both views, in the order chosen (a hand-edited file brought back to known bands).</summary>
+	public LayoutSettings EffectiveLayout => (Layout ?? new LayoutSettings()).Normalized();
 
 	/// <summary>The palette shown: the one saved, or the theme's.</summary>
 	public string EffectivePalette => Palettes.Normalize(Palette, Theme);

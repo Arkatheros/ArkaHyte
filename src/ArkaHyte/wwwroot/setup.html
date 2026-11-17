@@ -27,7 +27,8 @@
 			<button type="button" data-step="6"><span class="step-dot"></span>Raccourcis</button>
 			<button type="button" data-step="7"><span class="step-dot"></span>Énergie</button>
 			<button type="button" data-step="8"><span class="step-dot"></span>Apparence</button>
-			<button type="button" data-step="9"><span class="step-dot"></span>Terminer</button>
+			<button type="button" data-step="9"><span class="step-dot"></span>Disposition</button>
+			<button type="button" data-step="10"><span class="step-dot"></span>Terminer</button>
 		</nav>
 
 		<main class="pages">
@@ -300,8 +301,29 @@
 				</div>
 			</section>
 
-			<!-- Summary -->
+			<!-- Layout: the order of the case screen's bands, per view -->
 			<section class="page" data-page="9">
+				<h1>Disposition</h1>
+				<p class="lead">L'ordre des blocs de l'écran du boîtier, de haut en bas (glisser un bloc pour le déplacer), et
+					ceux à afficher. Le dock reste en bas. L'écran suit en direct et montre la vue que vous réglez ; rien n'est gardé avant Enregistrer.</p>
+				<div class="layouts">
+					<div class="layout-view">
+						<h2>Vue normale</h2>
+						<div class="bands" id="layoutNormal"></div>
+					</div>
+					<div class="layout-view">
+						<h2>Vue jeu</h2>
+						<div class="bands" id="layoutGame"></div>
+					</div>
+				</div>
+				<p class="hint">La place d'un bloc masqué est répartie entre les autres.</p>
+				<div class="row">
+					<button type="button" class="ghost" id="layoutReset">Rétablir la disposition d'origine</button>
+				</div>
+			</section>
+
+			<!-- Summary -->
+			<section class="page" data-page="10">
 				<h1>Terminer</h1>
 				<p class="lead">Les réglages sont enregistrés dans votre dossier de données, puis l'affichage
 					du boîtier redémarre pour les appliquer. L'assistant reste accessible depuis le menu de l'icône.</p>

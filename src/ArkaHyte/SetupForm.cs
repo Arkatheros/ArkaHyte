@@ -46,6 +46,13 @@ public sealed class SetupForm : Form
 	public event Action<AppearancePreview?>? AppearancePreviewChanged;
 	private bool _appearancePreviewed;
 
+	/// <summary>
+	/// Layout being edited, shown live on the case screen; view: the one being edited ("normal" / "game"), shown
+	/// meanwhile, null once the Layout step is left. Layout null when the window closes.
+	/// </summary>
+	public event Action<LayoutSettings?, string?>? LayoutPreviewChanged;
+	private bool _layoutPreviewed;
+
 	/// <param name="previewPath">Diagnostics: capture the page to this PNG and quit, never saving anything.</param>
 	public SetupForm(AppSettings settings, int startStep = 0, string? previewPath = null, EnergyMeter? energy = null)
 	{
@@ -175,6 +182,13 @@ public sealed class SetupForm : Form
 					AppearancePreviewChanged?.Invoke(BackgroundStore.ReadPreview(root, _settings.Background));
 				}
 				break;
+			case "previewLayout":
+				if (_previewPath is null && SensorSettings.ReadLayout(root) is { } layout)
+				{
+					_layoutPreviewed = true;
+					LayoutPreviewChanged?.Invoke(layout, ReadString(root, "view") is "normal" or "game" ? ReadString(root, "view") : null);
+				}
+				break;
 			case "exportConfig":
 				ExportConfig();
 				break;
@@ -294,6 +308,7 @@ public sealed class SetupForm : Form
 			hwInfoPath = HwInfoInstall.FindExecutable(),
 			weather = _settings.Weather,
 			gameView = _settings.EffectiveGameView,
+			layout = _settings.EffectiveLayout,
 			energy = _settings.EffectiveEnergy,
 			background = BackgroundState(_settings.Background),
 			// Appearance step: swatches, and what "the theme's colours" means now
@@ -373,8 +388,10 @@ public sealed class SetupForm : Form
 	/// <summary>Shows a page of the already open window (the dock editor asks for the shortcuts one).</summary>
 	public void GoToStep(int step) => Post(new { type = "goto", step });
 
-	private static string? ReadId(JsonElement message) =>
-		message.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.String ? id.GetString() : null;
+	private static string? ReadId(JsonElement message) => ReadString(message, "id");
+
+	private static string? ReadString(JsonElement message, string name) =>
+		message.TryGetProperty(name, out var element) && element.ValueKind == JsonValueKind.String ? element.GetString() : null;
 
 	/// <summary>Shortcuts step: the PowerShell script of an action, chosen with Windows' file dialog.</summary>
 	private void PickScript(string? id)
@@ -602,6 +619,7 @@ public sealed class SetupForm : Form
 			SensorSettings.ApplyChoices(root, message);
 			SensorSettings.ApplyWeather(root, message);
 			SensorSettings.ApplyGameView(root, message);
+			SensorSettings.ApplyLayout(root, message);
 			SensorSettings.ApplyCustomActions(root, message);
 			SensorSettings.ApplyEnergy(root, message);
 			// The page sets the theme's palette when a theme is chosen; another one may be chosen after it
@@ -626,6 +644,10 @@ public sealed class SetupForm : Form
 		if (_appearancePreviewed)
 		{
 			AppearancePreviewChanged?.Invoke(null);
+		}
+		if (_layoutPreviewed)
+		{
+			LayoutPreviewChanged?.Invoke(null, null);
 		}
 		// Pictures picked but never saved, renderings replaced since
 		if (_previewPath is null)

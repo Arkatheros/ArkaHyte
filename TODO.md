@@ -15,10 +15,7 @@ du non fait.
 ---
 
 # Liste des tâches
-- [ ] Positionnement des widgets
-  - Définir le modèle (emplacements prédéfinis, ordre des blocs, ou placement libre) avant de coder : les vues normale et jeu
-    et le morph entre elles en dépendent
- - [ ] intégration de home assistant dans un page, via api
+- [ ] intégration de home assistant dans un page, via api
  
 
 # En attente — uniquement sur demande explicite du propriétaire

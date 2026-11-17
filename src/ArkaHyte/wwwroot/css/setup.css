@@ -600,6 +600,85 @@ h2 {
 	color: var(--ash);
 }
 
+/* ---------- Layout step: one list of bands per view ---------- */
+.layouts {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 40px;
+}
+.layout-view {
+	flex: 1;
+	min-width: 300px;
+	max-width: 420px;
+}
+.bands {
+	/* Offsets of the rows (drag and drop) are taken in the list */
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin-top: 12px;
+}
+.band-row {
+	position: relative;
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 10px 12px 10px 8px;
+	border: 1px solid var(--line);
+	background: #12070a;
+	cursor: grab;
+	user-select: none;
+	touch-action: none;
+}
+.band-row:focus-visible {
+	outline: 1px solid var(--blade);
+}
+.bands.dragging,
+.bands.dragging .band-row {
+	cursor: grabbing;
+}
+/* The row being dragged rides above the others */
+.band-row.dragging {
+	z-index: 1;
+	border-color: var(--blade);
+	box-shadow: 0 6px 22px rgba(0, 0, 0, 0.7), 0 0 14px rgba(255, 31, 51, 0.35);
+}
+/* Two columns of dots */
+.band-grip {
+	width: 10px;
+	height: 18px;
+	flex: none;
+	background: radial-gradient(circle, var(--ash) 1.5px, transparent 2px) 0 0 / 5px 6px;
+	opacity: 0.8;
+}
+.band-row:hover .band-grip,
+.band-row.dragging .band-grip {
+	opacity: 1;
+}
+.band-row.off .band-text {
+	opacity: 0.45;
+}
+.band-row input {
+	width: 20px;
+	height: 20px;
+	accent-color: var(--blade);
+	cursor: pointer;
+}
+.band-text {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+.band-name {
+	font-weight: 600;
+}
+.band-detail {
+	font-size: 12px;
+	color: var(--ash);
+}
+
 /* ---------- Weather step ---------- */
 .switch {
 	display: flex;
@@ -705,7 +784,7 @@ body:not(.settings-mode) #exportConfig {
 /* Settings (opened from the tray once set up): free navigation, no summary step, saved in place */
 .settings-mode #back,
 .settings-mode #skip,
-.settings-mode .steps [data-step="9"] {
+.settings-mode .steps [data-step="10"] {
 	display: none;
 }
 

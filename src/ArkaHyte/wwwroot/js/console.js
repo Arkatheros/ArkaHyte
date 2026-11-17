@@ -2116,6 +2116,120 @@
 		}, timing.outMs);
 	}
 
+	// ---------- Layout: each view's full-width bands, stacked in the order chosen (settings, Layout step) ----------
+	// A band's height runs from its default top to the next band's (gap included), the last one's to end.
+	// Bands move by margin-top (--dy in the normal view, --dy-game in the game view): the CSS top stays
+	// as designed and transform stays free for the animations. The space of hidden bands is shared out
+	// between the bands shown. The dock stays at the bottom. Band ids are those of LayoutSettings (C#).
+	const LAYOUT_VIEWS = {
+		normal: {
+			end: 2300,
+			bands: [
+				{ id: 'clock', top: 48, widgets: '.clock' },
+				{ id: 'cpu', top: 312, widgets: '.cpu-head, .cpu, .cpu-side, .energy-side, .cpu-metrics' },
+				{ id: 'gpu', top: 872, widgets: '.gpu-head, .gpu-load, .vram, .gpu-metrics' },
+				{ id: 'memory', top: 1344, widgets: '.vault' },
+				{ id: 'network', top: 1724, widgets: '.holonet' },
+				{ id: 'media', top: 1996, widgets: '.media' }
+			]
+		},
+		game: {
+			end: 2265,
+			bands: [
+				{ id: 'header', top: 40, widgets: '.clock, .game-head, .game-rule' },
+				{ id: 'fps', top: 226, widgets: '.game-fps, .game-trio, .game-graph' },
+				{ id: 'gpu', top: 1064, widgets: '.gpu-head, .gpu-load, .vram, .gpu-metrics' },
+				{ id: 'cpu', top: 1584, widgets: '.cpu-head, .cpu, .cpu-metrics' },
+				{ id: 'network', top: 2012, widgets: '.holonet' }
+			]
+		}
+	};
+	for (const spec of Object.values(LAYOUT_VIEWS)) {
+		spec.bands.forEach((band, i) => {
+			band.height = (i + 1 < spec.bands.length ? spec.bands[i + 1].top : spec.end) - band.top;
+			band.elements = viewWidgets.filter((element) => element.matches(band.widgets));
+		});
+	}
+	// Saved layout (config.layout); the one being edited in the settings and the view shown meanwhile
+	let savedLayout = null;
+	let layoutPreview = null;
+	let layoutPreviewView = null;
+
+	// Bands of a view in the order given ([{ id, show }]); unknown ids dropped, missing bands last, shown
+	function layoutOrder(entries, bands) {
+		const order = [];
+		for (const entry of Array.isArray(entries) ? entries : []) {
+			const band = bands.find((b) => b.id === entry.id);
+			if (band && !order.some((o) => o.band === band)) {
+				order.push({ band, show: entry.show !== false });
+			}
+		}
+		bands.filter((band) => !order.some((o) => o.band === band)).forEach((band) => order.push({ band, show: true }));
+		return order;
+	}
+
+	function placeBands(layout) {
+		for (const [view, spec] of Object.entries(LAYOUT_VIEWS)) {
+			const order = layoutOrder(layout && layout[view], spec.bands);
+			const shown = order.filter((o) => o.show);
+			const spare = order.filter((o) => !o.show).reduce((sum, o) => sum + o.band.height, 0);
+			const extra = shown.length ? spare / shown.length : 0;
+			const variable = view === 'game' ? '--dy-game' : '--dy';
+			const off = view === 'game' ? 'band-off-game' : 'band-off';
+			let y = spec.bands[0].top;
+			for (const { band, show } of order) {
+				for (const element of band.elements) {
+					element.style.setProperty(variable, `${Math.round(y - band.top)}px`);
+					element.classList.toggle(off, !show);
+				}
+				if (show) {
+					y += band.height + extra;
+				}
+			}
+		}
+	}
+
+	// Live change (settings preview): the widgets shown glide to their new place, the ones appearing fade in
+	function arrangeBands(layout) {
+		if (!motion || viewChange) {
+			placeBands(layout);
+			return;
+		}
+		const before = new Map(viewWidgets.filter(isShown).map((element) => [element, viewBox(element)]));
+		placeBands(layout);
+		for (const element of viewWidgets) {
+			if (!isShown(element)) {
+				continue;
+			}
+			const from = before.get(element);
+			if (!from) {
+				element.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 420, easing: 'ease-out' });
+				continue;
+			}
+			const dy = from.y - element.offsetTop;
+			if (Math.abs(dy) >= 1) {
+				element.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: 480, easing: VIEW_EASING });
+			}
+		}
+	}
+
+	function applyLayoutPreview(message) {
+		if (message.end) {
+			if (!layoutPreview) {
+				return;
+			}
+			layoutPreview = null;
+			layoutPreviewView = null;
+			arrangeBands(savedLayout);
+			applyView();
+			return;
+		}
+		layoutPreview = message.layout;
+		layoutPreviewView = message.view === 'game' || message.view === 'normal' ? message.view : null;
+		arrangeBands(layoutPreview);
+		applyView();
+	}
+
 	// ---------- Game view: while a recognised game runs (snapshot.game) ----------
 	// The view stays 10 s after the game is gone (its process exited); a view picked with the switch
 	// holds until then. Values glide between samples and the graph scrolls in the 24 fps loop.
@@ -2328,7 +2442,9 @@
 
 	function applyView() {
 		const inGame = gameSession !== null;
-		const showGame = viewChoice ? viewChoice === 'game' : inGame && gameSession.view === 'game';
+		// The view whose layout is being edited in the settings comes first
+		const showGame = layoutPreviewView ? layoutPreviewView === 'game'
+			: viewChoice ? viewChoice === 'game' : inGame && gameSession.view === 'game';
 		frame.classList.toggle('has-game', inGame);
 		// The GPU goes to the game: a video background stays on its frame until the game ends
 		if (inGame !== videoHeldForGame) {
@@ -3426,6 +3542,17 @@
 		if (config.thresholds) applyLimits(config.thresholds);
 		if (config.weather) weatherConfig = config.weather;
 		if (config.gameView) gameViewConfig = config.gameView;
+		if (config.layout) {
+			// Put in place at start; later (settings saved) the bands glide. While edited in the settings,
+			// the preview stays until the window closes.
+			const first = savedLayout === null;
+			savedLayout = config.layout;
+			if (first) {
+				placeBands(savedLayout);
+			} else if (!layoutPreview) {
+				arrangeBands(savedLayout);
+			}
+		}
 		if (typeof config.cpuDetails === 'boolean') applyCpuDetailsOption(config.cpuDetails);
 		if (config.energy) applyEnergyConfig(config.energy);
 	}
@@ -3443,6 +3570,8 @@
 			applyConfig(message);
 		} else if (message.type === 'appearancePreview') {
 			applyAppearancePreview(message);
+		} else if (message.type === 'layoutPreview') {
+			applyLayoutPreview(message);
 		} else if (message.type === 'toast') {
 			showToast(message.text);
 		} else if (message.type === 'update') {
@@ -4598,6 +4727,15 @@
 	const transitionParam = new URLSearchParams(location.search).get('transition');
 	if (transitionParam) {
 		gameViewConfig.transition = transitionParam;
+	}
+	// "?layout=network,clock,-cpu|fps,header" sets the band order in design mode: normal view, then the game
+	// view after "|", "-" hides a band (the host sends the setting)
+	const layoutParam = new URLSearchParams(location.search).get('layout');
+	if (layoutParam) {
+		const [normal, game] = layoutParam.split('|').map((list) => (list || '').split(',').filter(Boolean)
+			.map((id) => ({ id: id.replace(/^-/, ''), show: !id.startsWith('-') })));
+		savedLayout = { normal, game };
+		placeBands(savedLayout);
 	}
 	// "?demo=<scenario>" (ArkaHyte.exe --demo stress) replaces live sensor data with a scenario
 	const demo = new URLSearchParams(location.search).get('demo');

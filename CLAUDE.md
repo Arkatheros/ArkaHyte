@@ -41,7 +41,7 @@ Pas de tests automatisés ni de linter. Vérification par les options one-shot d
 - `--screenshot out.png` : rend l'interface, capture, quitte. Moyen principal de valider un changement visuel.
 - `--dump out.json` : un échantillon de tous les capteurs + entrées HWiNFO disponibles.
 - `--demo stress|idle|game|desktop`, `--preview-speedtest [done]`, `--open-editor 0` : états à combiner avec `--screenshot`.
-- `--setup-preview out.png [--setup-step 0-9]` : capture de l'assistant, autonome (pas de mutex) et sans écriture.
+- `--setup-preview out.png [--setup-step 0-10]` : capture de l'assistant, autonome (pas de mutex) et sans écriture.
 - `--speedtest out.txt` : vrai test de débit (sature la connexion, ne pas lancer sans raison).
 - `--devtools` : F12.
 
@@ -176,7 +176,16 @@ n'installe que sur clic du menu. `AppSettings.Load()` préfère `%LOCALAPPDATA%\
 **Démarrage (dev)** : tâche planifiée `Arka Hyte` (AtLogOn) → `scripts/Start-ArkaHyte.ps1` → `bin\ArkaHyte\ArkaHyte.exe`.
 Sous PowerShell 5.1, ne pas utiliser `$PSScriptRoot` dans les valeurs par défaut de `param()` (vide).
 
-**Fond personnel** (étape « Apparence » des Paramètres, `data-page="8"`, « Terminer » = 9). `BackgroundStore` :
+**Disposition** (étape « Disposition », `data-page="9"`, « Terminer » = 10). Chaque vue = pile de bandes pleine largeur
+(`LAYOUT_VIEWS` dans `console.js` : haut d'origine, widgets de la bande ; hauteur = jusqu'au haut de la suivante), dock fixe.
+Réglage `Layout` (`LayoutSettings` : `Normal` / `Game` = `[{ Id, Show }]`, ids aussi dans `BANDS` de `setup.js` ;
+`EffectiveLayout` normalisé) → `config.layout` → `placeBands` : décalage par `margin-top` (`--dy` / `--dy-game`, posés
+sur les widgets, jamais `top` ni `transform`, laissés aux animations), classes `band-off` / `band-off-game`
+(`display: none`), place des bandes masquées répartie entre les autres. Nouveau widget pleine largeur : l'ajouter à
+une bande ou créer une bande (les trois listes). Aperçu en direct : `previewLayout { layout, view }` → `SetupForm.LayoutPreviewChanged`
+→ message `layoutPreview` (`view` force la vue affichée, `applyView` ; null en quittant l'étape ; `{ end }` à la fermeture),
+déplacements animés (`arrangeBands`, FLIP).
+**Fond personnel** (étape « Apparence » des Paramètres, `data-page="8"`). `BackgroundStore` :
 image choisie (`pickBackground` → `OpenFileDialog`, copiée aussitôt en `source-*` dans `DataFolder.Backgrounds`),
 cadre au ratio de l'écran dessiné dans `setup.js` (fractions de l'image redressée), rendu une seule fois en C#
 (GDI+, orientation EXIF appliquée, 682 × 2560, `background-*.jpg` nouveau nom à chaque rendu) dans `Save`, seulement

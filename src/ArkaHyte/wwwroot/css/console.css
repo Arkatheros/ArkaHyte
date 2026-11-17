@@ -296,6 +296,15 @@ body {
 }
 .widget {
 	z-index: 2;
+	/* Band order chosen in the settings (console.js, placeBands): shift from the designed place, per view */
+	margin-top: var(--dy, 0px);
+}
+.frame.game .widget {
+	margin-top: var(--dy-game, 0px);
+}
+.frame:not(.game) .widget.band-off,
+.frame.game .widget.band-off-game {
+	display: none !important;
 }
 .label {
 	font-weight: 700;

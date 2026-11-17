@@ -59,7 +59,8 @@ Au premier lancement, une fenêtre s'ouvre sur l'écran principal (ensuite : men
    boîtier, autre ; valeur totale par catégorie), affichage du coût.
 9. **Apparence** : thème, couleur de sabre et fond de l'écran du boîtier (celui du thème ou une image personnelle),
    suivis en direct sur l'écran (voir [Thèmes](#thèmes)).
-10. **Terminer** : écrit `%LOCALAPPDATA%\ArkaHyte\appsettings.json` (`SetupCompleted: true`) et redémarre l'affichage.
+10. **Disposition** : ordre des blocs de chaque vue et ceux à afficher (voir [Disposition](#disposition)).
+11. **Terminer** : écrit `%LOCALAPPDATA%\ArkaHyte\appsettings.json` (`SetupCompleted: true`) et redémarre l'affichage.
 
 « Passer l'assistant » ne change rien d'autre que `SetupCompleted` ; fermer la fenêtre le repropose
 au prochain démarrage.
@@ -90,6 +91,15 @@ Unreal Engine ou Unity (lanceur Epic et éditeurs exclus ; `DetectEngines: false
 le désactiver, absent de l'interface).
 Animation du changement de vue : `Transition` = `morph` (les widgets communs glissent à leur place, défaut),
 `slide` (balayage latéral), `fade` (fondu) ou `none` ; jauges et compteurs repartent de 0 ensuite.
+
+### Disposition
+
+Paramètres › **Disposition** : chaque vue est une pile de blocs pleine largeur, dans l'ordre choisi de haut en
+bas, chacun affiché ou masqué (glisser-déposer, case à cocher) ; le dock reste en bas. Vue normale : Horloge,
+Processeur, Carte graphique, Mémoire et disques, Réseau, Lecture en cours. Vue jeu : Horloge et jeu, FPS, Carte
+graphique, Processeur, Réseau. La place d'un bloc masqué est répartie entre les autres. L'écran du boîtier suit
+en direct et montre la vue en cours de réglage. Réglage `Layout` de `appsettings.json` :
+`{ "Normal": [{ "Id": "clock", "Show": true }, ...], "Game": [...] }` (blocs absents ajoutés à la fin, inconnus ignorés).
 
 ### Météo
 

@@ -170,6 +170,10 @@ public sealed class DisplayForm : Form
 		_setup.AppearancePreviewChanged += preview => Post(preview is null
 			? new { type = "appearancePreview", end = true }
 			: (object)new { type = "appearancePreview", url = preview.Url, crop = preview.Crop, shade = preview.Shade, palette = preview.Palette, theme = preview.Theme });
+		// Bands being reordered, in the view being edited; end: back to the saved layout and the usual view
+		_setup.LayoutPreviewChanged += (layout, view) => Post(layout is null
+			? new { type = "layoutPreview", end = true }
+			: (object)new { type = "layoutPreview", layout, view });
 		_setup.FormClosed += (_, _) => _setup = null;
 		_setup.Show();
 		_setup.Activate();
@@ -601,6 +605,7 @@ public sealed class DisplayForm : Form
 				located = _settings.Weather is { Latitude: not null, Longitude: not null }
 			},
 			gameView = _settings.EffectiveGameView,
+			layout = _settings.EffectiveLayout,
 			// Offered by the dock editor next to the system actions
 			customActions = (_settings.CustomActions ?? []).Select(a => new { id = a.Id, name = a.Name, kind = a.Kind }),
 			cpuDetails = _settings.CpuDetails,
