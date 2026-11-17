@@ -72,7 +72,11 @@ fréquence et tension à côté du compteur ;
 `ShortcutLauncher`, créés à l'étape « Raccourcis » des Paramètres, fichier choisi par `pickScript`) ; veille confirmée
 par un second toucher ; bouton vidé (`clearShortcut`, cible vide) affiché « + », ouvre l'éditeur ;
 barre de progression de la lecture en cours (`MediaData.CanSeek`, message `media` `{ action: seek, position }`
-→ `MediaMonitor.SeekAsync`, exclue du balayage par `data-no-swipe`) ;
+→ `MediaMonitor.SeekAsync`, exclue du balayage par `data-no-swipe`) ; pochette touchée → `media { action: show }`
+→ `PlayerWindow.BringToFront` (AUMID de la session : fenêtre trouvée par nom d'exécutable ou famille de paquet, sinon
+par le titre du morceau ; premier plan par `AttachThreadInput`, la fenêtre de l'affichage n'ayant jamais le focus ;
+réduite : `SC_RESTORE` ; sans fenêtre visible (zone de notification) : appli relancée, jamais `ShowWindow` sur une
+fenêtre cachée, qui figeait l'interface de Spotify) ;
 pastille audio de la lecture en cours → `#audioPanel` (`Audio/AudioService` : Core Audio par COM, `Native/CoreAudio.cs`,
 `IPolicyConfig` non documenté pour la sortie par défaut ; notifications `IMMNotificationClient` /
 `IAudioEndpointVolumeCallback`, appels hors thread UI, message `audio` regroupé sur 60 ms ; retour `audio`
@@ -165,6 +169,9 @@ range les fichiers des versions précédentes au démarrage. Export / import (`C
 l'assistant, messages `exportConfig` / `importConfig`) : un seul JSON (`format` `ArkaHyte.Config`) avec appsettings,
 shortcuts et energy ; l'import copie d'abord les fichiers remplacés dans `backup\before-import-*`, passe l'historique
 par `EnergyMeter.Replace` (sinon réécrit à l'arrêt) puis redémarre l'affichage. Fichiers HWiNFO exclus (propres à Windows).
+Maison : réglage `Home` dans appsettings, donc exporté ; jeton (`home-token.bin`) jamais exporté, effacé à l'import si
+l'adresse importée diffère (copié avant dans `before-import-*`). Propriétés calculées des réglages en `[JsonIgnore]`
+(sinon écrites dans appsettings par `ApplyHome`).
 
 **Installation et mises à jour (Velopack).** `VelopackApp.Build()…Run()` en tête de `Main` (hooks
 d'install / mise à jour / désinstallation → `Installation.cs`, 30 s max puis exit). Installé dans

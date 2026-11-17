@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using ArkaHyte.Home;
 using ArkaHyte.Sensors;
 
 namespace ArkaHyte;
@@ -9,9 +10,10 @@ namespace ArkaHyte;
 /// <summary>
 /// The whole configuration in one JSON file, to bring it back after reinstalling Windows or the app:
 /// settings (appsettings.json), dock shortcuts (shortcuts.json), the electricity history (energy.json) and the
-/// custom background (its rendering, in base64).
+/// custom background (its rendering, in base64). The Home Assistant page (address, groups) is part of the settings.
 /// Left out on purpose: logs, browser profile, downloaded tools and the HWiNFO files, which belong to
-/// this Windows installation (HWiNFO is configured again from the wizard).
+/// this Windows installation (HWiNFO is configured again from the wizard), and the Home Assistant token
+/// (a secret, encrypted for this Windows user anyway: typed again in the Maison step).
 /// </summary>
 public static class ConfigBackup
 {
@@ -115,7 +117,8 @@ public static class ConfigBackup
 	{
 		var keep = Path.Combine(DataFolder.Root, "backup", $"before-import-{DateTime.Now:yyyy-MM-dd-HHmmss}");
 		energy?.Save();
-		foreach (var file in new[] { AppSettings.UserFilePath, ShortcutStore.OverridePath, EnergyMeter.FilePath })
+		var homeUrl = AppSettings.Load().Home?.Url;
+		foreach (var file in new[] { AppSettings.UserFilePath, ShortcutStore.OverridePath, EnergyMeter.FilePath, HomeToken.FilePath })
 		{
 			if (File.Exists(file))
 			{
@@ -128,6 +131,14 @@ public static class ConfigBackup
 		// An export always comes from a set up copy: the wizard is not shown again
 		settings["SetupCompleted"] = true;
 		Write(AppSettings.UserFilePath, settings);
+
+		// The token of this machine stays for the same Home Assistant only: another one would refuse it
+		var importedUrl = settings["Home"]?["Url"] is JsonValue url && url.TryGetValue(out string? text) ? text : null;
+		if (HomeToken.Exists && !SameHomeUrl(homeUrl, importedUrl))
+		{
+			HomeToken.Delete();
+			Log.Info("Home Assistant token deleted: the imported settings use another address");
+		}
 
 		// No shortcuts in the export: the defaults of the settings apply, as they did there
 		if (backup[ShortcutsKey] is JsonArray shortcuts)
@@ -165,6 +176,10 @@ public static class ConfigBackup
 		}
 		Log.Info($"Configuration imported from {source} (previous files kept in {keep})");
 	}
+
+	private static bool SameHomeUrl(string? a, string? b) =>
+		!string.IsNullOrWhiteSpace(a) && !string.IsNullOrWhiteSpace(b)
+		&& string.Equals(a.Trim().TrimEnd('/'), b.Trim().TrimEnd('/'), StringComparison.OrdinalIgnoreCase);
 
 	private static JsonNode? ReadJson(string path)
 	{

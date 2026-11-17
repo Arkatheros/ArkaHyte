@@ -232,6 +232,7 @@ public sealed record HomeSettings(bool Enabled = false, string Url = "", IReadOn
 	public const int MaxSeparator = 600;
 
 	/// <summary>The groups as shown: columns and spans brought in range, each entity once, the old flat list as one group.</summary>
+	[JsonIgnore]
 	public IReadOnlyList<HomeGroup> EffectiveGroups
 	{
 		get
@@ -262,6 +263,7 @@ public sealed record HomeSettings(bool Enabled = false, string Url = "", IReadOn
 	}
 
 	/// <summary>Every entity shown, in page order.</summary>
+	[JsonIgnore]
 	public IEnumerable<string> EntityIds => EffectiveGroups.SelectMany(g => g.Tiles ?? []).Select(t => t.Id);
 }
 

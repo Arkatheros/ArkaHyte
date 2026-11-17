@@ -90,6 +90,19 @@ public sealed class MediaMonitor
 		await session.TryChangePlaybackPositionAsync(target.Ticks);
 	}
 
+	/// <summary>The app playing the current item (its AppUserModelID) and the item's title; null when nothing plays.</summary>
+	public async Task<(string AppId, string? Title)?> ReadSourceAsync()
+	{
+		_manager ??= await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
+		var session = _manager.GetCurrentSession();
+		if (session is null || string.IsNullOrWhiteSpace(session.SourceAppUserModelId))
+		{
+			return null;
+		}
+		var properties = await session.TryGetMediaPropertiesAsync();
+		return (session.SourceAppUserModelId, properties?.Title);
+	}
+
 	public async Task ControlAsync(string action)
 	{
 		_manager ??= await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();

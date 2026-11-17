@@ -463,6 +463,11 @@ public sealed class DisplayForm : Form
 					_ = SeekMediaAsync(seconds);
 				}
 				break;
+			case "media" when action == "show":
+				// Before the player comes up on the main screen, like a launch
+				_touchGuard.ReturnCursorNow();
+				_ = ShowMediaSourceAsync();
+				break;
 			case "media" when action is not null:
 				_ = ControlMediaAsync(action);
 				break;
@@ -816,6 +821,30 @@ public sealed class DisplayForm : Form
 		catch (Exception exception)
 		{
 			Log.Error("Media seek failed", exception);
+		}
+	}
+
+	/// <summary>Tap on the cover: the player's window to the front on the main screen.</summary>
+	private async Task ShowMediaSourceAsync()
+	{
+		try
+		{
+			if (await _hub.Media.ReadSourceAsync() is not { } source)
+			{
+				return;
+			}
+			// Back on the UI thread (the session API resumes elsewhere): activation attaches to its input queue
+			PostToUiThread(() =>
+			{
+				if (!PlayerWindow.BringToFront(source.AppId, source.Title))
+				{
+					Post(new { type = "toast", text = "Lecteur introuvable" });
+				}
+			});
+		}
+		catch (Exception exception)
+		{
+			Log.Error("Showing the media player failed", exception);
 		}
 	}
 

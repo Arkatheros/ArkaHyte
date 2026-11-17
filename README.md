@@ -72,7 +72,8 @@ d'écran du boîtier qui relance l'affichage.
 
 **Sauvegarde de la configuration** (réinstallation) : « Exporter la configuration », en bas de la fenêtre
 Paramètres, écrit un seul fichier JSON (réglages, raccourcis du dock, historique de consommation, image de fond
-personnelle). « Importer une
+personnelle, page Maison : adresse de Home Assistant et groupes). Le jeton Home Assistant n'est jamais exporté : à
+recoller dans Paramètres › Maison après l'import ; sur le même PC, il est gardé si l'adresse importée est la même. « Importer une
 configuration », aussi proposé dès la première page de l'assistant, le recharge après confirmation : les fichiers
 remplacés sont gardés dans `%LOCALAPPDATA%\ArkaHyte\backup\`, puis l'affichage redémarre. HWiNFO n'en fait pas
 partie : relancer sa configuration automatique après une réinstallation de Windows.
@@ -167,7 +168,8 @@ toucher dans les 3 s). **Retirer** vide un bouton : il devient un « + » qui ou
 créent dans Paramètres › **Raccourcis** (réglage `CustomActions`) ; modifiées là, le dock suit.
 
 **Lecture en cours** : glisser le doigt sur la barre de progression avance ou recule dans le morceau (si le lecteur
-l'accepte : Spotify, navigateurs… ; un curseur apparaît alors sur la barre).
+l'accepte : Spotify, navigateurs… ; un curseur apparaît alors sur la barre). Toucher la pochette affiche le lecteur
+(Spotify, le navigateur…) au premier plan sur l'écran principal.
 
 **Audio** (en-tête de la lecture en cours) : une pastille (icône de la sortie, volume, micro barré en couleur
 d'alerte quand il est coupé, rappelé dans l'en-tête de la vue jeu) qui ouvre le panneau Audio : volume général au

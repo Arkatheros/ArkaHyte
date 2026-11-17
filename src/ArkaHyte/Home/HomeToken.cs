@@ -9,7 +9,7 @@ namespace ArkaHyte.Home;
 /// </summary>
 public static class HomeToken
 {
-	private static string FilePath => Path.Combine(DataFolder.Root, "home-token.bin");
+	public static string FilePath => Path.Combine(DataFolder.Root, "home-token.bin");
 
 	// Ties the encrypted bytes to this use, on top of the user's DPAPI key
 	private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("ArkaHyte.HomeAssistant");

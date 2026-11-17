@@ -5212,6 +5212,12 @@
 	document.querySelectorAll('[data-media]').forEach((button) => {
 		button.addEventListener('click', () => send({ type: 'media', action: button.dataset.media }));
 	});
+	// The cover brings the player (Spotify, the browser...) to the front on the main screen
+	document.querySelector('.media-art-box').addEventListener('click', () => {
+		if (!$('media').classList.contains('idle')) {
+			send({ type: 'media', action: 'show' });
+		}
+	});
 	// No context menu or text selection on a touch panel
 	document.addEventListener('contextmenu', (event) => event.preventDefault());
 

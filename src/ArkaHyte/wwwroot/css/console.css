@@ -1399,6 +1399,7 @@ body {
 }
 .media-art-box {
 	position: relative;
+	cursor: pointer;
 	width: 200px;
 	height: 200px;
 	box-shadow: 0 0 0 1px rgba(var(--line-rgb), 0.3), 0 14px 46px rgba(var(--blade-rgb), 0.3);
