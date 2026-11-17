@@ -1439,12 +1439,23 @@ body {
 	height: 6px;
 	margin-top: 18px;
 }
-/* Player that accepts a new position: a knob, and a taller touch zone that keeps the layout */
+/* Player that accepts a new position: a knob, and a larger touch zone that keeps the layout: over the
+   artist line above, down to the buttons below, past the bar's ends (clamped to 0 / 100 %), above its
+   neighbours */
 .media-progress.seekable {
-	padding: 14px 0;
-	margin: -14px 0;
+	position: relative;
+	z-index: 1;
+	padding: 30px 16px 20px;
+	margin: -30px -16px -20px;
 	touch-action: none;
 	cursor: pointer;
+}
+/* Bigger knob while held */
+.media-progress.seeking #mediaFill::after {
+	right: -14px;
+	width: 28px;
+	height: 28px;
+	margin-top: -14px;
 }
 .media-progress.seekable #mediaFill {
 	position: relative;

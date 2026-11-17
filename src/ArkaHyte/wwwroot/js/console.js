@@ -1945,6 +1945,7 @@
 			return;
 		}
 		mediaSeek.active = true;
+		progressBar.classList.add('seeking');
 		progressBar.setPointerCapture(event.pointerId);
 		previewSeek(event);
 	});
@@ -1959,6 +1960,7 @@
 		}
 		previewSeek(event);
 		mediaSeek.active = false;
+		progressBar.classList.remove('seeking');
 		mediaSeek.target = mediaSeek.fraction * mediaSeek.duration;
 		mediaSeek.until = performance.now() + SEEK_HOLD_MS;
 		send({ type: 'media', action: 'seek', position: mediaSeek.target });
@@ -1967,6 +1969,7 @@
 	});
 	progressBar.addEventListener('pointercancel', () => {
 		mediaSeek.active = false;
+		progressBar.classList.remove('seeking');
 	});
 
 	function drawMediaProgress(fraction) {
